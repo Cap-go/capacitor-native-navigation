@@ -5,9 +5,26 @@ import Capacitor
 import UIKit
 import ObjectiveC
 
+private struct NativeNavigationTransitionContext {
+    let webView: UIView
+    let snapshot: UIView?
+    let id: String
+    let direction: String
+    let duration: TimeInterval
+    let durationMs: Int
+    let resolve: ([String: Any]) -> Void
+}
+
+private struct NativeNavigationZoomTransitionContext {
+    let transition: NativeNavigationTransitionContext
+    let sourceFrame: CGRect?
+    let targetFrame: CGRect?
+    let cornerRadius: CGFloat
+}
+
 // swiftlint:disable type_body_length
 @objc(NativeNavigationPlugin)
-public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin {
+public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelegate {
     public let identifier = "NativeNavigationPlugin"
     public let jsName = "NativeNavigation"
     public let pluginMethods: [CAPPluginMethod] = [
@@ -25,7 +42,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin {
     private var navBar: UINavigationBar?
     private var tabContainer: UIView?
     private var tabEffectView: UIVisualEffectView?
-    private var tabBar: NativeNavigationFloatingTabBar?
+    private var tabBar: UITabBar?
     private var navbarHeight: CGFloat = 44
     private var tabbarHeight: CGFloat = 64
     private let floatingTabbarHorizontalMargin: CGFloat = 24
@@ -43,6 +60,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin {
     private var transitionSnapshot: UIView?
     private var activeTransitionId: String?
     private var activeTransitionDirection = "forward"
+    private var activeZoomSourceFrame: CGRect?
+    private var activeZoomCornerRadius: CGFloat = 0
 
     override public func load() {
         NotificationCenter.default.addObserver(
@@ -152,30 +171,24 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin {
             let tabs = call.getArray("tabs") as? [[String: Any]] ?? []
             let selectedId = call.getString("selectedId")
             let labels = call.getBool("labels", true)
+            let labelVisibilityMode = call.getString("labelVisibilityMode") ?? (labels ? "labeled" : "unlabeled")
             let icons = call.getBool("icons", true)
 
-            let (items, selectedIndex) = self.makeFloatingTabItems(
+            let (items, selectedIndex) = self.makeTabBarItems(
                 tabs,
                 selectedId: selectedId,
-                labels: labels,
+                labelVisibilityMode: labelVisibilityMode,
                 icons: icons
             )
 
-            self.applyTabBarAppearance(tabBar: tabBar, options: call)
-            let resolvedSelectedIndex = selectedIndex ?? (items.indices.contains(tabBar.selectedIndex) ? tabBar.selectedIndex : 0)
-            tabBar.configure(
-                items: items,
-                selectedIndex: resolvedSelectedIndex,
-                labels: labels,
-                icons: icons
-            )
-            tabBar.onSelect = { [weak self] index, item in
-                self?.notifyListeners("tabSelect", data: [
-                    "id": item.id,
-                    "index": index,
-                    "title": item.title
-                ])
+            tabBar.items = items
+            if let selectedIndex = selectedIndex, selectedIndex < items.count {
+                tabBar.selectedItem = items[selectedIndex]
+            } else if tabBar.selectedItem == nil {
+                tabBar.selectedItem = items.first
             }
+
+            self.applyTabBarAppearance(tabBar: tabBar, options: call)
             self.tabContainer?.isHidden = false
             tabBar.isHidden = false
             self.layoutChrome()
@@ -194,16 +207,23 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin {
             let transitionId = call.getString("id") ?? "transition-\(Int(Date().timeIntervalSince1970 * 1_000))"
             let direction = call.getString("direction") ?? "forward"
             let durationMs = Int((call.getDouble("duration") ?? self.defaultTransitionDuration * 1_000).rounded())
+            let zoomSourceRect = direction == "zoom" ? self.transitionRect(call.getObject("sourceRect")) : nil
+            let zoomSourceFrame = zoomSourceRect.map { self.rootFrame(for: $0, webView: webView) }
+            let cornerRadius = CGFloat(call.getDouble("cornerRadius") ?? 0)
 
             self.transitionSnapshot?.removeFromSuperview()
-            let snapshot = webView.snapshotView(afterScreenUpdates: false) ?? UIView(frame: webView.frame)
-            snapshot.frame = webView.frame
-            snapshot.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            let snapshot = self.transitionSnapshotView(from: webView, sourceRect: zoomSourceRect)
+            snapshot.frame = zoomSourceFrame ?? webView.frame
+            snapshot.autoresizingMask = zoomSourceFrame == nil ? [.flexibleWidth, .flexibleHeight] : []
+            snapshot.layer.cornerRadius = cornerRadius
+            snapshot.clipsToBounds = cornerRadius > 0
             rootView.insertSubview(snapshot, aboveSubview: webView)
             self.bringChromeToFront()
             self.transitionSnapshot = snapshot
             self.activeTransitionId = transitionId
             self.activeTransitionDirection = direction
+            self.activeZoomSourceFrame = zoomSourceFrame
+            self.activeZoomCornerRadius = cornerRadius
             webView.alpha = 0.01
 
             let event: [String: Any] = ["id": transitionId, "direction": direction, "duration": durationMs]
@@ -223,48 +243,155 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin {
             let direction = call.getString("direction") ?? self.activeTransitionDirection
             let duration = (call.getDouble("duration") ?? self.defaultTransitionDuration * 1_000) / 1_000
             let durationMs = Int((duration * 1_000).rounded())
-            let width = webView.bounds.width
-            let snapshot = self.transitionSnapshot
+            let transition = NativeNavigationTransitionContext(
+                webView: webView,
+                snapshot: self.transitionSnapshot,
+                id: transitionId,
+                direction: direction,
+                duration: duration,
+                durationMs: durationMs,
+                resolve: { call.resolve($0) }
+            )
 
-            let startTransform: CGAffineTransform
-            let endSnapshotTransform: CGAffineTransform
-            switch direction {
-            case "back":
-                startTransform = CGAffineTransform(translationX: -width * 0.3, y: 0)
-                endSnapshotTransform = CGAffineTransform(translationX: width, y: 0)
-            case "tab", "root", "none":
-                startTransform = .identity
-                endSnapshotTransform = .identity
-            default:
-                startTransform = CGAffineTransform(translationX: width, y: 0)
-                endSnapshotTransform = CGAffineTransform(translationX: -width * 0.3, y: 0)
+            if direction == "zoom" {
+                let sourceRect = self.transitionRect(call.getObject("sourceRect"))
+                let targetRect = self.transitionRect(call.getObject("targetRect"))
+                self.finishZoomTransition(NativeNavigationZoomTransitionContext(
+                    transition: transition,
+                    sourceFrame: sourceRect.map { self.rootFrame(for: $0, webView: webView) },
+                    targetFrame: targetRect.map { self.rootFrame(for: $0, webView: webView) },
+                    cornerRadius: CGFloat(call.getDouble("cornerRadius") ?? Double(self.activeZoomCornerRadius))
+                ))
+                return
             }
 
-            webView.transform = startTransform
-            webView.alpha = direction == "none" ? 1 : 0.01
-
-            UIView.animate(
-                withDuration: max(duration, 0),
-                delay: 0,
-                options: [.curveEaseOut, .allowUserInteraction],
-                animations: {
-                    webView.transform = .identity
-                    webView.alpha = 1
-                    snapshot?.transform = endSnapshotTransform
-                    snapshot?.alpha = direction == "none" ? 0 : 0.75
-                },
-                completion: { _ in
-                    snapshot?.removeFromSuperview()
-                    webView.transform = .identity
-                    webView.alpha = 1
-                    self.transitionSnapshot = nil
-                    self.activeTransitionId = nil
-                    let event: [String: Any] = ["id": transitionId, "direction": direction, "duration": durationMs]
-                    self.notifyListeners("transitionEnd", data: event)
-                    call.resolve(event)
-                }
-            )
+            self.finishStandardTransition(transition)
         }
+    }
+
+    private func finishStandardTransition(_ transition: NativeNavigationTransitionContext) {
+        let width = transition.webView.bounds.width
+        let transforms = standardTransitionTransforms(direction: transition.direction, width: width)
+        transition.webView.transform = transforms.start
+        transition.webView.alpha = transition.direction == "none" ? 1 : 0.01
+
+        UIView.animate(
+            withDuration: max(transition.duration, 0),
+            delay: 0,
+            options: [.curveEaseOut, .allowUserInteraction],
+            animations: {
+                transition.webView.transform = .identity
+                transition.webView.alpha = 1
+                transition.snapshot?.transform = transforms.snapshotEnd
+                transition.snapshot?.alpha = transition.direction == "none" ? 0 : 0.75
+            },
+            completion: { _ in
+                self.finishTransitionCleanup(transition)
+            }
+        )
+    }
+
+    private func standardTransitionTransforms(direction: String, width: CGFloat) -> (start: CGAffineTransform, snapshotEnd: CGAffineTransform) {
+        switch direction {
+        case "back":
+            return (CGAffineTransform(translationX: -width * 0.3, y: 0), CGAffineTransform(translationX: width, y: 0))
+        case "tab", "root", "none":
+            return (.identity, .identity)
+        default:
+            return (CGAffineTransform(translationX: width, y: 0), CGAffineTransform(translationX: -width * 0.3, y: 0))
+        }
+    }
+
+    private func finishZoomTransition(_ zoom: NativeNavigationZoomTransitionContext) {
+        let transition = zoom.transition
+        let startFrame = zoom.sourceFrame ?? activeZoomSourceFrame ?? transition.webView.frame
+
+        let finish = {
+            self.finishTransitionCleanup(transition)
+        }
+
+        guard transition.duration > 0 else {
+            finish()
+            return
+        }
+
+        if let targetFrame = zoom.targetFrame {
+            animateZoomToTarget(zoom, startFrame: startFrame, targetFrame: targetFrame, completion: finish)
+            return
+        }
+
+        animateZoomToFullScreen(zoom, startFrame: startFrame, completion: finish)
+    }
+
+    private func animateZoomToTarget(
+        _ zoom: NativeNavigationZoomTransitionContext,
+        startFrame: CGRect,
+        targetFrame: CGRect,
+        completion: @escaping () -> Void
+    ) {
+        let transition = zoom.transition
+        transition.webView.transform = .identity
+        transition.webView.alpha = 0.01
+        transition.snapshot?.frame = startFrame
+        transition.snapshot?.layer.cornerRadius = zoom.cornerRadius
+        transition.snapshot?.clipsToBounds = zoom.cornerRadius > 0
+
+        UIView.animate(
+            withDuration: transition.duration,
+            delay: 0,
+            options: [.curveEaseInOut, .allowUserInteraction],
+            animations: {
+                transition.webView.alpha = 1
+                transition.snapshot?.frame = targetFrame
+                transition.snapshot?.alpha = 0
+            },
+            completion: { _ in completion() }
+        )
+    }
+
+    private func animateZoomToFullScreen(
+        _ zoom: NativeNavigationZoomTransitionContext,
+        startFrame: CGRect,
+        completion: @escaping () -> Void
+    ) {
+        let transition = zoom.transition
+        let fullFrame = transition.webView.frame
+        let scaleX = max(startFrame.width / max(fullFrame.width, 1), 0.01)
+        let scaleY = max(startFrame.height / max(fullFrame.height, 1), 0.01)
+        let translationX = startFrame.midX - fullFrame.midX
+        let translationY = startFrame.midY - fullFrame.midY
+        transition.webView.transform = CGAffineTransform(translationX: translationX, y: translationY).scaledBy(x: scaleX, y: scaleY)
+        transition.webView.alpha = 1
+        transition.webView.layer.cornerRadius = zoom.cornerRadius
+        transition.webView.clipsToBounds = zoom.cornerRadius > 0
+        transition.snapshot?.frame = startFrame
+
+        UIView.animate(
+            withDuration: transition.duration,
+            delay: 0,
+            options: [.curveEaseInOut, .allowUserInteraction],
+            animations: {
+                transition.webView.transform = .identity
+                transition.webView.layer.cornerRadius = 0
+                transition.snapshot?.frame = fullFrame
+                transition.snapshot?.alpha = 0
+            },
+            completion: { _ in completion() }
+        )
+    }
+
+    private func finishTransitionCleanup(_ transition: NativeNavigationTransitionContext) {
+        transition.snapshot?.removeFromSuperview()
+        transition.webView.transform = .identity
+        transition.webView.alpha = 1
+        transition.webView.layer.cornerRadius = 0
+        transition.webView.clipsToBounds = false
+        transitionSnapshot = nil
+        activeTransitionId = nil
+        activeZoomSourceFrame = nil
+        let event: [String: Any] = ["id": transition.id, "direction": transition.direction, "duration": transition.durationMs]
+        notifyListeners("transitionEnd", data: event)
+        transition.resolve(event)
     }
 
     @objc func getPluginVersion(_ call: CAPPluginCall) {
@@ -285,6 +412,18 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin {
             "id": id,
             "title": navbarItemTitle[id] ?? "",
             "placement": navbarItemPlacement[id] ?? "right"
+        ])
+    }
+
+    public func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {
+        let index = item.tag
+        guard index >= 0 && index < tabIds.count else {
+            return
+        }
+        notifyListeners("tabSelect", data: [
+            "id": tabIds[index],
+            "index": index,
+            "title": tabTitles[index]
         ])
     }
 
@@ -324,7 +463,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin {
         return bar
     }
 
-    private func ensureTabBar() -> NativeNavigationFloatingTabBar {
+    private func ensureTabBar() -> UITabBar {
         if let tabBar = tabBar {
             return tabBar
         }
@@ -345,8 +484,12 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin {
         effectView.clipsToBounds = true
         container.addSubview(effectView)
 
-        let bar = NativeNavigationFloatingTabBar()
+        let bar = UITabBar()
+        bar.isTranslucent = true
         bar.backgroundColor = .clear
+        bar.backgroundImage = UIImage()
+        bar.shadowImage = UIImage()
+        bar.delegate = self
         bar.autoresizingMask = [.flexibleWidth, .flexibleTopMargin]
         bar.clipsToBounds = true
         container.addSubview(bar)
@@ -376,40 +519,63 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
-    private func makeFloatingTabItems(
+    private func makeTabBarItems(
         _ tabs: [[String: Any]],
         selectedId: String?,
-        labels: Bool,
+        labelVisibilityMode: String,
         icons: Bool
-    ) -> ([NativeNavigationFloatingTabItem], Int?) {
+    ) -> ([UITabBarItem], Int?) {
         tabIds = []
         tabTitles = []
         var selectedIndex: Int?
 
-        let items = tabs.enumerated().map { index, tab -> NativeNavigationFloatingTabItem in
+        let items = tabs.enumerated().map { index, tab -> UITabBarItem in
             let id = tab["id"] as? String ?? "tab-\(index)"
-            let title = tab["title"] as? String ?? ""
+            let title = tabTitle(
+                tab["title"] as? String,
+                id: id,
+                index: index,
+                selectedId: selectedId,
+                labelVisibilityMode: labelVisibilityMode
+            )
             let image = icons ? self.image(from: tab["icon"] as? [String: Any]) : nil
             let selectedImage = icons ? self.image(from: tab["selectedIcon"] as? [String: Any]) : nil
-            let badge = tab["badge"].map { String(describing: $0) }
-            let enabled = tab["enabled"] as? Bool ?? true
+            let item = UITabBarItem(title: title, image: image, selectedImage: selectedImage)
+            item.tag = index
+            item.isEnabled = tab["enabled"] as? Bool ?? true
+            if let badge = tab["badge"] {
+                item.badgeValue = String(describing: badge)
+            }
             tabIds.append(id)
-            tabTitles.append(title)
+            tabTitles.append(tab["title"] as? String ?? "")
             if id == selectedId {
                 selectedIndex = index
             }
-            return NativeNavigationFloatingTabItem(
-                id: id,
-                title: labels ? title : "",
-                accessibilityTitle: title,
-                image: image,
-                selectedImage: selectedImage,
-                badge: badge,
-                enabled: enabled
-            )
+            return item
         }
 
         return (items, selectedIndex)
+    }
+
+    private func tabTitle(
+        _ title: String?,
+        id: String,
+        index: Int,
+        selectedId: String?,
+        labelVisibilityMode: String
+    ) -> String? {
+        let isSelected = id == selectedId || (selectedId == nil && index == 0)
+        switch labelVisibilityMode {
+        case "unlabeled":
+            return nil
+        case "selected":
+            return isSelected ? title : nil
+        case "auto":
+            let compact = bridge?.viewController?.traitCollection.horizontalSizeClass == .compact || UIDevice.current.userInterfaceIdiom == .phone
+            return compact && !isSelected ? nil : title
+        default:
+            return title
+        }
     }
 
     private func image(from descriptor: [String: Any]?) -> UIImage? {
@@ -496,6 +662,63 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin {
         return nil
     }
 
+    private func transitionRect(_ rawRect: [String: Any]?) -> CGRect? {
+        guard let rawRect = rawRect,
+              let width = number(from: rawRect["width"]),
+              let height = number(from: rawRect["height"]),
+              width > 0,
+              height > 0 else {
+            return nil
+        }
+
+        return CGRect(
+            x: number(from: rawRect["x"]) ?? 0,
+            y: number(from: rawRect["y"]) ?? 0,
+            width: width,
+            height: height
+        )
+    }
+
+    private func rootFrame(for viewportRect: CGRect, webView: UIView) -> CGRect {
+        return CGRect(
+            x: webView.frame.minX + viewportRect.minX,
+            y: webView.frame.minY + viewportRect.minY,
+            width: viewportRect.width,
+            height: viewportRect.height
+        )
+    }
+
+    private func transitionSnapshotView(from webView: UIView, sourceRect: CGRect?) -> UIView {
+        guard let sourceRect = sourceRect else {
+            return webView.snapshotView(afterScreenUpdates: false) ?? UIView(frame: webView.frame)
+        }
+
+        let cropRect = sourceRect.intersection(webView.bounds)
+        guard cropRect.width > 0, cropRect.height > 0 else {
+            return webView.snapshotView(afterScreenUpdates: false) ?? UIView(frame: webView.frame)
+        }
+
+        let renderer = UIGraphicsImageRenderer(bounds: webView.bounds)
+        let image = renderer.image { _ in
+            webView.drawHierarchy(in: webView.bounds, afterScreenUpdates: false)
+        }
+        let scale = image.scale
+        let scaledCropRect = CGRect(
+            x: cropRect.minX * scale,
+            y: cropRect.minY * scale,
+            width: cropRect.width * scale,
+            height: cropRect.height * scale
+        ).integral
+
+        guard let croppedImage = image.cgImage?.cropping(to: scaledCropRect) else {
+            return webView.snapshotView(afterScreenUpdates: false) ?? UIView(frame: webView.frame)
+        }
+
+        let imageView = UIImageView(image: UIImage(cgImage: croppedImage, scale: scale, orientation: image.imageOrientation))
+        imageView.contentMode = .scaleAspectFill
+        return imageView
+    }
+
     private func applyNavBarAppearance(navBar: UINavigationBar, options call: CAPPluginCall) {
         let appearance = UINavigationBarAppearance()
         let transparent = call.getBool("transparent", false)
@@ -512,19 +735,27 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin {
             appearance.configureWithTransparentBackground()
             appearance.backgroundColor = .clear
             appearance.shadowColor = .clear
-            navBlurView?.effect = UIBlurEffect(style: .systemChromeMaterial)
-            navBlurView?.isHidden = false
+            if let effect = blurEffect(from: call.getString("blurEffect"), fallback: .systemChromeMaterial) {
+                navBlurView?.effect = effect
+                navBlurView?.isHidden = false
+            } else {
+                navBlurView?.isHidden = true
+            }
         } else {
             appearance.configureWithDefaultBackground()
             navBlurView?.isHidden = true
         }
 
         if let colors = call.getObject("colors") {
-            if let tint = colors["tint"] as? String, let color = UIColor(hexString: tint) {
+            if let color = colorValue(colors["tint"]) {
                 navBar.tintColor = color
             }
+            if let color = colorValue(colors["foreground"]) {
+                appearance.titleTextAttributes = [.foregroundColor: color]
+                appearance.largeTitleTextAttributes = [.foregroundColor: color]
+            }
             if let background = colors["background"] as? String,
-               let color = UIColor(hexString: background),
+               let color = colorValue(background),
                backgroundTint == nil || glassEffect == nil,
                !transparent {
                 appearance.backgroundColor = color
@@ -536,28 +767,88 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin {
         navBar.compactAppearance = appearance
     }
 
-    private func applyTabBarAppearance(tabBar: NativeNavigationFloatingTabBar, options call: CAPPluginCall) {
+    private func applyTabBarAppearance(tabBar: UITabBar, options call: CAPPluginCall) {
+        let appearance = UITabBarAppearance()
         let backgroundTint = colorOption(call, key: "background")
         let glassEffect = systemGlassEffect(tintColor: backgroundTint)
         if let glassEffect = glassEffect {
+            appearance.configureWithTransparentBackground()
+            appearance.backgroundColor = .clear
+            appearance.backgroundEffect = nil
+            appearance.shadowColor = .clear
             tabEffectView?.effect = glassEffect
             tabEffectView?.isHidden = false
-            tabEffectView?.contentView.backgroundColor = backgroundTint?.withAlphaComponent(0.12)
         } else {
-            tabEffectView?.effect = UIBlurEffect(style: .systemChromeMaterial)
-            tabEffectView?.isHidden = false
-            tabEffectView?.contentView.backgroundColor = (backgroundTint ?? .systemBackground).withAlphaComponent(0.46)
+            appearance.configureWithDefaultBackground()
+            if let effect = blurEffect(from: call.getString("blurEffect"), fallback: nil) {
+                appearance.configureWithTransparentBackground()
+                appearance.backgroundColor = .clear
+                tabEffectView?.effect = effect
+                tabEffectView?.isHidden = false
+            } else {
+                tabEffectView?.isHidden = true
+            }
         }
 
         if let colors = call.getObject("colors") {
-            if let tint = colors["tint"] as? String, let color = UIColor(hexString: tint) {
-                tabBar.selectedTintColor = color
+            if let color = colorValue(colors["tint"]) {
+                tabBar.tintColor = color
+                applyTabItemAppearances(appearance) { itemAppearance in
+                    itemAppearance.selected.iconColor = color
+                    itemAppearance.selected.titleTextAttributes = [.foregroundColor: color]
+                }
             }
-            if let inactiveTint = colors["inactiveTint"] as? String, let color = UIColor(hexString: inactiveTint) {
-                tabBar.inactiveTintColor = color
+            if let color = colorValue(colors["inactiveTint"]) {
+                tabBar.unselectedItemTintColor = color
+                applyTabItemAppearances(appearance) { itemAppearance in
+                    itemAppearance.normal.iconColor = color
+                    itemAppearance.normal.titleTextAttributes = [.foregroundColor: color]
+                }
+            }
+            if let color = colorValue(colors["badgeBackground"]) {
+                applyTabItemAppearances(appearance) { itemAppearance in
+                    itemAppearance.normal.badgeBackgroundColor = color
+                    itemAppearance.selected.badgeBackgroundColor = color
+                }
+            }
+            if let color = colorValue(colors["badgeText"]) {
+                applyTabItemAppearances(appearance) { itemAppearance in
+                    itemAppearance.normal.badgeTextAttributes = [.foregroundColor: color]
+                    itemAppearance.selected.badgeTextAttributes = [.foregroundColor: color]
+                }
+            }
+            if let background = colors["background"] as? String,
+               let color = colorValue(background),
+               backgroundTint == nil || glassEffect == nil {
+                appearance.backgroundColor = color
             }
         }
-        tabBar.setNeedsLayout()
+        if let color = colorValue(call.getString("badgeBackgroundColor")) {
+            applyTabItemAppearances(appearance) { itemAppearance in
+                itemAppearance.normal.badgeBackgroundColor = color
+                itemAppearance.selected.badgeBackgroundColor = color
+            }
+        }
+        if let color = colorValue(call.getString("badgeTextColor")) {
+            applyTabItemAppearances(appearance) { itemAppearance in
+                itemAppearance.normal.badgeTextAttributes = [.foregroundColor: color]
+                itemAppearance.selected.badgeTextAttributes = [.foregroundColor: color]
+            }
+        }
+
+        tabBar.standardAppearance = appearance
+        if #available(iOS 15.0, *) {
+            tabBar.scrollEdgeAppearance = appearance
+        }
+    }
+
+    private func applyTabItemAppearances(
+        _ appearance: UITabBarAppearance,
+        update: (UITabBarItemAppearance) -> Void
+    ) {
+        update(appearance.stackedLayoutAppearance)
+        update(appearance.inlineLayoutAppearance)
+        update(appearance.compactInlineLayoutAppearance)
     }
 
     private func layoutChrome() {
@@ -603,10 +894,68 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin {
 
     private func colorOption(_ call: CAPPluginCall, key: String) -> UIColor? {
         guard let colors = call.getObject("colors"),
-              let value = colors[key] as? String else {
+              let value = colors[key] else {
             return nil
         }
-        return UIColor(hexString: value)
+        return colorValue(value)
+    }
+
+    private func colorValue(_ value: Any?) -> UIColor? {
+        guard let value = value as? String else {
+            return nil
+        }
+
+        switch value {
+        case "ios:label", "system:label":
+            return .label
+        case "ios:secondaryLabel", "system:secondaryLabel":
+            return .secondaryLabel
+        case "ios:systemBackground", "system:background":
+            return .systemBackground
+        case "ios:secondarySystemBackground", "system:secondaryBackground":
+            return .secondarySystemBackground
+        default:
+            return UIColor(hexString: value)
+        }
+    }
+
+    private func blurEffect(from value: String?, fallback: UIBlurEffect.Style?) -> UIBlurEffect? {
+        guard value != "none" else {
+            return nil
+        }
+        guard let style = blurStyle(from: value) ?? fallback else {
+            return nil
+        }
+        return UIBlurEffect(style: style)
+    }
+
+    private func blurStyle(from value: String?) -> UIBlurEffect.Style? {
+        guard let value = value else {
+            return nil
+        }
+        return [
+            "extraLight": .extraLight,
+            "light": .light,
+            "dark": .dark,
+            "regular": .regular,
+            "prominent": .prominent,
+            "systemUltraThinMaterial": .systemUltraThinMaterial,
+            "systemThinMaterial": .systemThinMaterial,
+            "systemMaterial": .systemMaterial,
+            "systemThickMaterial": .systemThickMaterial,
+            "systemUltraThinMaterialLight": .systemUltraThinMaterialLight,
+            "systemThinMaterialLight": .systemThinMaterialLight,
+            "systemMaterialLight": .systemMaterialLight,
+            "systemThickMaterialLight": .systemThickMaterialLight,
+            "systemUltraThinMaterialDark": .systemUltraThinMaterialDark,
+            "systemThinMaterialDark": .systemThinMaterialDark,
+            "systemMaterialDark": .systemMaterialDark,
+            "systemThickMaterialDark": .systemThickMaterialDark,
+            "systemDefault": .systemChromeMaterial,
+            "systemChromeMaterial": .systemChromeMaterial,
+            "systemChromeMaterialLight": .systemChromeMaterialLight,
+            "systemChromeMaterialDark": .systemChromeMaterialDark
+        ][value]
     }
 
     private func systemGlassEffect(tintColor: UIColor?) -> UIVisualEffect? {
@@ -747,219 +1096,6 @@ private struct SVGRenderStyle {
                 lineJoin = .miter
             }
         }
-    }
-}
-
-private struct NativeNavigationFloatingTabItem {
-    let id: String
-    let title: String
-    let accessibilityTitle: String
-    let image: UIImage?
-    let selectedImage: UIImage?
-    let badge: String?
-    let enabled: Bool
-}
-
-private struct NativeNavigationFloatingTabStyle {
-    let selected: Bool
-    let labels: Bool
-    let icons: Bool
-    let selectedTint: UIColor
-    let inactiveTint: UIColor
-}
-
-private final class NativeNavigationFloatingTabBar: UIView {
-    private var items: [NativeNavigationFloatingTabItem] = []
-    private var buttons: [NativeNavigationFloatingTabButton] = []
-    private var labelsVisible = true
-    private var iconsVisible = true
-
-    var selectedIndex = 0
-    var selectedTintColor = UIColor.systemBlue {
-        didSet { updateButtons() }
-    }
-    var inactiveTintColor = UIColor.secondaryLabel {
-        didSet { updateButtons() }
-    }
-    var onSelect: ((Int, NativeNavigationFloatingTabItem) -> Void)?
-
-    func configure(
-        items: [NativeNavigationFloatingTabItem],
-        selectedIndex: Int,
-        labels: Bool,
-        icons: Bool
-    ) {
-        self.items = items
-        self.labelsVisible = labels
-        self.iconsVisible = icons
-        self.selectedIndex = items.indices.contains(selectedIndex) ? selectedIndex : 0
-        rebuildButtons()
-        setNeedsLayout()
-    }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        guard !buttons.isEmpty else {
-            return
-        }
-        let itemWidth = bounds.width / CGFloat(buttons.count)
-        for (index, button) in buttons.enumerated() {
-            button.frame = CGRect(
-                x: CGFloat(index) * itemWidth,
-                y: 0,
-                width: itemWidth,
-                height: bounds.height
-            )
-        }
-    }
-
-    private func rebuildButtons() {
-        buttons.forEach { $0.removeFromSuperview() }
-        buttons = items.enumerated().map { index, item in
-            let button = NativeNavigationFloatingTabButton()
-            button.tag = index
-            button.configure(
-                item: item,
-                style: style(selected: index == selectedIndex)
-            )
-            button.addTarget(self, action: #selector(handleTap(_:)), for: .touchUpInside)
-            addSubview(button)
-            return button
-        }
-    }
-
-    private func updateButtons() {
-        for (index, button) in buttons.enumerated() {
-            guard items.indices.contains(index) else {
-                continue
-            }
-            button.configure(
-                item: items[index],
-                style: style(selected: index == selectedIndex)
-            )
-        }
-    }
-
-    private func style(selected: Bool) -> NativeNavigationFloatingTabStyle {
-        return NativeNavigationFloatingTabStyle(
-            selected: selected,
-            labels: labelsVisible,
-            icons: iconsVisible,
-            selectedTint: selectedTintColor,
-            inactiveTint: inactiveTintColor
-        )
-    }
-
-    @objc private func handleTap(_ sender: NativeNavigationFloatingTabButton) {
-        let index = sender.tag
-        guard items.indices.contains(index), items[index].enabled else {
-            return
-        }
-        selectedIndex = index
-        updateButtons()
-        onSelect?(index, items[index])
-    }
-}
-
-private final class NativeNavigationFloatingTabButton: UIControl {
-    private let selectedView = UIView()
-    private let imageView = UIImageView()
-    private let titleLabel = UILabel()
-    private let badgeLabel = UILabel()
-    private var hasIcon = true
-    private var hasLabel = true
-    private var badgeText: String?
-
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        isAccessibilityElement = true
-
-        selectedView.isUserInteractionEnabled = false
-        selectedView.alpha = 0
-        addSubview(selectedView)
-
-        imageView.contentMode = .scaleAspectFit
-        imageView.isUserInteractionEnabled = false
-        addSubview(imageView)
-
-        titleLabel.textAlignment = .center
-        titleLabel.font = .systemFont(ofSize: 11, weight: .semibold)
-        titleLabel.adjustsFontSizeToFitWidth = true
-        titleLabel.minimumScaleFactor = 0.78
-        titleLabel.isUserInteractionEnabled = false
-        addSubview(titleLabel)
-
-        badgeLabel.textAlignment = .center
-        badgeLabel.font = .systemFont(ofSize: 11, weight: .bold)
-        badgeLabel.textColor = .white
-        badgeLabel.backgroundColor = .systemRed
-        badgeLabel.layer.masksToBounds = true
-        badgeLabel.isUserInteractionEnabled = false
-        addSubview(badgeLabel)
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    func configure(
-        item: NativeNavigationFloatingTabItem,
-        style: NativeNavigationFloatingTabStyle
-    ) {
-        isEnabled = item.enabled
-        alpha = item.enabled ? 1 : 0.38
-        hasIcon = style.icons && (item.image != nil || item.selectedImage != nil)
-        hasLabel = style.labels && !item.title.isEmpty
-        badgeText = item.badge
-
-        let color = style.selected ? style.selectedTint : style.inactiveTint
-        selectedView.backgroundColor = style.selectedTint.withAlphaComponent(style.selected ? 0.16 : 0)
-        selectedView.alpha = style.selected ? 1 : 0
-
-        let image = style.selected ? (item.selectedImage ?? item.image) : item.image
-        imageView.image = image
-        imageView.tintColor = color
-        imageView.isHidden = !hasIcon
-
-        titleLabel.text = item.title
-        titleLabel.textColor = color
-        titleLabel.font = .systemFont(ofSize: 11, weight: style.selected ? .bold : .semibold)
-        titleLabel.isHidden = !hasLabel
-
-        badgeLabel.text = item.badge
-        badgeLabel.isHidden = item.badge == nil || item.badge == "0"
-        accessibilityLabel = item.accessibilityTitle
-        accessibilityTraits = style.selected ? [.button, .selected] : .button
-        setNeedsLayout()
-    }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        selectedView.frame = bounds.insetBy(dx: 7, dy: 7)
-        selectedView.layer.cornerRadius = selectedView.bounds.height / 2
-
-        let iconSize: CGFloat = 23
-        if hasIcon && hasLabel {
-            imageView.frame = CGRect(x: (bounds.width - iconSize) / 2, y: 10, width: iconSize, height: iconSize)
-            titleLabel.frame = CGRect(x: 5, y: bounds.height - 23, width: bounds.width - 10, height: 15)
-        } else if hasIcon {
-            imageView.frame = CGRect(x: (bounds.width - iconSize) / 2, y: (bounds.height - iconSize) / 2, width: iconSize, height: iconSize)
-            titleLabel.frame = .zero
-        } else {
-            imageView.frame = .zero
-            titleLabel.frame = CGRect(x: 5, y: (bounds.height - 18) / 2, width: bounds.width - 10, height: 18)
-        }
-
-        let badgeHeight: CGFloat = 18
-        let badgeWidth = max(badgeHeight, CGFloat((badgeText ?? "").count * 7 + 11))
-        let anchor = hasIcon ? imageView.frame : CGRect(x: bounds.midX - 10, y: bounds.midY - 10, width: 20, height: 20)
-        badgeLabel.frame = CGRect(
-            x: min(bounds.width - badgeWidth - 8, anchor.midX + 7),
-            y: max(6, anchor.minY - 6),
-            width: badgeWidth,
-            height: badgeHeight
-        )
-        badgeLabel.layer.cornerRadius = badgeHeight / 2
     }
 }
 

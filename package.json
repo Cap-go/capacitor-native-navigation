@@ -1,5 +1,5 @@
 {
-  "name": "@capgo/native-navigation",
+  "name": "@capgo/capacitor-native-navigation",
   "version": "8.0.8",
   "description": "Capacitor plugin for native navbar, tabbar, and route transition chrome over a WebView.",
   "main": "dist/plugin.cjs.js",

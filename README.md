@@ -1,4 +1,4 @@
-# @capgo/native-navigation
+# @capgo/capacitor-native-navigation
 <a href="https://capgo.app/"><img src="https://raw.githubusercontent.com/Cap-go/capgo/main/assets/capgo_banner.png" alt="Capgo - Instant updates for capacitor" /></a>
 
 <div align="center">
@@ -22,7 +22,8 @@ Native navigation chrome for Capacitor apps. Render a native navbar, native tabb
 
 - Renders native top navigation and bottom tab chrome from JavaScript state.
 - Emits native intent events such as `navbarBack`, `navbarItemTap`, and `tabSelect`.
-- Captures WebView snapshots for native-feeling push, back, root, and tab transition shells.
+- Captures WebView snapshots for native-feeling push, back, root, tab, and zoom transition shells.
+- Supports native tab styling controls such as Material You dynamic colors, label visibility, indicators, ripples, badges, and selected icons.
 - Writes CSS variables so web content can scroll behind native bars without being hidden.
 - Works with React, Vue, Angular, Svelte, Solid, vanilla JS, and any router that can call imperative methods.
 
@@ -43,14 +44,14 @@ Native navigation chrome for Capacitor apps. Render a native navbar, native tabb
 ## Install
 
 ```bash
-bun add @capgo/native-navigation
+bun add @capgo/capacitor-native-navigation
 bunx cap sync
 ```
 
 ## Minimal Usage
 
 ```typescript
-import { NativeNavigation } from '@capgo/native-navigation';
+import { NativeNavigation } from '@capgo/capacitor-native-navigation';
 
 await NativeNavigation.configure({
   contentInsetMode: 'css',
@@ -75,8 +76,11 @@ await NativeNavigation.setNavbar({
 
 await NativeNavigation.setTabbar({
   selectedId: 'home',
-  labels: true,
+  labelVisibilityMode: 'labeled',
   icons: true,
+  colors: {
+    dynamic: true,
+  },
   tabs: [
     {
       id: 'home',
@@ -100,6 +104,32 @@ NativeNavigation.addListener('tabSelect', ({ id }) => {
 });
 ```
 
+## Native Tab Styling
+
+```typescript
+await NativeNavigation.setTabbar({
+  selectedId: 'home',
+  labelVisibilityMode: 'selected',
+  indicatorColor: '#0A84FF',
+  rippleColor: '#330A84FF',
+  badgeBackgroundColor: '#FF3B30',
+  badgeTextColor: '#FFFFFF',
+  colors: {
+    dynamic: true,
+    tint: '#0A84FF',
+    inactiveTint: '#8E8E93',
+  },
+  tabs: [
+    {
+      id: 'home',
+      title: 'Home',
+      icon: { ios: { sfSymbol: 'house' }, android: { resource: 'ic_home' } },
+      selectedIcon: { ios: { sfSymbol: 'house.fill' }, android: { resource: 'ic_home_filled' } },
+    },
+  ],
+});
+```
+
 ## Transition Flow
 
 ```typescript
@@ -117,6 +147,25 @@ await NativeNavigation.finishTransition({
   id: transition.id,
   direction: 'forward',
 });
+```
+
+## Zoom Transition
+
+```typescript
+import { beginZoomTransition, finishZoomTransition } from '@capgo/capacitor-native-navigation';
+
+const card = document.querySelector('[data-photo-card]');
+if (card) {
+  const transition = await beginZoomTransition(card, { cornerRadius: 18 });
+
+  router.navigate('/photo/42');
+  await router.ready?.();
+
+  await finishZoomTransition(undefined, {
+    id: transition.id,
+    cornerRadius: 18,
+  });
+}
 ```
 
 ## CSS Insets
@@ -151,7 +200,7 @@ Available variables:
 The package can register optional custom elements for framework-agnostic declarative setup:
 
 ```typescript
-import { defineNativeNavigationElements } from '@capgo/native-navigation';
+import { defineNativeNavigationElements } from '@capgo/capacitor-native-navigation';
 
 defineNativeNavigationElements();
 ```
@@ -478,29 +527,36 @@ Global plugin configuration.
 
 Native bar colors. Use CSS-style hex strings (`#RRGGBB` or `#AARRGGBB`).
 
-| Prop               | Type                | Description                                                                                                             |
-| ------------------ | ------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| **`tint`**         | <code>string</code> | Tint color for active buttons/items.                                                                                    |
-| **`inactiveTint`** | <code>string</code> | Color for inactive tab items.                                                                                           |
-| **`background`**   | <code>string</code> | Optional background tint. On iOS 26+ avoid setting this unless you want to override the system Liquid Glass appearance. |
+| Prop                  | Type                 | Description                                                                                                                 |
+| --------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **`dynamic`**         | <code>boolean</code> | When `true`, Android 12+ derives unspecified bar colors from Material You system palettes. Explicit color fields still win. |
+| **`tint`**            | <code>string</code>  | Tint color for active buttons/items.                                                                                        |
+| **`inactiveTint`**    | <code>string</code>  | Color for inactive tab items.                                                                                               |
+| **`background`**      | <code>string</code>  | Optional background tint. On iOS 26+ avoid setting this unless you want to override the system Liquid Glass appearance.     |
+| **`foreground`**      | <code>string</code>  | Title and label text color where the native platform supports it.                                                           |
+| **`badgeBackground`** | <code>string</code>  | Badge background color for native tab badges.                                                                               |
+| **`badgeText`**       | <code>string</code>  | Badge text color for native tab badges.                                                                                     |
+| **`indicator`**       | <code>string</code>  | Active tab indicator color on Android.                                                                                      |
+| **`ripple`**          | <code>string</code>  | Tab press ripple color on Android.                                                                                          |
 
 
 #### NativeNavigationNavbarOptions
 
 Native navbar state.
 
-| Prop              | Type                                                                              | Description                                      |
-| ----------------- | --------------------------------------------------------------------------------- | ------------------------------------------------ |
-| **`hidden`**      | <code>boolean</code>                                                              | Hide the native navbar.                          |
-| **`title`**       | <code>string</code>                                                               | Main title.                                      |
-| **`subtitle`**    | <code>string</code>                                                               | Secondary title where supported by the platform. |
-| **`large`**       | <code>boolean</code>                                                              | Prefer a large iOS title style.                  |
-| **`transparent`** | <code>boolean</code>                                                              | Prefer transparent/scroll-edge style.            |
-| **`backButton`**  | <code><a href="#nativenavigationbackbutton">NativeNavigationBackButton</a></code> | Back button state.                               |
-| **`leftItems`**   | <code>NativeNavigationBarButton[]</code>                                          | Left-side action buttons.                        |
-| **`rightItems`**  | <code>NativeNavigationBarButton[]</code>                                          | Right-side action buttons.                       |
-| **`colors`**      | <code><a href="#nativenavigationcolors">NativeNavigationColors</a></code>         | Navbar color hints.                              |
-| **`animated`**    | <code>boolean</code>                                                              | Animate native navbar changes.                   |
+| Prop              | Type                                                                              | Description                                                                                                                              |
+| ----------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **`hidden`**      | <code>boolean</code>                                                              | Hide the native navbar.                                                                                                                  |
+| **`title`**       | <code>string</code>                                                               | Main title.                                                                                                                              |
+| **`subtitle`**    | <code>string</code>                                                               | Secondary title where supported by the platform.                                                                                         |
+| **`large`**       | <code>boolean</code>                                                              | Prefer a large iOS title style.                                                                                                          |
+| **`transparent`** | <code>boolean</code>                                                              | Prefer transparent/scroll-edge style.                                                                                                    |
+| **`blurEffect`**  | <code><a href="#nativenavigationblureffect">NativeNavigationBlurEffect</a></code> | iOS blur/material effect for the navbar background when glass is not available. Defaults to `systemChromeMaterial` for transparent bars. |
+| **`backButton`**  | <code><a href="#nativenavigationbackbutton">NativeNavigationBackButton</a></code> | Back button state.                                                                                                                       |
+| **`leftItems`**   | <code>NativeNavigationBarButton[]</code>                                          | Left-side action buttons.                                                                                                                |
+| **`rightItems`**  | <code>NativeNavigationBarButton[]</code>                                          | Right-side action buttons.                                                                                                               |
+| **`colors`**      | <code><a href="#nativenavigationcolors">NativeNavigationColors</a></code>         | Navbar color hints.                                                                                                                      |
+| **`animated`**    | <code>boolean</code>                                                              | Animate native navbar changes.                                                                                                           |
 
 
 #### NativeNavigationBackButton
@@ -545,15 +601,22 @@ because icons are rendered by native UI.
 
 Native tabbar state.
 
-| Prop             | Type                                                                      | Description                           |
-| ---------------- | ------------------------------------------------------------------------- | ------------------------------------- |
-| **`hidden`**     | <code>boolean</code>                                                      | Hide the native tabbar.               |
-| **`tabs`**       | <code>NativeNavigationTab[]</code>                                        | Tab definitions.                      |
-| **`selectedId`** | <code>string</code>                                                       | Currently selected tab id.            |
-| **`labels`**     | <code>boolean</code>                                                      | Show text labels. Defaults to `true`. |
-| **`icons`**      | <code>boolean</code>                                                      | Show icons. Defaults to `true`.       |
-| **`colors`**     | <code><a href="#nativenavigationcolors">NativeNavigationColors</a></code> | Tabbar color hints.                   |
-| **`animated`**   | <code>boolean</code>                                                      | Animate native tabbar changes.        |
+| Prop                       | Type                                                                                                      | Description                                                                     |
+| -------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| **`hidden`**               | <code>boolean</code>                                                                                      | Hide the native tabbar.                                                         |
+| **`tabs`**                 | <code>NativeNavigationTab[]</code>                                                                        | Tab definitions.                                                                |
+| **`selectedId`**           | <code>string</code>                                                                                       | Currently selected tab id.                                                      |
+| **`labels`**               | <code>boolean</code>                                                                                      | Show text labels. Defaults to `true`.                                           |
+| **`labelVisibilityMode`**  | <code><a href="#nativenavigationtablabelvisibilitymode">NativeNavigationTabLabelVisibilityMode</a></code> | Native label visibility mode. Overrides `labels` when provided.                 |
+| **`icons`**                | <code>boolean</code>                                                                                      | Show icons. Defaults to `true`.                                                 |
+| **`colors`**               | <code><a href="#nativenavigationcolors">NativeNavigationColors</a></code>                                 | Tabbar color hints.                                                             |
+| **`blurEffect`**           | <code><a href="#nativenavigationblureffect">NativeNavigationBlurEffect</a></code>                         | iOS blur/material effect for the tabbar background when glass is not available. |
+| **`disableIndicator`**     | <code>boolean</code>                                                                                      | Disable the Android active tab indicator.                                       |
+| **`indicatorColor`**       | <code>string</code>                                                                                       | Active tab indicator color on Android. `colors.indicator` is also supported.    |
+| **`rippleColor`**          | <code>string</code>                                                                                       | Tab press ripple color on Android. `colors.ripple` is also supported.           |
+| **`badgeBackgroundColor`** | <code>string</code>                                                                                       | Badge background color. `colors.badgeBackground` is also supported.             |
+| **`badgeTextColor`**       | <code>string</code>                                                                                       | Badge text color. `colors.badgeText` is also supported.                         |
+| **`animated`**             | <code>boolean</code>                                                                                      | Animate native tabbar changes.                                                  |
 
 
 #### NativeNavigationTab
@@ -585,22 +648,40 @@ Native transition result.
 
 Begin a native transition transaction before JS changes route content.
 
-| Prop            | Type                                                                                                |
-| --------------- | --------------------------------------------------------------------------------------------------- |
-| **`id`**        | <code>string</code>                                                                                 |
-| **`direction`** | <code><a href="#nativenavigationtransitiondirection">NativeNavigationTransitionDirection</a></code> |
-| **`duration`**  | <code>number</code>                                                                                 |
+| Prop               | Type                                                                                                | Description                                                                                                                    |
+| ------------------ | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **`id`**           | <code>string</code>                                                                                 |                                                                                                                                |
+| **`direction`**    | <code><a href="#nativenavigationtransitiondirection">NativeNavigationTransitionDirection</a></code> |                                                                                                                                |
+| **`duration`**     | <code>number</code>                                                                                 |                                                                                                                                |
+| **`sourceRect`**   | <code><a href="#nativenavigationrect">NativeNavigationRect</a></code>                               | Source rectangle for `zoom` transitions. Use viewport coordinates such as those returned by `Element.getBoundingClientRect()`. |
+| **`targetRect`**   | <code><a href="#nativenavigationrect">NativeNavigationRect</a></code>                               | Destination rectangle for shared-element-style `zoom` transitions.                                                             |
+| **`cornerRadius`** | <code>number</code>                                                                                 | Corner radius used while animating a `zoom` transition.                                                                        |
+
+
+#### NativeNavigationRect
+
+A rectangle in WebView viewport coordinates, expressed in native points/dp.
+
+| Prop         | Type                |
+| ------------ | ------------------- |
+| **`x`**      | <code>number</code> |
+| **`y`**      | <code>number</code> |
+| **`width`**  | <code>number</code> |
+| **`height`** | <code>number</code> |
 
 
 #### NativeNavigationFinishTransitionOptions
 
 Finish a native transition transaction after JS has changed route content.
 
-| Prop            | Type                                                                                                |
-| --------------- | --------------------------------------------------------------------------------------------------- |
-| **`id`**        | <code>string</code>                                                                                 |
-| **`direction`** | <code><a href="#nativenavigationtransitiondirection">NativeNavigationTransitionDirection</a></code> |
-| **`duration`**  | <code>number</code>                                                                                 |
+| Prop               | Type                                                                                                | Description                                                                 |
+| ------------------ | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| **`id`**           | <code>string</code>                                                                                 |                                                                             |
+| **`direction`**    | <code><a href="#nativenavigationtransitiondirection">NativeNavigationTransitionDirection</a></code> |                                                                             |
+| **`duration`**     | <code>number</code>                                                                                 |                                                                             |
+| **`sourceRect`**   | <code><a href="#nativenavigationrect">NativeNavigationRect</a></code>                               | Source rectangle for `zoom` transitions when no active source was recorded. |
+| **`targetRect`**   | <code><a href="#nativenavigationrect">NativeNavigationRect</a></code>                               | Destination rectangle for shared-element-style `zoom` transitions.          |
+| **`cornerRadius`** | <code>number</code>                                                                                 | Corner radius used while animating a `zoom` transition.                     |
 
 
 #### PluginVersionResult
@@ -677,10 +758,24 @@ How the plugin exposes native bar sizes to web content.
 <code>'css' | 'none'</code>
 
 
+#### NativeNavigationBlurEffect
+
+Native material/blur effect preference.
+
+<code>'none' | 'systemDefault' | 'extraLight' | 'light' | 'dark' | 'regular' | 'prominent' | 'systemUltraThinMaterial' | 'systemThinMaterial' | 'systemMaterial' | 'systemThickMaterial' | 'systemChromeMaterial' | 'systemUltraThinMaterialLight' | 'systemThinMaterialLight' | 'systemMaterialLight' | 'systemThickMaterialLight' | 'systemChromeMaterialLight' | 'systemUltraThinMaterialDark' | 'systemThinMaterialDark' | 'systemMaterialDark' | 'systemThickMaterialDark' | 'systemChromeMaterialDark'</code>
+
+
+#### NativeNavigationTabLabelVisibilityMode
+
+Native tab label visibility behavior.
+
+<code>'auto' | 'selected' | 'labeled' | 'unlabeled'</code>
+
+
 #### NativeNavigationTransitionDirection
 
 Navigation animation direction.
 
-<code>'forward' | 'back' | 'root' | 'tab' | 'none'</code>
+<code>'forward' | 'back' | 'root' | 'tab' | 'zoom' | 'none'</code>
 
 </docgen-api>
