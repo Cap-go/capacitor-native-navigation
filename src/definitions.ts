@@ -13,7 +13,49 @@ export type NativeNavigationContentInsetMode = 'css' | 'none';
 /**
  * Navigation animation direction.
  */
-export type NativeNavigationTransitionDirection = 'forward' | 'back' | 'root' | 'tab' | 'none';
+export type NativeNavigationTransitionDirection = 'forward' | 'back' | 'root' | 'tab' | 'zoom' | 'none';
+
+/**
+ * Native material/blur effect preference.
+ */
+export type NativeNavigationBlurEffect =
+  | 'none'
+  | 'systemDefault'
+  | 'extraLight'
+  | 'light'
+  | 'dark'
+  | 'regular'
+  | 'prominent'
+  | 'systemUltraThinMaterial'
+  | 'systemThinMaterial'
+  | 'systemMaterial'
+  | 'systemThickMaterial'
+  | 'systemChromeMaterial'
+  | 'systemUltraThinMaterialLight'
+  | 'systemThinMaterialLight'
+  | 'systemMaterialLight'
+  | 'systemThickMaterialLight'
+  | 'systemChromeMaterialLight'
+  | 'systemUltraThinMaterialDark'
+  | 'systemThinMaterialDark'
+  | 'systemMaterialDark'
+  | 'systemThickMaterialDark'
+  | 'systemChromeMaterialDark';
+
+/**
+ * Native tab label visibility behavior.
+ */
+export type NativeNavigationTabLabelVisibilityMode = 'auto' | 'selected' | 'labeled' | 'unlabeled';
+
+/**
+ * A rectangle in WebView viewport coordinates, expressed in native points/dp.
+ */
+export interface NativeNavigationRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
 /**
  * A serializable icon descriptor. Framework nodes are intentionally not accepted
@@ -95,6 +137,12 @@ export interface NativeNavigationIcon {
  */
 export interface NativeNavigationColors {
   /**
+   * When `true`, Android 12+ derives unspecified bar colors from Material You
+   * system palettes. Explicit color fields still win.
+   */
+  dynamic?: boolean;
+
+  /**
    * Tint color for active buttons/items.
    */
   tint?: string;
@@ -105,10 +153,35 @@ export interface NativeNavigationColors {
   inactiveTint?: string;
 
   /**
-   * Optional background tint. On iOS 26+ avoid setting this unless you want to
-   * override the system Liquid Glass appearance.
+   * Optional background tint. Ignored on iOS 26+ so UIKit can preserve the
+   * system Liquid Glass navigation appearance.
    */
   background?: string;
+
+  /**
+   * Title and label text color where the native platform supports it.
+   */
+  foreground?: string;
+
+  /**
+   * Badge background color for native tab badges.
+   */
+  badgeBackground?: string;
+
+  /**
+   * Badge text color for native tab badges.
+   */
+  badgeText?: string;
+
+  /**
+   * Active tab indicator color on Android.
+   */
+  indicator?: string;
+
+  /**
+   * Tab press ripple color on Android.
+   */
+  ripple?: string;
 }
 
 /**
@@ -211,6 +284,12 @@ export interface NativeNavigationNavbarOptions {
   transparent?: boolean;
 
   /**
+   * iOS blur/material effect for the navbar background when glass is not
+   * available. Defaults to `systemChromeMaterial` for transparent bars.
+   */
+  blurEffect?: NativeNavigationBlurEffect;
+
+  /**
    * Back button state.
    */
   backButton?: NativeNavigationBackButton;
@@ -297,6 +376,11 @@ export interface NativeNavigationTabbarOptions {
   labels?: boolean;
 
   /**
+   * Native label visibility mode. Overrides `labels` when provided.
+   */
+  labelVisibilityMode?: NativeNavigationTabLabelVisibilityMode;
+
+  /**
    * Show icons. Defaults to `true`.
    */
   icons?: boolean;
@@ -305,6 +389,38 @@ export interface NativeNavigationTabbarOptions {
    * Tabbar color hints.
    */
   colors?: NativeNavigationColors;
+
+  /**
+   * iOS blur/material effect for the tabbar background when glass is not
+   * available.
+   */
+  blurEffect?: NativeNavigationBlurEffect;
+
+  /**
+   * Disable the Android active tab indicator.
+   */
+  disableIndicator?: boolean;
+
+  /**
+   * Active tab indicator color on Android. `colors.indicator` is also
+   * supported.
+   */
+  indicatorColor?: string;
+
+  /**
+   * Tab press ripple color on Android. `colors.ripple` is also supported.
+   */
+  rippleColor?: string;
+
+  /**
+   * Badge background color. `colors.badgeBackground` is also supported.
+   */
+  badgeBackgroundColor?: string;
+
+  /**
+   * Badge text color. `colors.badgeText` is also supported.
+   */
+  badgeTextColor?: string;
 
   /**
    * Animate native tabbar changes.
@@ -338,6 +454,19 @@ export interface NativeNavigationBeginTransitionOptions {
   id?: string;
   direction?: NativeNavigationTransitionDirection;
   duration?: number;
+  /**
+   * Source rectangle for `zoom` transitions. Use viewport coordinates such as
+   * those returned by `Element.getBoundingClientRect()`.
+   */
+  sourceRect?: NativeNavigationRect;
+  /**
+   * Destination rectangle for shared-element-style `zoom` transitions.
+   */
+  targetRect?: NativeNavigationRect;
+  /**
+   * Corner radius used while animating a `zoom` transition.
+   */
+  cornerRadius?: number;
 }
 
 /**
@@ -347,6 +476,18 @@ export interface NativeNavigationFinishTransitionOptions {
   id?: string;
   direction?: NativeNavigationTransitionDirection;
   duration?: number;
+  /**
+   * Source rectangle for `zoom` transitions when no active source was recorded.
+   */
+  sourceRect?: NativeNavigationRect;
+  /**
+   * Destination rectangle for shared-element-style `zoom` transitions.
+   */
+  targetRect?: NativeNavigationRect;
+  /**
+   * Corner radius used while animating a `zoom` transition.
+   */
+  cornerRadius?: number;
 }
 
 /**

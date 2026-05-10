@@ -1,4 +1,4 @@
-# Example App for `@capgo/native-navigation`
+# Example App for `@capgo/capacitor-native-navigation`
 
 This Vite project links directly to the local plugin source so you can validate iOS, Android, and Web wiring while developing.
 

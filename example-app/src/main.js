@@ -1,5 +1,5 @@
 import './style.css';
-import { NativeNavigation } from '@capgo/native-navigation';
+import { NativeNavigation } from '@capgo/capacitor-native-navigation';
 
 const app = document.getElementById('app');
 

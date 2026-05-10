@@ -1,7 +1,7 @@
 {
   "name": "native-navigation-example",
   "version": "1.0.0",
-  "description": "Example Capacitor app for @capgo/native-navigation",
+  "description": "Example Capacitor app for @capgo/capacitor-native-navigation",
   "type": "module",
   "scripts": {
     "start": "vite",
@@ -12,7 +12,7 @@
     "@capacitor/core": "^8.0.0",
     "@capacitor/android": "^8.0.0",
     "@capacitor/ios": "^8.0.0",
-    "@capgo/native-navigation": "file:.."
+    "@capgo/capacitor-native-navigation": "file:.."
   },
   "devDependencies": {
     "@capacitor/cli": "^8.0.0",
