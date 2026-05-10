@@ -1,0 +1,460 @@
+import type { PluginListenerHandle } from '@capacitor/core';
+
+/**
+ * Platform rendering preference for the native bars.
+ */
+export type NativeNavigationPlatformStyle = 'auto' | 'ios' | 'android';
+
+/**
+ * How the plugin exposes native bar sizes to web content.
+ */
+export type NativeNavigationContentInsetMode = 'css' | 'none';
+
+/**
+ * Navigation animation direction.
+ */
+export type NativeNavigationTransitionDirection = 'forward' | 'back' | 'root' | 'tab' | 'none';
+
+/**
+ * A serializable icon descriptor. Framework nodes are intentionally not accepted
+ * because icons are rendered by native UI.
+ */
+export interface NativeNavigationIcon {
+  /**
+   * Cross-platform asset path or URL fallback.
+   */
+  src?: string;
+
+  /**
+   * Cross-platform inline SVG markup. The native renderers support common icon
+   * shapes such as path, line, polyline, polygon, circle, and rect. SVG icons
+   * are rendered as template images by default so native tint colors still
+   * apply.
+   */
+  svg?: string;
+
+  /**
+   * Preferred rendered icon width in native points/dp. Defaults to `24`.
+   */
+  width?: number;
+
+  /**
+   * Preferred rendered icon height in native points/dp. Defaults to `24`.
+   */
+  height?: number;
+
+  /**
+   * When `true`, native tint colors are applied to the rendered SVG/image.
+   * Defaults to `true`.
+   */
+  template?: boolean;
+
+  /**
+   * iOS-specific SF Symbol, bundled image name, or inline SVG.
+   */
+  ios?: {
+    /**
+     * SF Symbol name, for example `house.fill`.
+     */
+    sfSymbol?: string;
+
+    /**
+     * Bundled image name from the app asset catalog.
+     */
+    image?: string;
+
+    /**
+     * iOS-specific inline SVG markup.
+     */
+    svg?: string;
+  };
+
+  /**
+   * Android-specific drawable resource, asset name, or inline SVG.
+   */
+  android?: {
+    /**
+     * Drawable resource name without the `R.drawable.` prefix.
+     */
+    resource?: string;
+
+    /**
+     * Bundled image asset name.
+     */
+    image?: string;
+
+    /**
+     * Android-specific inline SVG markup.
+     */
+    svg?: string;
+  };
+}
+
+/**
+ * Native bar colors. Use CSS-style hex strings (`#RRGGBB` or `#AARRGGBB`).
+ */
+export interface NativeNavigationColors {
+  /**
+   * Tint color for active buttons/items.
+   */
+  tint?: string;
+
+  /**
+   * Color for inactive tab items.
+   */
+  inactiveTint?: string;
+
+  /**
+   * Optional background tint. On iOS 26+ avoid setting this unless you want to
+   * override the system Liquid Glass appearance.
+   */
+  background?: string;
+}
+
+/**
+ * Global plugin configuration.
+ */
+export interface NativeNavigationConfigureOptions {
+  /**
+   * Enables or disables the native chrome host.
+   */
+  enabled?: boolean;
+
+  /**
+   * Native style preference. `auto` uses the current platform.
+   */
+  platformStyle?: NativeNavigationPlatformStyle;
+
+  /**
+   * When `css`, the plugin writes CSS variables on `document.documentElement`.
+   */
+  contentInsetMode?: NativeNavigationContentInsetMode;
+
+  /**
+   * Default native transition duration in milliseconds.
+   */
+  animationDuration?: number;
+
+  /**
+   * Shared color hints for native bars.
+   */
+  colors?: NativeNavigationColors;
+}
+
+/**
+ * A button shown in the native navbar.
+ */
+export interface NativeNavigationBarButton {
+  /**
+   * Stable id returned in `navbarItemTap`.
+   */
+  id: string;
+
+  /**
+   * Visible text label.
+   */
+  title?: string;
+
+  /**
+   * Native icon descriptor.
+   */
+  icon?: NativeNavigationIcon;
+
+  /**
+   * Whether the action is enabled. Defaults to `true`.
+   */
+  enabled?: boolean;
+}
+
+/**
+ * Native back button configuration.
+ */
+export interface NativeNavigationBackButton {
+  /**
+   * Show the native back affordance.
+   */
+  visible?: boolean;
+
+  /**
+   * Optional back title.
+   */
+  title?: string;
+}
+
+/**
+ * Native navbar state.
+ */
+export interface NativeNavigationNavbarOptions {
+  /**
+   * Hide the native navbar.
+   */
+  hidden?: boolean;
+
+  /**
+   * Main title.
+   */
+  title?: string;
+
+  /**
+   * Secondary title where supported by the platform.
+   */
+  subtitle?: string;
+
+  /**
+   * Prefer a large iOS title style.
+   */
+  large?: boolean;
+
+  /**
+   * Prefer transparent/scroll-edge style.
+   */
+  transparent?: boolean;
+
+  /**
+   * Back button state.
+   */
+  backButton?: NativeNavigationBackButton;
+
+  /**
+   * Left-side action buttons.
+   */
+  leftItems?: NativeNavigationBarButton[];
+
+  /**
+   * Right-side action buttons.
+   */
+  rightItems?: NativeNavigationBarButton[];
+
+  /**
+   * Navbar color hints.
+   */
+  colors?: NativeNavigationColors;
+
+  /**
+   * Animate native navbar changes.
+   */
+  animated?: boolean;
+}
+
+/**
+ * A native tab item.
+ */
+export interface NativeNavigationTab {
+  /**
+   * Stable tab id returned in `tabSelect`.
+   */
+  id: string;
+
+  /**
+   * Visible tab label.
+   */
+  title?: string;
+
+  /**
+   * Native icon descriptor.
+   */
+  icon?: NativeNavigationIcon;
+
+  /**
+   * Optional selected-state icon.
+   */
+  selectedIcon?: NativeNavigationIcon;
+
+  /**
+   * Optional badge. Numeric badges are supported on both platforms; text badge
+   * support depends on platform capabilities.
+   */
+  badge?: string | number;
+
+  /**
+   * Whether the tab is enabled. Defaults to `true`.
+   */
+  enabled?: boolean;
+}
+
+/**
+ * Native tabbar state.
+ */
+export interface NativeNavigationTabbarOptions {
+  /**
+   * Hide the native tabbar.
+   */
+  hidden?: boolean;
+
+  /**
+   * Tab definitions.
+   */
+  tabs?: NativeNavigationTab[];
+
+  /**
+   * Currently selected tab id.
+   */
+  selectedId?: string;
+
+  /**
+   * Show text labels. Defaults to `true`.
+   */
+  labels?: boolean;
+
+  /**
+   * Show icons. Defaults to `true`.
+   */
+  icons?: boolean;
+
+  /**
+   * Tabbar color hints.
+   */
+  colors?: NativeNavigationColors;
+
+  /**
+   * Animate native tabbar changes.
+   */
+  animated?: boolean;
+}
+
+/**
+ * Insets exposed to web content.
+ */
+export interface NativeNavigationInsets {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+  navbarHeight: number;
+  tabbarHeight: number;
+}
+
+/**
+ * Returned by methods that may change safe content bounds.
+ */
+export interface NativeNavigationInsetsResult {
+  insets: NativeNavigationInsets;
+}
+
+/**
+ * Begin a native transition transaction before JS changes route content.
+ */
+export interface NativeNavigationBeginTransitionOptions {
+  id?: string;
+  direction?: NativeNavigationTransitionDirection;
+  duration?: number;
+}
+
+/**
+ * Finish a native transition transaction after JS has changed route content.
+ */
+export interface NativeNavigationFinishTransitionOptions {
+  id?: string;
+  direction?: NativeNavigationTransitionDirection;
+  duration?: number;
+}
+
+/**
+ * Native transition result.
+ */
+export interface NativeNavigationTransitionResult {
+  id: string;
+  direction: NativeNavigationTransitionDirection;
+  duration: number;
+}
+
+/**
+ * Plugin version payload.
+ */
+export interface PluginVersionResult {
+  /**
+   * Version identifier returned by the platform implementation.
+   */
+  version: string;
+}
+
+export interface NativeNavigationBackEvent {
+  source: 'navbar';
+}
+
+export interface NativeNavigationBarItemTapEvent {
+  id: string;
+  title?: string;
+  placement: 'left' | 'right';
+}
+
+export interface NativeNavigationTabSelectEvent {
+  id: string;
+  index: number;
+  title?: string;
+}
+
+export interface NativeNavigationSafeAreaChangedEvent {
+  insets: NativeNavigationInsets;
+}
+
+export interface NativeNavigationTransitionEvent {
+  id: string;
+  direction: NativeNavigationTransitionDirection;
+  duration: number;
+}
+
+/**
+ * Framework-agnostic native navigation chrome API.
+ */
+export interface NativeNavigationPlugin {
+  /**
+   * Configure the native chrome host and content inset behavior.
+   */
+  configure(options?: NativeNavigationConfigureOptions): Promise<NativeNavigationInsetsResult>;
+
+  /**
+   * Render or update the native navbar.
+   */
+  setNavbar(options: NativeNavigationNavbarOptions): Promise<NativeNavigationInsetsResult>;
+
+  /**
+   * Render or update the native tabbar.
+   */
+  setTabbar(options: NativeNavigationTabbarOptions): Promise<NativeNavigationInsetsResult>;
+
+  /**
+   * Capture the current WebView and prepare a native transition.
+   */
+  beginTransition(options?: NativeNavigationBeginTransitionOptions): Promise<NativeNavigationTransitionResult>;
+
+  /**
+   * Animate from the captured WebView snapshot to the current live WebView.
+   */
+  finishTransition(options?: NativeNavigationFinishTransitionOptions): Promise<NativeNavigationTransitionResult>;
+
+  /**
+   * Returns the platform implementation version marker.
+   */
+  getPluginVersion(): Promise<PluginVersionResult>;
+
+  addListener(
+    eventName: 'navbarBack',
+    listenerFunc: (event: NativeNavigationBackEvent) => void,
+  ): Promise<PluginListenerHandle>;
+
+  addListener(
+    eventName: 'navbarItemTap',
+    listenerFunc: (event: NativeNavigationBarItemTapEvent) => void,
+  ): Promise<PluginListenerHandle>;
+
+  addListener(
+    eventName: 'tabSelect',
+    listenerFunc: (event: NativeNavigationTabSelectEvent) => void,
+  ): Promise<PluginListenerHandle>;
+
+  addListener(
+    eventName: 'safeAreaChanged',
+    listenerFunc: (event: NativeNavigationSafeAreaChangedEvent) => void,
+  ): Promise<PluginListenerHandle>;
+
+  addListener(
+    eventName: 'transitionStart',
+    listenerFunc: (event: NativeNavigationTransitionEvent) => void,
+  ): Promise<PluginListenerHandle>;
+
+  addListener(
+    eventName: 'transitionEnd',
+    listenerFunc: (event: NativeNavigationTransitionEvent) => void,
+  ): Promise<PluginListenerHandle>;
+}
