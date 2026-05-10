@@ -87,9 +87,9 @@ function phoneShell(inner) {
         <stop offset="100%" stop-color="#ffffff" stop-opacity="0.66"/>
       </linearGradient>
       <linearGradient id="liquidGlass" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#ffffff" stop-opacity="0.32"/>
-        <stop offset="45%" stop-color="#e8f7ff" stop-opacity="0.16"/>
-        <stop offset="100%" stop-color="#ffffff" stop-opacity="0.08"/>
+        <stop offset="0%" stop-color="#ffffff" stop-opacity="0.64"/>
+        <stop offset="45%" stop-color="#e8f7ff" stop-opacity="0.38"/>
+        <stop offset="100%" stop-color="#ffffff" stop-opacity="0.24"/>
       </linearGradient>
       <filter id="softShadow" x="-20%" y="-40%" width="140%" height="190%">
         <feDropShadow dx="0" dy="14" stdDeviation="14" flood-color="#0f172a" flood-opacity="0.16"/>
@@ -133,7 +133,7 @@ function tabbar(active, shown = true, tint = '#0a84ff') {
         const selected = active === id;
         const color = selected ? tint : '#64748b';
         return `
-          ${selected ? pill(x - 44, 748, 88, 54, `${tint}14`) : ''}
+          ${selected ? pill(x - 44, 748, 88, 54, `${tint}20`) : ''}
           ${icon(id, x - 12, 756, 24, color, 2)}
           ${id === 'activity' ? `${pill(x + 10, 750, 22, 18, '#ff3b30')} ${text('3', x + 21, 763, 11, '#ffffff', 800, 'middle')}` : ''}
           ${text(label, x, 793, 11, color, selected ? 800 : 600, 'middle')}
@@ -292,7 +292,7 @@ function iconDemoFrame(frame) {
         const selected = state.selected === id;
         const color = selected ? state.tint : '#64748b';
         return `
-          ${selected ? pill(x - 44, 748, 88, 54, `${state.tint}14`) : ''}
+          ${selected ? pill(x - 44, 748, 88, 54, `${state.tint}20`) : ''}
           ${icon(id, x - 12, 756, 24, color, 2)}
           <g opacity="${labelsOpacity}">${text(label, x, 793, 11, color, selected ? 800 : 600, 'middle')}</g>
         `;
@@ -397,7 +397,7 @@ function optionsTabbar(state) {
         const color = selected ? state.tint : '#64748b';
         const labelOpacity = state.labelMode === 'labeled' || selected ? 1 : 0;
         return `
-          ${selected ? pill(x - 38, 748, 76, 54, `${state.tint}14`) : ''}
+          ${selected ? pill(x - 38, 748, 76, 54, `${state.tint}20`) : ''}
           ${selected ? `<rect x="${x - 20}" y="751" width="40" height="4" rx="2" fill="${state.tint}"/>` : ''}
           ${icon(id, x - 12, 756, 24, color, 2)}
           ${id === 'activity' ? `${pill(x + 10, 750, 22, 18, '#ff3b30')} ${text('3', x + 21, 763, 11, '#ffffff', 800, 'middle')}` : ''}
