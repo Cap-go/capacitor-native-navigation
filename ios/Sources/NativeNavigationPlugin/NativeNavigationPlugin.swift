@@ -7,7 +7,7 @@ import ObjectiveC
 
 // swiftlint:disable type_body_length
 @objc(NativeNavigationPlugin)
-public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelegate {
+public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "NativeNavigationPlugin"
     public let jsName = "NativeNavigation"
     public let pluginMethods: [CAPPluginMethod] = [
@@ -25,7 +25,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
     private var navBar: UINavigationBar?
     private var tabContainer: UIView?
     private var tabEffectView: UIVisualEffectView?
-    private var tabBar: UITabBar?
+    private var tabBar: NativeNavigationFloatingTabBar?
     private var navbarHeight: CGFloat = 44
     private var tabbarHeight: CGFloat = 64
     private let floatingTabbarHorizontalMargin: CGFloat = 24
@@ -154,21 +154,28 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
             let labels = call.getBool("labels", true)
             let icons = call.getBool("icons", true)
 
-            let (items, selectedIndex) = self.makeTabBarItems(
+            let (items, selectedIndex) = self.makeFloatingTabItems(
                 tabs,
                 selectedId: selectedId,
                 labels: labels,
                 icons: icons
             )
 
-            tabBar.items = items
-            if let selectedIndex = selectedIndex, selectedIndex < items.count {
-                tabBar.selectedItem = items[selectedIndex]
-            } else if tabBar.selectedItem == nil {
-                tabBar.selectedItem = items.first
-            }
-
             self.applyTabBarAppearance(tabBar: tabBar, options: call)
+            let resolvedSelectedIndex = selectedIndex ?? (items.indices.contains(tabBar.selectedIndex) ? tabBar.selectedIndex : 0)
+            tabBar.configure(
+                items: items,
+                selectedIndex: resolvedSelectedIndex,
+                labels: labels,
+                icons: icons
+            )
+            tabBar.onSelect = { [weak self] index, item in
+                self?.notifyListeners("tabSelect", data: [
+                    "id": item.id,
+                    "index": index,
+                    "title": item.title
+                ])
+            }
             self.tabContainer?.isHidden = false
             tabBar.isHidden = false
             self.layoutChrome()
@@ -281,18 +288,6 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
         ])
     }
 
-    public func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {
-        let index = item.tag
-        guard index >= 0 && index < tabIds.count else {
-            return
-        }
-        notifyListeners("tabSelect", data: [
-            "id": tabIds[index],
-            "index": index,
-            "title": tabTitles[index]
-        ])
-    }
-
     @objc private func handleLayoutChange() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             self.layoutChrome()
@@ -329,7 +324,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
         return bar
     }
 
-    private func ensureTabBar() -> UITabBar {
+    private func ensureTabBar() -> NativeNavigationFloatingTabBar {
         if let tabBar = tabBar {
             return tabBar
         }
@@ -350,12 +345,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
         effectView.clipsToBounds = true
         container.addSubview(effectView)
 
-        let bar = UITabBar()
-        bar.isTranslucent = true
+        let bar = NativeNavigationFloatingTabBar()
         bar.backgroundColor = .clear
-        bar.backgroundImage = UIImage()
-        bar.shadowImage = UIImage()
-        bar.delegate = self
         bar.autoresizingMask = [.flexibleWidth, .flexibleTopMargin]
         bar.clipsToBounds = true
         container.addSubview(bar)
@@ -385,33 +376,37 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
         }
     }
 
-    private func makeTabBarItems(
+    private func makeFloatingTabItems(
         _ tabs: [[String: Any]],
         selectedId: String?,
         labels: Bool,
         icons: Bool
-    ) -> ([UITabBarItem], Int?) {
+    ) -> ([NativeNavigationFloatingTabItem], Int?) {
         tabIds = []
         tabTitles = []
         var selectedIndex: Int?
 
-        let items = tabs.enumerated().map { index, tab -> UITabBarItem in
+        let items = tabs.enumerated().map { index, tab -> NativeNavigationFloatingTabItem in
             let id = tab["id"] as? String ?? "tab-\(index)"
-            let title = labels ? tab["title"] as? String : nil
+            let title = tab["title"] as? String ?? ""
             let image = icons ? self.image(from: tab["icon"] as? [String: Any]) : nil
             let selectedImage = icons ? self.image(from: tab["selectedIcon"] as? [String: Any]) : nil
-            let item = UITabBarItem(title: title, image: image, selectedImage: selectedImage)
-            item.tag = index
-            item.isEnabled = tab["enabled"] as? Bool ?? true
-            if let badge = tab["badge"] {
-                item.badgeValue = String(describing: badge)
-            }
+            let badge = tab["badge"].map { String(describing: $0) }
+            let enabled = tab["enabled"] as? Bool ?? true
             tabIds.append(id)
-            tabTitles.append(tab["title"] as? String ?? "")
+            tabTitles.append(title)
             if id == selectedId {
                 selectedIndex = index
             }
-            return item
+            return NativeNavigationFloatingTabItem(
+                id: id,
+                title: labels ? title : "",
+                accessibilityTitle: title,
+                image: image,
+                selectedImage: selectedImage,
+                badge: badge,
+                enabled: enabled
+            )
         }
 
         return (items, selectedIndex)
@@ -541,40 +536,28 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
         navBar.compactAppearance = appearance
     }
 
-    private func applyTabBarAppearance(tabBar: UITabBar, options call: CAPPluginCall) {
-        let appearance = UITabBarAppearance()
+    private func applyTabBarAppearance(tabBar: NativeNavigationFloatingTabBar, options call: CAPPluginCall) {
         let backgroundTint = colorOption(call, key: "background")
         let glassEffect = systemGlassEffect(tintColor: backgroundTint)
         if let glassEffect = glassEffect {
-            appearance.configureWithTransparentBackground()
-            appearance.backgroundColor = .clear
-            appearance.backgroundEffect = nil
-            appearance.shadowColor = .clear
             tabEffectView?.effect = glassEffect
             tabEffectView?.isHidden = false
+            tabEffectView?.contentView.backgroundColor = backgroundTint?.withAlphaComponent(0.12)
         } else {
-            appearance.configureWithDefaultBackground()
-            tabEffectView?.isHidden = true
+            tabEffectView?.effect = UIBlurEffect(style: .systemChromeMaterial)
+            tabEffectView?.isHidden = false
+            tabEffectView?.contentView.backgroundColor = (backgroundTint ?? .systemBackground).withAlphaComponent(0.46)
         }
 
         if let colors = call.getObject("colors") {
             if let tint = colors["tint"] as? String, let color = UIColor(hexString: tint) {
-                tabBar.tintColor = color
+                tabBar.selectedTintColor = color
             }
             if let inactiveTint = colors["inactiveTint"] as? String, let color = UIColor(hexString: inactiveTint) {
-                tabBar.unselectedItemTintColor = color
-            }
-            if let background = colors["background"] as? String,
-               let color = UIColor(hexString: background),
-               backgroundTint == nil || glassEffect == nil {
-                appearance.backgroundColor = color
+                tabBar.inactiveTintColor = color
             }
         }
-
-        tabBar.standardAppearance = appearance
-        if #available(iOS 15.0, *) {
-            tabBar.scrollEdgeAppearance = appearance
-        }
+        tabBar.setNeedsLayout()
     }
 
     private func layoutChrome() {
@@ -764,6 +747,219 @@ private struct SVGRenderStyle {
                 lineJoin = .miter
             }
         }
+    }
+}
+
+private struct NativeNavigationFloatingTabItem {
+    let id: String
+    let title: String
+    let accessibilityTitle: String
+    let image: UIImage?
+    let selectedImage: UIImage?
+    let badge: String?
+    let enabled: Bool
+}
+
+private struct NativeNavigationFloatingTabStyle {
+    let selected: Bool
+    let labels: Bool
+    let icons: Bool
+    let selectedTint: UIColor
+    let inactiveTint: UIColor
+}
+
+private final class NativeNavigationFloatingTabBar: UIView {
+    private var items: [NativeNavigationFloatingTabItem] = []
+    private var buttons: [NativeNavigationFloatingTabButton] = []
+    private var labelsVisible = true
+    private var iconsVisible = true
+
+    var selectedIndex = 0
+    var selectedTintColor = UIColor.systemBlue {
+        didSet { updateButtons() }
+    }
+    var inactiveTintColor = UIColor.secondaryLabel {
+        didSet { updateButtons() }
+    }
+    var onSelect: ((Int, NativeNavigationFloatingTabItem) -> Void)?
+
+    func configure(
+        items: [NativeNavigationFloatingTabItem],
+        selectedIndex: Int,
+        labels: Bool,
+        icons: Bool
+    ) {
+        self.items = items
+        self.labelsVisible = labels
+        self.iconsVisible = icons
+        self.selectedIndex = items.indices.contains(selectedIndex) ? selectedIndex : 0
+        rebuildButtons()
+        setNeedsLayout()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard !buttons.isEmpty else {
+            return
+        }
+        let itemWidth = bounds.width / CGFloat(buttons.count)
+        for (index, button) in buttons.enumerated() {
+            button.frame = CGRect(
+                x: CGFloat(index) * itemWidth,
+                y: 0,
+                width: itemWidth,
+                height: bounds.height
+            )
+        }
+    }
+
+    private func rebuildButtons() {
+        buttons.forEach { $0.removeFromSuperview() }
+        buttons = items.enumerated().map { index, item in
+            let button = NativeNavigationFloatingTabButton()
+            button.tag = index
+            button.configure(
+                item: item,
+                style: style(selected: index == selectedIndex)
+            )
+            button.addTarget(self, action: #selector(handleTap(_:)), for: .touchUpInside)
+            addSubview(button)
+            return button
+        }
+    }
+
+    private func updateButtons() {
+        for (index, button) in buttons.enumerated() {
+            guard items.indices.contains(index) else {
+                continue
+            }
+            button.configure(
+                item: items[index],
+                style: style(selected: index == selectedIndex)
+            )
+        }
+    }
+
+    private func style(selected: Bool) -> NativeNavigationFloatingTabStyle {
+        return NativeNavigationFloatingTabStyle(
+            selected: selected,
+            labels: labelsVisible,
+            icons: iconsVisible,
+            selectedTint: selectedTintColor,
+            inactiveTint: inactiveTintColor
+        )
+    }
+
+    @objc private func handleTap(_ sender: NativeNavigationFloatingTabButton) {
+        let index = sender.tag
+        guard items.indices.contains(index), items[index].enabled else {
+            return
+        }
+        selectedIndex = index
+        updateButtons()
+        onSelect?(index, items[index])
+    }
+}
+
+private final class NativeNavigationFloatingTabButton: UIControl {
+    private let selectedView = UIView()
+    private let imageView = UIImageView()
+    private let titleLabel = UILabel()
+    private let badgeLabel = UILabel()
+    private var hasIcon = true
+    private var hasLabel = true
+    private var badgeText: String?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isAccessibilityElement = true
+
+        selectedView.isUserInteractionEnabled = false
+        selectedView.alpha = 0
+        addSubview(selectedView)
+
+        imageView.contentMode = .scaleAspectFit
+        imageView.isUserInteractionEnabled = false
+        addSubview(imageView)
+
+        titleLabel.textAlignment = .center
+        titleLabel.font = .systemFont(ofSize: 11, weight: .semibold)
+        titleLabel.adjustsFontSizeToFitWidth = true
+        titleLabel.minimumScaleFactor = 0.78
+        titleLabel.isUserInteractionEnabled = false
+        addSubview(titleLabel)
+
+        badgeLabel.textAlignment = .center
+        badgeLabel.font = .systemFont(ofSize: 11, weight: .bold)
+        badgeLabel.textColor = .white
+        badgeLabel.backgroundColor = .systemRed
+        badgeLabel.layer.masksToBounds = true
+        badgeLabel.isUserInteractionEnabled = false
+        addSubview(badgeLabel)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func configure(
+        item: NativeNavigationFloatingTabItem,
+        style: NativeNavigationFloatingTabStyle
+    ) {
+        isEnabled = item.enabled
+        alpha = item.enabled ? 1 : 0.38
+        hasIcon = style.icons && (item.image != nil || item.selectedImage != nil)
+        hasLabel = style.labels && !item.title.isEmpty
+        badgeText = item.badge
+
+        let color = style.selected ? style.selectedTint : style.inactiveTint
+        selectedView.backgroundColor = style.selectedTint.withAlphaComponent(style.selected ? 0.16 : 0)
+        selectedView.alpha = style.selected ? 1 : 0
+
+        let image = style.selected ? (item.selectedImage ?? item.image) : item.image
+        imageView.image = image
+        imageView.tintColor = color
+        imageView.isHidden = !hasIcon
+
+        titleLabel.text = item.title
+        titleLabel.textColor = color
+        titleLabel.font = .systemFont(ofSize: 11, weight: style.selected ? .bold : .semibold)
+        titleLabel.isHidden = !hasLabel
+
+        badgeLabel.text = item.badge
+        badgeLabel.isHidden = item.badge == nil || item.badge == "0"
+        accessibilityLabel = item.accessibilityTitle
+        accessibilityTraits = style.selected ? [.button, .selected] : .button
+        setNeedsLayout()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        selectedView.frame = bounds.insetBy(dx: 7, dy: 7)
+        selectedView.layer.cornerRadius = selectedView.bounds.height / 2
+
+        let iconSize: CGFloat = 23
+        if hasIcon && hasLabel {
+            imageView.frame = CGRect(x: (bounds.width - iconSize) / 2, y: 10, width: iconSize, height: iconSize)
+            titleLabel.frame = CGRect(x: 5, y: bounds.height - 23, width: bounds.width - 10, height: 15)
+        } else if hasIcon {
+            imageView.frame = CGRect(x: (bounds.width - iconSize) / 2, y: (bounds.height - iconSize) / 2, width: iconSize, height: iconSize)
+            titleLabel.frame = .zero
+        } else {
+            imageView.frame = .zero
+            titleLabel.frame = CGRect(x: 5, y: (bounds.height - 18) / 2, width: bounds.width - 10, height: 18)
+        }
+
+        let badgeHeight: CGFloat = 18
+        let badgeWidth = max(badgeHeight, CGFloat((badgeText ?? "").count * 7 + 11))
+        let anchor = hasIcon ? imageView.frame : CGRect(x: bounds.midX - 10, y: bounds.midY - 10, width: 20, height: 20)
+        badgeLabel.frame = CGRect(
+            x: min(bounds.width - badgeWidth - 8, anchor.midX + 7),
+            y: max(6, anchor.minY - 6),
+            width: badgeWidth,
+            height: badgeHeight
+        )
+        badgeLabel.layer.cornerRadius = badgeHeight / 2
     }
 }
 

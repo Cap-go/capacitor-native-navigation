@@ -1,7 +1,6 @@
 package app.capgo.nativenavigation;
 
 import android.app.Activity;
-import android.content.res.ColorStateList;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -10,11 +9,13 @@ import android.graphics.Outline;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
+import android.graphics.Typeface;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -25,6 +26,8 @@ import android.view.Window;
 import android.view.WindowInsets;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.graphics.PathParser;
@@ -34,9 +37,6 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
-import com.google.android.material.badge.BadgeDrawable;
-import com.google.android.material.bottomnavigation.BottomNavigationView;
-import com.google.android.material.navigation.NavigationBarView;
 import java.io.StringReader;
 import java.net.URLDecoder;
 import java.util.ArrayDeque;
@@ -63,7 +63,7 @@ public class NativeNavigationPlugin extends Plugin {
     private FrameLayout navbarContainer;
     private FrameLayout tabbarContainer;
     private Toolbar toolbar;
-    private BottomNavigationView tabbar;
+    private LinearLayout tabbar;
     private ImageView transitionSnapshot;
     private boolean enabled = true;
     private boolean navbarVisible = false;
@@ -78,8 +78,8 @@ public class NativeNavigationPlugin extends Plugin {
     private final Map<Integer, String> menuActionIds = new HashMap<>();
     private final Map<Integer, String> menuActionTitles = new HashMap<>();
     private final Map<Integer, String> menuActionPlacements = new HashMap<>();
-    private final Map<Integer, String> tabIds = new HashMap<>();
-    private final Map<Integer, String> tabTitles = new HashMap<>();
+    private final List<NativeTabItem> tabItems = new ArrayList<>();
+    private int selectedTabIndex = 0;
 
     @Override
     public void load() {
@@ -188,17 +188,11 @@ public class NativeNavigationPlugin extends Plugin {
                 return;
             }
 
-            BottomNavigationView nativeTabbar = ensureTabbar();
-            nativeTabbar.getMenu().clear();
-            tabIds.clear();
-            tabTitles.clear();
-
+            LinearLayout nativeTabbar = ensureTabbar();
+            nativeTabbar.removeAllViews();
+            tabItems.clear();
             boolean labels = call.getBoolean("labels", true);
             boolean icons = call.getBoolean("icons", true);
-            nativeTabbar.setLabelVisibilityMode(
-                labels ? NavigationBarView.LABEL_VISIBILITY_LABELED : NavigationBarView.LABEL_VISIBILITY_UNLABELED
-            );
-
             JSONArray tabs = call.getArray("tabs", new JSArray());
             String selectedId = call.getString("selectedId", null);
             for (int index = 0; index < tabs.length(); index++) {
@@ -206,40 +200,22 @@ public class NativeNavigationPlugin extends Plugin {
                 if (tab == null) {
                     continue;
                 }
-                int itemId = MENU_ITEM_BASE + index;
                 String id = tab.optString("id", "tab-" + index);
                 String title = tab.optString("title", "");
-                MenuItem item = nativeTabbar.getMenu().add(Menu.NONE, itemId, index, labels ? title : "");
-                item.setEnabled(tab.optBoolean("enabled", true));
                 Drawable icon = icons ? iconFrom(tab.optJSONObject("icon")) : new ColorDrawable(Color.TRANSPARENT);
-                if (icon != null) {
-                    item.setIcon(icon);
-                }
-                if (tab.has("badge")) {
-                    BadgeDrawable badge = nativeTabbar.getOrCreateBadge(itemId);
-                    Object badgeValue = tab.opt("badge");
-                    if (badgeValue instanceof Number) {
-                        badge.setNumber(((Number) badgeValue).intValue());
-                    } else {
-                        try {
-                            badge.setNumber(Integer.parseInt(String.valueOf(badgeValue)));
-                        } catch (NumberFormatException ignored) {
-                            badge.setVisible(true);
-                        }
-                    }
-                }
-                tabIds.put(itemId, id);
-                tabTitles.put(itemId, title);
+                String badge = tab.has("badge") ? String.valueOf(tab.opt("badge")) : null;
+                tabItems.add(new NativeTabItem(id, title, icon, badge, tab.optBoolean("enabled", true)));
                 if (id.equals(selectedId)) {
-                    nativeTabbar.setSelectedItemId(itemId);
+                    selectedTabIndex = index;
                 }
             }
 
-            if (nativeTabbar.getSelectedItemId() == 0 && nativeTabbar.getMenu().size() > 0) {
-                nativeTabbar.setSelectedItemId(nativeTabbar.getMenu().getItem(0).getItemId());
+            if (!tabItems.isEmpty() && (selectedTabIndex < 0 || selectedTabIndex >= tabItems.size())) {
+                selectedTabIndex = 0;
             }
 
-            applyTabbarColors(nativeTabbar, call.getObject("colors", new JSObject()));
+            applyTabbarColors(call.getObject("colors", new JSObject()));
+            renderTabbarItems(labels, icons);
             if (tabbarContainer != null) {
                 tabbarContainer.setVisibility(View.VISIBLE);
             }
@@ -414,7 +390,7 @@ public class NativeNavigationPlugin extends Plugin {
         return toolbar;
     }
 
-    private BottomNavigationView ensureTabbar() {
+    private LinearLayout ensureTabbar() {
         if (tabbar != null) {
             return tabbar;
         }
@@ -433,21 +409,11 @@ public class NativeNavigationPlugin extends Plugin {
             );
         }
 
-        tabbar = new BottomNavigationView(getContext());
-        tabbar.setElevation(0);
+        tabbar = new LinearLayout(getContext());
+        tabbar.setOrientation(LinearLayout.HORIZONTAL);
+        tabbar.setGravity(Gravity.CENTER);
+        tabbar.setPadding(dp(6), dp(6), dp(6), dp(6));
         tabbar.setBackgroundColor(Color.TRANSPARENT);
-        tabbar.setOnItemSelectedListener((item) -> {
-            int itemId = item.getItemId();
-            if (!tabIds.containsKey(itemId)) {
-                return false;
-            }
-            JSObject event = new JSObject();
-            event.put("id", tabIds.get(itemId));
-            event.put("index", itemId - MENU_ITEM_BASE);
-            event.put("title", tabTitles.get(itemId));
-            notifyListeners("tabSelect", event);
-            return true;
-        });
         tabbarContainer.addView(tabbar);
         if (root != null) {
             root.addView(tabbarContainer);
@@ -458,6 +424,100 @@ public class NativeNavigationPlugin extends Plugin {
             );
         }
         return tabbar;
+    }
+
+    private void renderTabbarItems(boolean labels, boolean icons) {
+        if (tabbar == null) {
+            return;
+        }
+        tabbar.removeAllViews();
+        for (int index = 0; index < tabItems.size(); index++) {
+            final int itemIndex = index;
+            NativeTabItem item = tabItems.get(index);
+            FrameLayout button = makeTabButton(item, itemIndex == selectedTabIndex, labels, icons);
+            button.setEnabled(item.enabled);
+            button.setAlpha(item.enabled ? 1f : 0.38f);
+            button.setOnClickListener((view) -> {
+                if (!item.enabled) {
+                    return;
+                }
+                selectedTabIndex = itemIndex;
+                renderTabbarItems(labels, icons);
+                JSObject event = new JSObject();
+                event.put("id", item.id);
+                event.put("index", itemIndex);
+                event.put("title", item.title);
+                notifyListeners("tabSelect", event);
+            });
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
+            params.setMargins(dp(2), 0, dp(2), 0);
+            tabbar.addView(button, params);
+        }
+    }
+
+    private FrameLayout makeTabButton(NativeTabItem item, boolean selected, boolean labels, boolean icons) {
+        FrameLayout button = new FrameLayout(getContext());
+        button.setForeground(selectableItemBackground());
+        if (selected) {
+            GradientDrawable selectedBackground = new GradientDrawable();
+            selectedBackground.setColor(withAlpha(tintColor, 34));
+            selectedBackground.setCornerRadius(dp(26));
+            button.setBackground(selectedBackground);
+        }
+
+        LinearLayout content = new LinearLayout(getContext());
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setGravity(Gravity.CENTER);
+        content.setPadding(dp(4), dp(4), dp(4), dp(4));
+        button.addView(content, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        int itemColor = selected ? tintColor : inactiveTintColor;
+        if (icons && item.icon != null) {
+            Drawable icon = item.icon.mutate();
+            icon.setTint(itemColor);
+            ImageView image = new ImageView(getContext());
+            image.setImageDrawable(icon);
+            image.setColorFilter(itemColor);
+            LinearLayout.LayoutParams imageParams = new LinearLayout.LayoutParams(dp(24), dp(24));
+            imageParams.bottomMargin = labels ? dp(2) : 0;
+            content.addView(image, imageParams);
+        }
+
+        if (labels) {
+            TextView label = new TextView(getContext());
+            label.setText(item.title);
+            label.setTextColor(itemColor);
+            label.setTextSize(12);
+            label.setTypeface(Typeface.DEFAULT, selected ? Typeface.BOLD : Typeface.NORMAL);
+            label.setGravity(Gravity.CENTER);
+            label.setSingleLine(true);
+            content.addView(label, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(18)));
+        }
+
+        if (item.badge != null && !item.badge.isEmpty() && !"0".equals(item.badge)) {
+            TextView badge = new TextView(getContext());
+            badge.setText(item.badge);
+            badge.setTextColor(Color.WHITE);
+            badge.setTextSize(11);
+            badge.setTypeface(Typeface.DEFAULT_BOLD);
+            badge.setGravity(Gravity.CENTER);
+            GradientDrawable badgeBackground = new GradientDrawable();
+            badgeBackground.setColor(Color.rgb(255, 59, 48));
+            badgeBackground.setCornerRadius(dp(9));
+            badge.setBackground(badgeBackground);
+            int badgeWidth = Math.max(dp(18), item.badge.length() * dp(7) + dp(10));
+            FrameLayout.LayoutParams badgeParams = new FrameLayout.LayoutParams(
+                badgeWidth,
+                dp(18),
+                Gravity.TOP | Gravity.CENTER_HORIZONTAL
+            );
+            badgeParams.topMargin = dp(4);
+            badge.setTranslationX(dp(16));
+            button.addView(badge, badgeParams);
+        }
+
+        button.setContentDescription(item.title);
+        return button;
     }
 
     private Drawable iconFrom(JSONObject descriptor) {
@@ -607,6 +667,23 @@ public class NativeNavigationPlugin extends Plugin {
             } else if (join != null) {
                 lineJoin = Paint.Join.MITER;
             }
+        }
+    }
+
+    private static final class NativeTabItem {
+
+        final String id;
+        final String title;
+        final Drawable icon;
+        final String badge;
+        final boolean enabled;
+
+        NativeTabItem(String id, String title, Drawable icon, String badge, boolean enabled) {
+            this.id = id;
+            this.title = title;
+            this.icon = icon;
+            this.badge = badge;
+            this.enabled = enabled;
         }
     }
 
@@ -800,18 +877,12 @@ public class NativeNavigationPlugin extends Plugin {
         }
     }
 
-    private void applyTabbarColors(BottomNavigationView nativeTabbar, JSObject colors) {
+    private void applyTabbarColors(JSObject colors) {
         int tint = parseColor(colors.getString("tint", null), tintColor);
         int inactiveTint = parseColor(colors.getString("inactiveTint", null), inactiveTintColor);
         int background = parseColor(colors.getString("background", null), Color.argb(235, 255, 255, 255));
         tintColor = tint;
         inactiveTintColor = inactiveTint;
-        int[][] states = new int[][] { new int[] { android.R.attr.state_checked }, new int[] {} };
-        int[] colorState = new int[] { tint, inactiveTint };
-        ColorStateList colorStateList = new ColorStateList(states, colorState);
-        nativeTabbar.setItemIconTintList(colorStateList);
-        nativeTabbar.setItemTextColor(colorStateList);
-        nativeTabbar.setBackgroundColor(Color.TRANSPARENT);
         if (tabbarContainer != null) {
             GradientDrawable capsule = new GradientDrawable();
             capsule.setColor(background);
@@ -829,6 +900,16 @@ public class NativeNavigationPlugin extends Plugin {
         } catch (IllegalArgumentException ignored) {
             return fallback;
         }
+    }
+
+    private Drawable selectableItemBackground() {
+        TypedValue outValue = new TypedValue();
+        getContext().getTheme().resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, outValue, true);
+        return AppCompatResources.getDrawable(getContext(), outValue.resourceId);
+    }
+
+    private int withAlpha(int color, int alpha) {
+        return Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color));
     }
 
     private void layoutChrome() {
