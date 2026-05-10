@@ -987,10 +987,21 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
     }
 
     private func configureGlassBarButtonItem(_ item: UIBarButtonItem, id: String) {
-        if #available(iOS 26.0, *) {
-            item.identifier = id
-            item.sharesBackground = true
-            item.hidesSharedBackground = false
+        guard #available(iOS 26.0, *) else {
+            return
+        }
+
+        // Keep older SDK builds working while adopting the native iOS 26 bar
+        // button Liquid Glass grouping APIs when the runtime exposes them.
+        let object = item as NSObject
+        if object.responds(to: NSSelectorFromString("setIdentifier:")) {
+            object.setValue(id, forKey: "identifier")
+        }
+        if object.responds(to: NSSelectorFromString("setSharesBackground:")) {
+            object.setValue(true, forKey: "sharesBackground")
+        }
+        if object.responds(to: NSSelectorFromString("setHidesSharedBackground:")) {
+            object.setValue(false, forKey: "hidesSharedBackground")
         }
     }
 
