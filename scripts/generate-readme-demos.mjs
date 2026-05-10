@@ -86,6 +86,11 @@ function phoneShell(inner) {
         <stop offset="0%" stop-color="#ffffff" stop-opacity="0.88"/>
         <stop offset="100%" stop-color="#ffffff" stop-opacity="0.66"/>
       </linearGradient>
+      <linearGradient id="liquidGlass" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#ffffff" stop-opacity="0.32"/>
+        <stop offset="45%" stop-color="#e8f7ff" stop-opacity="0.16"/>
+        <stop offset="100%" stop-color="#ffffff" stop-opacity="0.08"/>
+      </linearGradient>
       <filter id="softShadow" x="-20%" y="-40%" width="140%" height="190%">
         <feDropShadow dx="0" dy="14" stdDeviation="14" flood-color="#0f172a" flood-opacity="0.16"/>
       </filter>
@@ -122,13 +127,13 @@ function tabbar(active, shown = true, tint = '#0a84ff') {
     ['settings', 'Settings', 284],
   ];
   return `
-    <rect x="58" y="742" width="274" height="66" rx="33" fill="url(#glass)" stroke="#dbe3ef" filter="url(#softShadow)"/>
+    <rect x="58" y="742" width="274" height="66" rx="33" fill="url(#liquidGlass)" stroke="#ffffff" stroke-opacity="0.52" filter="url(#softShadow)"/>
     ${items
       .map(([id, label, x]) => {
         const selected = active === id;
         const color = selected ? tint : '#64748b';
         return `
-          ${selected ? pill(x - 44, 748, 88, 54, '#e8f2ff') : ''}
+          ${selected ? pill(x - 44, 748, 88, 54, `${tint}14`) : ''}
           ${icon(id, x - 12, 756, 24, color, 2)}
           ${id === 'activity' ? `${pill(x + 10, 750, 22, 18, '#ff3b30')} ${text('3', x + 21, 763, 11, '#ffffff', 800, 'middle')}` : ''}
           ${text(label, x, 793, 11, color, selected ? 800 : 600, 'middle')}
@@ -277,7 +282,7 @@ function iconDemoFrame(frame) {
     <rect x="30" y="604" width="330" height="66" rx="22" fill="#ffffff" stroke="#dbe3ef"/>
     ${text(state.callout, 54, 644, 17, '#0f172a', 850)}
     ${navbar('SVG Icons', 'No native asset packaging required', { tint: state.tint })}
-    <rect x="58" y="742" width="274" height="66" rx="33" fill="url(#glass)" stroke="#dbe3ef" filter="url(#softShadow)"/>
+    <rect x="58" y="742" width="274" height="66" rx="33" fill="url(#liquidGlass)" stroke="#ffffff" stroke-opacity="0.52" filter="url(#softShadow)"/>
     ${[
       ['home', 'Home', 106],
       ['activity', 'Activity', 195],
@@ -287,7 +292,7 @@ function iconDemoFrame(frame) {
         const selected = state.selected === id;
         const color = selected ? state.tint : '#64748b';
         return `
-          ${selected ? pill(x - 44, 748, 88, 54, '#eef2ff') : ''}
+          ${selected ? pill(x - 44, 748, 88, 54, `${state.tint}14`) : ''}
           ${icon(id, x - 12, 756, 24, color, 2)}
           <g opacity="${labelsOpacity}">${text(label, x, 793, 11, color, selected ? 800 : 600, 'middle')}</g>
         `;
@@ -385,14 +390,14 @@ function optionsTabbar(state) {
     ['settings', 'Settings', 284],
   ];
   return `
-    <rect x="58" y="742" width="274" height="66" rx="33" fill="url(#glass)" stroke="#dbe3ef" filter="url(#softShadow)"/>
+    <rect x="58" y="742" width="274" height="66" rx="33" fill="url(#liquidGlass)" stroke="#ffffff" stroke-opacity="0.52" filter="url(#softShadow)"/>
     ${items
       .map(([id, label, x]) => {
         const selected = state.selected === id;
         const color = selected ? state.tint : '#64748b';
         const labelOpacity = state.labelMode === 'labeled' || selected ? 1 : 0;
         return `
-          ${selected ? pill(x - 38, 748, 76, 54, `${state.tint}22`) : ''}
+          ${selected ? pill(x - 38, 748, 76, 54, `${state.tint}14`) : ''}
           ${selected ? `<rect x="${x - 20}" y="751" width="40" height="4" rx="2" fill="${state.tint}"/>` : ''}
           ${icon(id, x - 12, 756, 24, color, 2)}
           ${id === 'activity' ? `${pill(x + 10, 750, 22, 18, '#ff3b30')} ${text('3', x + 21, 763, 11, '#ffffff', 800, 'middle')}` : ''}
