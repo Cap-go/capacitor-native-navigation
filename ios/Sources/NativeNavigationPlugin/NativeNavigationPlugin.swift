@@ -3,6 +3,7 @@
 import Foundation
 import Capacitor
 import UIKit
+import ObjectiveC
 
 // swiftlint:disable type_body_length
 @objc(NativeNavigationPlugin)
@@ -22,6 +23,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
     private var navContainer: UIView?
     private var navBlurView: UIVisualEffectView?
     private var navBar: UINavigationBar?
+    private var tabContainer: UIView?
+    private var tabEffectView: UIVisualEffectView?
     private var tabBar: UITabBar?
     private var navbarHeight: CGFloat = 44
     private var tabbarHeight: CGFloat = 49
@@ -61,6 +64,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
 
             if !self.isEnabled {
                 self.navContainer?.isHidden = true
+                self.tabContainer?.isHidden = true
                 self.tabBar?.isHidden = true
             }
 
@@ -105,6 +109,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
             if let backButton = call.getObject("backButton"), backButton["visible"] as? Bool == true {
                 let title = backButton["title"] as? String
                 let item = UIBarButtonItem(title: title ?? "Back", style: .plain, target: self, action: #selector(self.handleNavbarBack))
+                self.configureGlassBarButtonItem(item, id: "back")
                 navItem.leftBarButtonItem = item
             } else {
                 navItem.leftBarButtonItems = self.makeBarButtonItems(call.getArray("leftItems") as? [[String: Any]] ?? [], placement: "left")
@@ -133,6 +138,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
             self.tabbarVisible = !hidden
 
             guard !hidden else {
+                self.tabContainer?.isHidden = true
                 self.tabBar?.isHidden = true
                 self.updateInsetsAndNotify()
                 call.resolve(self.insetsResult())
@@ -145,34 +151,22 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
             let labels = call.getBool("labels", true)
             let icons = call.getBool("icons", true)
 
-            self.tabIds = []
-            self.tabTitles = []
-
-            let items = tabs.enumerated().map { index, tab -> UITabBarItem in
-                let id = tab["id"] as? String ?? "tab-\(index)"
-                let title = labels ? tab["title"] as? String : nil
-                let image = icons ? self.image(from: tab["icon"] as? [String: Any]) : nil
-                let selectedImage = icons ? self.image(from: tab["selectedIcon"] as? [String: Any]) : nil
-                let item = UITabBarItem(title: title, image: image, selectedImage: selectedImage)
-                item.tag = index
-                item.isEnabled = tab["enabled"] as? Bool ?? true
-                if let badge = tab["badge"] {
-                    item.badgeValue = String(describing: badge)
-                }
-                self.tabIds.append(id)
-                self.tabTitles.append(tab["title"] as? String ?? "")
-                if id == selectedId {
-                    tabBar.selectedItem = item
-                }
-                return item
-            }
+            let (items, selectedIndex) = self.makeTabBarItems(
+                tabs,
+                selectedId: selectedId,
+                labels: labels,
+                icons: icons
+            )
 
             tabBar.items = items
-            if tabBar.selectedItem == nil {
+            if let selectedIndex = selectedIndex, selectedIndex < items.count {
+                tabBar.selectedItem = items[selectedIndex]
+            } else if tabBar.selectedItem == nil {
                 tabBar.selectedItem = items.first
             }
 
             self.applyTabBarAppearance(tabBar: tabBar, options: call)
+            self.tabContainer?.isHidden = false
             tabBar.isHidden = false
             self.layoutChrome()
             self.updateInsetsAndNotify()
@@ -308,16 +302,20 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
             return navBar
         }
 
-        let container = UIView()
+        let container = NativeNavigationChromeContainer()
+        container.hitSlop = UIEdgeInsets(top: 0, left: 0, bottom: 32, right: 0)
         container.isUserInteractionEnabled = true
         container.autoresizingMask = [.flexibleWidth, .flexibleBottomMargin]
 
         let blurView = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterial))
         blurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        blurView.isUserInteractionEnabled = false
         container.addSubview(blurView)
 
-        let bar = UINavigationBar()
+        let bar = NativeNavigationBar()
+        bar.hitSlop = UIEdgeInsets(top: 0, left: 0, bottom: 32, right: 0)
         bar.isTranslucent = true
+        bar.backgroundColor = .clear
         bar.autoresizingMask = [.flexibleWidth, .flexibleBottomMargin]
         container.addSubview(bar)
 
@@ -333,11 +331,27 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
             return tabBar
         }
 
+        let container = NativeNavigationChromeContainer()
+        container.hitSlop = UIEdgeInsets(top: 32, left: 0, bottom: 0, right: 0)
+        container.isUserInteractionEnabled = true
+        container.autoresizingMask = [.flexibleWidth, .flexibleTopMargin]
+
+        let effectView = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterial))
+        effectView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        effectView.isUserInteractionEnabled = false
+        container.addSubview(effectView)
+
         let bar = UITabBar()
         bar.isTranslucent = true
+        bar.backgroundColor = .clear
+        bar.backgroundImage = UIImage()
+        bar.shadowImage = UIImage()
         bar.delegate = self
         bar.autoresizingMask = [.flexibleWidth, .flexibleTopMargin]
-        bridge?.viewController?.view.addSubview(bar)
+        container.addSubview(bar)
+        bridge?.viewController?.view.addSubview(container)
+        self.tabContainer = container
+        self.tabEffectView = effectView
         self.tabBar = bar
         return bar
     }
@@ -354,10 +368,43 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
             item.isEnabled = rawItem["enabled"] as? Bool ?? true
             item.accessibilityIdentifier = id
             item.accessibilityLabel = title
+            configureGlassBarButtonItem(item, id: id)
             navbarItemPlacement[id] = placement
             navbarItemTitle[id] = title ?? ""
             return item
         }
+    }
+
+    private func makeTabBarItems(
+        _ tabs: [[String: Any]],
+        selectedId: String?,
+        labels: Bool,
+        icons: Bool
+    ) -> ([UITabBarItem], Int?) {
+        tabIds = []
+        tabTitles = []
+        var selectedIndex: Int?
+
+        let items = tabs.enumerated().map { index, tab -> UITabBarItem in
+            let id = tab["id"] as? String ?? "tab-\(index)"
+            let title = labels ? tab["title"] as? String : nil
+            let image = icons ? self.image(from: tab["icon"] as? [String: Any]) : nil
+            let selectedImage = icons ? self.image(from: tab["selectedIcon"] as? [String: Any]) : nil
+            let item = UITabBarItem(title: title, image: image, selectedImage: selectedImage)
+            item.tag = index
+            item.isEnabled = tab["enabled"] as? Bool ?? true
+            if let badge = tab["badge"] {
+                item.badgeValue = String(describing: badge)
+            }
+            tabIds.append(id)
+            tabTitles.append(tab["title"] as? String ?? "")
+            if id == selectedId {
+                selectedIndex = index
+            }
+            return item
+        }
+
+        return (items, selectedIndex)
     }
 
     private func image(from descriptor: [String: Any]?) -> UIImage? {
@@ -447,11 +494,20 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
     private func applyNavBarAppearance(navBar: UINavigationBar, options call: CAPPluginCall) {
         let appearance = UINavigationBarAppearance()
         let transparent = call.getBool("transparent", false)
-        if #available(iOS 26.0, *) {
+        let backgroundTint = colorOption(call, key: "background")
+        let glassEffect = systemGlassEffect(tintColor: backgroundTint)
+        if let glassEffect = glassEffect {
             appearance.configureWithTransparentBackground()
-            navBlurView?.isHidden = true
+            appearance.backgroundColor = .clear
+            appearance.backgroundEffect = nil
+            appearance.shadowColor = .clear
+            navBlurView?.effect = glassEffect
+            navBlurView?.isHidden = false
         } else if transparent {
             appearance.configureWithTransparentBackground()
+            appearance.backgroundColor = .clear
+            appearance.shadowColor = .clear
+            navBlurView?.effect = UIBlurEffect(style: .systemChromeMaterial)
             navBlurView?.isHidden = false
         } else {
             appearance.configureWithDefaultBackground()
@@ -462,7 +518,10 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
             if let tint = colors["tint"] as? String, let color = UIColor(hexString: tint) {
                 navBar.tintColor = color
             }
-            if let background = colors["background"] as? String, let color = UIColor(hexString: background), !transparent {
+            if let background = colors["background"] as? String,
+               let color = UIColor(hexString: background),
+               backgroundTint == nil || glassEffect == nil,
+               !transparent {
                 appearance.backgroundColor = color
             }
         }
@@ -474,10 +533,18 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
 
     private func applyTabBarAppearance(tabBar: UITabBar, options call: CAPPluginCall) {
         let appearance = UITabBarAppearance()
-        if #available(iOS 26.0, *) {
+        let backgroundTint = colorOption(call, key: "background")
+        let glassEffect = systemGlassEffect(tintColor: backgroundTint)
+        if let glassEffect = glassEffect {
             appearance.configureWithTransparentBackground()
+            appearance.backgroundColor = .clear
+            appearance.backgroundEffect = nil
+            appearance.shadowColor = .clear
+            tabEffectView?.effect = glassEffect
+            tabEffectView?.isHidden = false
         } else {
             appearance.configureWithDefaultBackground()
+            tabEffectView?.isHidden = true
         }
 
         if let colors = call.getObject("colors") {
@@ -487,7 +554,9 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
             if let inactiveTint = colors["inactiveTint"] as? String, let color = UIColor(hexString: inactiveTint) {
                 tabBar.unselectedItemTintColor = color
             }
-            if let background = colors["background"] as? String, let color = UIColor(hexString: background) {
+            if let background = colors["background"] as? String,
+               let color = UIColor(hexString: background),
+               backgroundTint == nil || glassEffect == nil {
                 appearance.backgroundColor = color
             }
         }
@@ -513,9 +582,11 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
             navBar?.frame = CGRect(x: 0, y: safeInsets.top, width: width, height: navbarHeight)
         }
 
-        if let tabBar = tabBar {
+        if let container = tabContainer {
             let totalHeight = tabbarHeight + safeInsets.bottom
-            tabBar.frame = CGRect(x: 0, y: height - totalHeight, width: width, height: totalHeight)
+            container.frame = CGRect(x: 0, y: height - totalHeight, width: width, height: totalHeight)
+            tabEffectView?.frame = container.bounds
+            tabBar?.frame = container.bounds
         }
 
         bringChromeToFront()
@@ -525,8 +596,54 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
         if let navContainer = navContainer {
             bridge?.viewController?.view.bringSubviewToFront(navContainer)
         }
-        if let tabBar = tabBar {
-            bridge?.viewController?.view.bringSubviewToFront(tabBar)
+        if let tabContainer = tabContainer {
+            bridge?.viewController?.view.bringSubviewToFront(tabContainer)
+        }
+    }
+
+    private func colorOption(_ call: CAPPluginCall, key: String) -> UIColor? {
+        guard let colors = call.getObject("colors"),
+              let value = colors[key] as? String else {
+            return nil
+        }
+        return UIColor(hexString: value)
+    }
+
+    private func systemGlassEffect(tintColor: UIColor?) -> UIVisualEffect? {
+        guard #available(iOS 26.0, *),
+              let glassClass = NSClassFromString("UIGlassEffect"),
+              let method = class_getClassMethod(glassClass, NSSelectorFromString("effectWithStyle:")) else {
+            return nil
+        }
+
+        typealias EffectWithStyle = @convention(c) (AnyClass, Selector, Int) -> Unmanaged<UIVisualEffect>
+        let implementation = method_getImplementation(method)
+        let makeEffect = unsafeBitCast(implementation, to: EffectWithStyle.self)
+        let effect = makeEffect(glassClass, NSSelectorFromString("effectWithStyle:"), 0).takeUnretainedValue()
+        let object = effect as NSObject
+        if object.responds(to: NSSelectorFromString("setInteractive:")) {
+            object.setValue(true, forKey: "interactive")
+        }
+        if let tintColor = tintColor,
+           object.responds(to: NSSelectorFromString("setTintColor:")) {
+            object.setValue(tintColor, forKey: "tintColor")
+        }
+        return effect
+    }
+
+    private func configureGlassBarButtonItem(_ item: UIBarButtonItem, id: String) {
+        guard #available(iOS 26.0, *) else {
+            return
+        }
+        let object = item as NSObject
+        if object.responds(to: NSSelectorFromString("setIdentifier:")) {
+            object.setValue(id, forKey: "identifier")
+        }
+        if object.responds(to: NSSelectorFromString("setSharesBackground:")) {
+            object.setValue(true, forKey: "sharesBackground")
+        }
+        if object.responds(to: NSSelectorFromString("setHidesSharedBackground:")) {
+            object.setValue(false, forKey: "hidesSharedBackground")
         }
     }
 
@@ -630,6 +747,34 @@ private struct SVGRenderStyle {
                 lineJoin = .miter
             }
         }
+    }
+}
+
+private final class NativeNavigationChromeContainer: UIView {
+    var hitSlop = UIEdgeInsets.zero
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        let expandedBounds = bounds.inset(by: UIEdgeInsets(
+            top: -hitSlop.top,
+            left: -hitSlop.left,
+            bottom: -hitSlop.bottom,
+            right: -hitSlop.right
+        ))
+        return expandedBounds.contains(point)
+    }
+}
+
+private final class NativeNavigationBar: UINavigationBar {
+    var hitSlop = UIEdgeInsets.zero
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        let expandedBounds = bounds.inset(by: UIEdgeInsets(
+            top: -hitSlop.top,
+            left: -hitSlop.left,
+            bottom: -hitSlop.bottom,
+            right: -hitSlop.right
+        ))
+        return expandedBounds.contains(point)
     }
 }
 
@@ -990,32 +1135,52 @@ private final class SVGPathParser {
                 index = data.index(after: index)
                 continue
             }
+
+            let start = index
             var end = index
-            var hasExponent = false
-            while end < data.endIndex {
-                let scalar = data[end]
-                if scalar == "e" || scalar == "E" {
-                    hasExponent = true
-                    end = data.index(after: end)
-                    continue
-                }
-                if (scalar == "-" || scalar == "+") && end != index && !hasExponent {
-                    break
-                }
-                if (scalar == "-" || scalar == "+") && hasExponent {
-                    hasExponent = false
-                    end = data.index(after: end)
-                    continue
-                }
-                if scalar.isNumber || scalar == "." {
-                    hasExponent = false
-                    end = data.index(after: end)
-                    continue
-                }
-                break
+            var hasDigits = false
+
+            if data[end] == "-" || data[end] == "+" {
+                end = data.index(after: end)
             }
-            tokens.append(String(data[index..<end]))
-            index = end
+
+            while end < data.endIndex, data[end].isNumber {
+                hasDigits = true
+                end = data.index(after: end)
+            }
+
+            if end < data.endIndex, data[end] == "." {
+                end = data.index(after: end)
+                while end < data.endIndex, data[end].isNumber {
+                    hasDigits = true
+                    end = data.index(after: end)
+                }
+            }
+
+            if hasDigits, end < data.endIndex, data[end] == "e" || data[end] == "E" {
+                let exponentStart = end
+                var exponentEnd = data.index(after: end)
+                if exponentEnd < data.endIndex, data[exponentEnd] == "-" || data[exponentEnd] == "+" {
+                    exponentEnd = data.index(after: exponentEnd)
+                }
+                var hasExponentDigits = false
+                while exponentEnd < data.endIndex, data[exponentEnd].isNumber {
+                    hasExponentDigits = true
+                    exponentEnd = data.index(after: exponentEnd)
+                }
+                if hasExponentDigits {
+                    end = exponentEnd
+                } else {
+                    end = exponentStart
+                }
+            }
+
+            if hasDigits, end > start {
+                tokens.append(String(data[start..<end]))
+                index = end
+            } else {
+                index = data.index(after: index)
+            }
         }
         return tokens
     }
