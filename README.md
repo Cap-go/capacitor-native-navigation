@@ -10,13 +10,13 @@ Native navigation chrome for Capacitor apps. Render a native navbar, native tabb
 
 ## Demo
 
-### iOS
+### Native navigation tap flow
 
-<img src="./docs/demo-ios.webp" alt="iOS native navigation demo" width="320" />
+<img src="./docs/demo-navigation.webp" alt="Animated native navigation tap flow showing tab selection, push transition, and native back" width="320" />
 
-### Android
+### SVG icon descriptors
 
-<img src="./docs/demo-android.webp" alt="Android native navigation demo" width="320" />
+<img src="./docs/demo-svg-icons.webp" alt="Animated native SVG icon demo showing inline SVG icons, native tint, labels, and tab selection" width="320" />
 
 ## What It Does
 
