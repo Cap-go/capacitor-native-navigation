@@ -2,6 +2,7 @@
 
 import Foundation
 import Capacitor
+import ObjectiveC
 import UIKit
 
 private struct NativeNavigationTransitionContext {
@@ -484,7 +485,16 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
         container.autoresizingMask = [.flexibleWidth, .flexibleTopMargin]
         container.backgroundColor = .clear
 
-        if !usesSystemLiquidGlass {
+        if usesSystemLiquidGlass {
+            if let effect = liquidGlassEffect() {
+                let effectView = UIVisualEffectView(effect: effect)
+                effectView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+                effectView.isUserInteractionEnabled = false
+                effectView.backgroundColor = .clear
+                container.addSubview(effectView)
+                self.tabEffectView = effectView
+            }
+        } else {
             container.layer.shadowColor = UIColor.black.cgColor
             container.layer.shadowOpacity = 0.14
             container.layer.shadowRadius = 18
@@ -500,8 +510,10 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
 
         let bar = UITabBar()
         bar.isTranslucent = true
-        if !usesSystemLiquidGlass {
-            bar.backgroundColor = .clear
+        bar.backgroundColor = .clear
+        if usesSystemLiquidGlass {
+            bar.isOpaque = false
+        } else {
             bar.backgroundImage = UIImage()
             bar.shadowImage = UIImage()
             bar.clipsToBounds = true
@@ -793,8 +805,12 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
 
     private func configureTabBarBackground(_ appearance: UITabBarAppearance, options call: CAPPluginCall) {
         if usesSystemLiquidGlass {
-            appearance.configureWithDefaultBackground()
-            tabEffectView?.isHidden = true
+            appearance.configureWithTransparentBackground()
+            appearance.backgroundColor = .clear
+            appearance.backgroundEffect = nil
+            appearance.shadowColor = .clear
+            tabEffectView?.effect = liquidGlassEffect()
+            tabEffectView?.isHidden = tabEffectView?.effect == nil
         } else {
             appearance.configureWithDefaultBackground()
             if let effect = blurEffect(from: call.getString("blurEffect"), fallback: nil) {
@@ -898,7 +914,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
                 container.layer.cornerRadius = 0
                 container.layer.shadowOpacity = 0
                 container.layer.shadowPath = nil
-                tabEffectView?.isHidden = true
+                tabEffectView?.frame = container.bounds
                 tabBar?.frame = container.bounds
                 tabBar?.layer.cornerRadius = 0
             } else {
@@ -955,6 +971,23 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
             return nil
         }
         return UIBlurEffect(style: style)
+    }
+
+    private func liquidGlassEffect() -> UIVisualEffect? {
+        guard usesSystemLiquidGlass,
+              let effectClass = NSClassFromString("UIGlassEffect") else {
+            return nil
+        }
+
+        let selector = NSSelectorFromString("effectWithStyle:")
+        guard let method = class_getClassMethod(effectClass, selector) else {
+            return nil
+        }
+
+        typealias EffectWithStyle = @convention(c) (AnyClass, Selector, Int) -> AnyObject?
+        let implementation = method_getImplementation(method)
+        let factory = unsafeBitCast(implementation, to: EffectWithStyle.self)
+        return factory(effectClass, selector, 0) as? UIVisualEffect
     }
 
     private func blurStyle(from value: String?) -> UIBlurEffect.Style? {
