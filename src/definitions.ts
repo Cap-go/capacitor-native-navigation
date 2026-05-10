@@ -397,6 +397,13 @@ export interface NativeNavigationTabbarOptions {
   blurEffect?: NativeNavigationBlurEffect;
 
   /**
+   * Keep the iOS scroll-edge tabbar appearance from becoming transparent.
+   * Mirrors Expo Router native tabs' `disableTransparentOnScrollEdge` option.
+   * Defaults to `false`.
+   */
+  disableTransparentOnScrollEdge?: boolean;
+
+  /**
    * Disable the Android active tab indicator.
    */
   disableIndicator?: boolean;
