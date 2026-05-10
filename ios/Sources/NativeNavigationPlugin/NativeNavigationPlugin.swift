@@ -27,7 +27,10 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
     private var tabEffectView: UIVisualEffectView?
     private var tabBar: UITabBar?
     private var navbarHeight: CGFloat = 44
-    private var tabbarHeight: CGFloat = 49
+    private var tabbarHeight: CGFloat = 64
+    private let floatingTabbarHorizontalMargin: CGFloat = 24
+    private let floatingTabbarMaxWidth: CGFloat = 430
+    private let floatingTabbarBottomGap: CGFloat = 10
     private var navbarVisible = false
     private var tabbarVisible = false
     private var contentInsetMode = "css"
@@ -332,13 +335,19 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
         }
 
         let container = NativeNavigationChromeContainer()
-        container.hitSlop = UIEdgeInsets(top: 32, left: 0, bottom: 0, right: 0)
+        container.hitSlop = UIEdgeInsets(top: 32, left: 0, bottom: 24, right: 0)
         container.isUserInteractionEnabled = true
         container.autoresizingMask = [.flexibleWidth, .flexibleTopMargin]
+        container.backgroundColor = .clear
+        container.layer.shadowColor = UIColor.black.cgColor
+        container.layer.shadowOpacity = 0.14
+        container.layer.shadowRadius = 18
+        container.layer.shadowOffset = CGSize(width: 0, height: 10)
 
         let effectView = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterial))
         effectView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         effectView.isUserInteractionEnabled = false
+        effectView.clipsToBounds = true
         container.addSubview(effectView)
 
         let bar = UITabBar()
@@ -348,6 +357,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
         bar.shadowImage = UIImage()
         bar.delegate = self
         bar.autoresizingMask = [.flexibleWidth, .flexibleTopMargin]
+        bar.clipsToBounds = true
         container.addSubview(bar)
         bridge?.viewController?.view.addSubview(container)
         self.tabContainer = container
@@ -583,10 +593,17 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
         }
 
         if let container = tabContainer {
-            let totalHeight = tabbarHeight + safeInsets.bottom
-            container.frame = CGRect(x: 0, y: height - totalHeight, width: width, height: totalHeight)
+            let availableWidth = max(0, width - (floatingTabbarHorizontalMargin * 2))
+            let tabbarWidth = min(availableWidth, floatingTabbarMaxWidth)
+            let originX = (width - tabbarWidth) / 2
+            let originY = height - safeInsets.bottom - floatingTabbarBottomGap - tabbarHeight
+            container.frame = CGRect(x: originX, y: originY, width: tabbarWidth, height: tabbarHeight)
+            container.layer.cornerRadius = tabbarHeight / 2
+            container.layer.shadowPath = UIBezierPath(roundedRect: container.bounds, cornerRadius: tabbarHeight / 2).cgPath
             tabEffectView?.frame = container.bounds
+            tabEffectView?.layer.cornerRadius = tabbarHeight / 2
             tabBar?.frame = container.bounds
+            tabBar?.layer.cornerRadius = tabbarHeight / 2
         }
 
         bringChromeToFront()
@@ -650,7 +667,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
     private func currentInsets() -> [String: Any] {
         let safeInsets = bridge?.viewController?.view.safeAreaInsets ?? .zero
         let navHeight = navbarVisible ? navbarHeight + safeInsets.top : 0
-        let tabHeight = tabbarVisible ? tabbarHeight + safeInsets.bottom : 0
+        let tabHeight = tabbarVisible ? tabbarHeight + safeInsets.bottom + floatingTabbarBottomGap : 0
         return [
             "top": navHeight,
             "right": safeInsets.right,

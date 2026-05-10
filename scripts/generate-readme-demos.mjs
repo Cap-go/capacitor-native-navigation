@@ -82,6 +82,9 @@ function phoneShell(inner) {
         <stop offset="0%" stop-color="#ffffff" stop-opacity="0.88"/>
         <stop offset="100%" stop-color="#ffffff" stop-opacity="0.66"/>
       </linearGradient>
+      <filter id="softShadow" x="-20%" y="-40%" width="140%" height="190%">
+        <feDropShadow dx="0" dy="14" stdDeviation="14" flood-color="#0f172a" flood-opacity="0.16"/>
+      </filter>
     </defs>
     <rect width="${width}" height="${height}" fill="url(#pageBg)"/>
     <rect x="10" y="10" width="${width - 20}" height="${height - 20}" rx="42" fill="#ffffff" opacity="0.72"/>
@@ -110,26 +113,25 @@ function navbar(title, subtitle, options = {}) {
 function tabbar(active, shown = true, tint = '#0a84ff') {
   if (!shown) return '';
   const items = [
-    ['home', 'Home', 74],
+    ['home', 'Home', 106],
     ['activity', 'Activity', 195],
-    ['settings', 'Settings', 316],
+    ['settings', 'Settings', 284],
   ];
   return `
-    <rect x="10" y="734" width="${width - 20}" height="100" fill="url(#glass)"/>
-    <line x1="10" y1="733.5" x2="${width - 10}" y2="733.5" stroke="#dbe3ef"/>
+    <rect x="58" y="742" width="274" height="66" rx="33" fill="url(#glass)" stroke="#dbe3ef" filter="url(#softShadow)"/>
     ${items
       .map(([id, label, x]) => {
         const selected = active === id;
         const color = selected ? tint : '#64748b';
         return `
-          ${selected ? pill(x - 27, 746, 54, 32, '#e8f2ff') : ''}
-          ${icon(id, x - 12, 752, 24, color, 2)}
-          ${id === 'activity' ? `${pill(x + 10, 746, 22, 18, '#ff3b30')} ${text('3', x + 21, 759, 11, '#ffffff', 800, 'middle')}` : ''}
-          ${text(label, x, 800, 11, color, selected ? 800 : 600, 'middle')}
+          ${selected ? pill(x - 44, 748, 88, 54, '#e8f2ff') : ''}
+          ${icon(id, x - 12, 756, 24, color, 2)}
+          ${id === 'activity' ? `${pill(x + 10, 750, 22, 18, '#ff3b30')} ${text('3', x + 21, 763, 11, '#ffffff', 800, 'middle')}` : ''}
+          ${text(label, x, 793, 11, color, selected ? 800 : 600, 'middle')}
         `;
       })
       .join('')}
-    <rect x="148" y="818" width="94" height="5" rx="2.5" fill="#111827" opacity="0.84"/>
+    <rect x="148" y="824" width="94" height="5" rx="2.5" fill="#111827" opacity="0.84"/>
   `;
 }
 
@@ -147,11 +149,14 @@ function content(route, active, progress = 1) {
   const opacity = 0.15 + progress * 0.85;
   if (route === 'activity') {
     return `<g transform="translate(0 ${offset})" opacity="${opacity}">
-      ${text('Activity', 30, 156, 34, '#111827', 850)}
-      ${text('Badge state and tab selection came from JS.', 31, 181, 14, '#64748b', 600)}
-      ${card(30, 212, 330, 82, 'tabSelect: activity', 'Native tap intent routed to web content.', '#34c759')}
-      ${card(30, 312, 330, 82, 'SVG tab icons', 'Home, Activity, and Settings are inline SVG.', '#0a84ff')}
-      ${card(30, 412, 330, 82, 'Platform chrome', active === 'activity' ? 'Native tab highlight stays outside the WebView.' : 'Native frame tracks selectedId.', '#af52de')}
+      ${card(30, 138, 330, 74, 'Live update shipped', 'Navbar action event received by JS.', '#34c759')}
+      ${card(30, 224, 330, 74, 'Android Material bar', 'Bottom navigation is native on Android.', '#0a84ff')}
+      ${card(30, 310, 330, 74, 'iOS Liquid Glass', 'UINavigationBar and UITabBar use system rendering.', '#af52de')}
+      ${card(30, 396, 330, 74, 'Orders synced', 'Seven pending approvals moved to done.', '#34c759')}
+      ${card(30, 482, 330, 74, 'Review queued', 'Three changes wait for owner review.', '#0a84ff')}
+      ${card(30, 568, 330, 74, 'Build complete', 'Release candidate finished without errors.', '#af52de')}
+      ${card(30, 654, 330, 74, 'Archive ready', 'May exports are prepared for download.', '#34c759')}
+      ${card(30, 740, 330, 74, 'Invoices posted', 'Thirty-two customers were notified.', '#0a84ff')}
     </g>`;
   }
   if (route === 'settings') {
@@ -251,24 +256,23 @@ function iconDemoFrame(frame) {
     <rect x="30" y="604" width="330" height="66" rx="22" fill="#ffffff" stroke="#dbe3ef"/>
     ${text(state.callout, 54, 644, 17, '#0f172a', 850)}
     ${navbar('SVG Icons', 'No native asset packaging required', { tint: state.tint })}
-    <rect x="10" y="734" width="${width - 20}" height="100" fill="url(#glass)"/>
-    <line x1="10" y1="733.5" x2="${width - 10}" y2="733.5" stroke="#dbe3ef"/>
+    <rect x="58" y="742" width="274" height="66" rx="33" fill="url(#glass)" stroke="#dbe3ef" filter="url(#softShadow)"/>
     ${[
-      ['home', 'Home', 74],
+      ['home', 'Home', 106],
       ['activity', 'Activity', 195],
-      ['settings', 'Settings', 316],
+      ['settings', 'Settings', 284],
     ]
       .map(([id, label, x]) => {
         const selected = state.selected === id;
         const color = selected ? state.tint : '#64748b';
         return `
-          ${selected ? pill(x - 27, 746, 54, 32, selected ? '#eef2ff' : '#f8fafc') : ''}
-          ${icon(id, x - 12, 752, 24, color, 2)}
-          <g opacity="${labelsOpacity}">${text(label, x, 800, 11, color, selected ? 800 : 600, 'middle')}</g>
+          ${selected ? pill(x - 44, 748, 88, 54, '#eef2ff') : ''}
+          ${icon(id, x - 12, 756, 24, color, 2)}
+          <g opacity="${labelsOpacity}">${text(label, x, 793, 11, color, selected ? 800 : 600, 'middle')}</g>
         `;
       })
       .join('')}
-    <rect x="148" y="818" width="94" height="5" rx="2.5" fill="#111827" opacity="0.84"/>
+    <rect x="148" y="824" width="94" height="5" rx="2.5" fill="#111827" opacity="0.84"/>
     ${state.touch ? touch(state.touch[0], state.touch[1], true, state.touch[2]) : ''}
   `;
   return phoneShell(inner);

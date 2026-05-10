@@ -6,18 +6,21 @@ import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Outline;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewOutlineProvider;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.widget.FrameLayout;
@@ -58,6 +61,7 @@ public class NativeNavigationPlugin extends Plugin {
 
     private final NativeNavigation implementation = new NativeNavigation();
     private FrameLayout navbarContainer;
+    private FrameLayout tabbarContainer;
     private Toolbar toolbar;
     private BottomNavigationView tabbar;
     private ImageView transitionSnapshot;
@@ -100,6 +104,9 @@ public class NativeNavigationPlugin extends Plugin {
                 }
                 if (tabbar != null) {
                     tabbar.setVisibility(View.GONE);
+                }
+                if (tabbarContainer != null) {
+                    tabbarContainer.setVisibility(View.GONE);
                 }
             }
             updateInsetsAndNotify();
@@ -173,6 +180,9 @@ public class NativeNavigationPlugin extends Plugin {
                 if (tabbar != null) {
                     tabbar.setVisibility(View.GONE);
                 }
+                if (tabbarContainer != null) {
+                    tabbarContainer.setVisibility(View.GONE);
+                }
                 updateInsetsAndNotify();
                 call.resolve(insetsResult());
                 return;
@@ -230,6 +240,9 @@ public class NativeNavigationPlugin extends Plugin {
             }
 
             applyTabbarColors(nativeTabbar, call.getObject("colors", new JSObject()));
+            if (tabbarContainer != null) {
+                tabbarContainer.setVisibility(View.VISIBLE);
+            }
             nativeTabbar.setVisibility(View.VISIBLE);
             layoutChrome();
             updateInsetsAndNotify();
@@ -406,8 +419,23 @@ public class NativeNavigationPlugin extends Plugin {
             return tabbar;
         }
         FrameLayout root = contentRoot();
+        tabbarContainer = new FrameLayout(getContext());
+        tabbarContainer.setElevation(dp(12));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            tabbarContainer.setClipToOutline(true);
+            tabbarContainer.setOutlineProvider(
+                new ViewOutlineProvider() {
+                    @Override
+                    public void getOutline(View view, Outline outline) {
+                        outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), view.getHeight() / 2f);
+                    }
+                }
+            );
+        }
+
         tabbar = new BottomNavigationView(getContext());
-        tabbar.setElevation(dp(8));
+        tabbar.setElevation(0);
+        tabbar.setBackgroundColor(Color.TRANSPARENT);
         tabbar.setOnItemSelectedListener((item) -> {
             int itemId = item.getItemId();
             if (!tabIds.containsKey(itemId)) {
@@ -420,10 +448,14 @@ public class NativeNavigationPlugin extends Plugin {
             notifyListeners("tabSelect", event);
             return true;
         });
+        tabbarContainer.addView(tabbar);
         if (root != null) {
-            root.addView(tabbar);
+            root.addView(tabbarContainer);
         } else {
-            getActivity().addContentView(tabbar, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(DEFAULT_TABBAR_DP)));
+            getActivity().addContentView(
+                tabbarContainer,
+                new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(DEFAULT_TABBAR_DP))
+            );
         }
         return tabbar;
     }
@@ -779,7 +811,13 @@ public class NativeNavigationPlugin extends Plugin {
         ColorStateList colorStateList = new ColorStateList(states, colorState);
         nativeTabbar.setItemIconTintList(colorStateList);
         nativeTabbar.setItemTextColor(colorStateList);
-        nativeTabbar.setBackgroundColor(background);
+        nativeTabbar.setBackgroundColor(Color.TRANSPARENT);
+        if (tabbarContainer != null) {
+            GradientDrawable capsule = new GradientDrawable();
+            capsule.setColor(background);
+            capsule.setCornerRadius(dp(DEFAULT_TABBAR_DP) / 2f);
+            tabbarContainer.setBackground(capsule);
+        }
     }
 
     private int parseColor(String value, int fallback) {
@@ -801,7 +839,8 @@ public class NativeNavigationPlugin extends Plugin {
         int status = statusBarInset();
         int bottom = navigationBarInset();
         int navbarHeight = navbarVisible ? status + dp(DEFAULT_NAVBAR_DP) : 0;
-        int tabbarHeight = tabbarVisible ? bottom + dp(DEFAULT_TABBAR_DP) : 0;
+        int tabbarHeight = dp(DEFAULT_TABBAR_DP);
+        int tabbarBottomMargin = tabbarVisible ? bottom + dp(10) : bottom;
 
         if (navbarContainer != null) {
             FrameLayout.LayoutParams containerParams = new FrameLayout.LayoutParams(
@@ -819,14 +858,28 @@ public class NativeNavigationPlugin extends Plugin {
             toolbar.setLayoutParams(toolbarParams);
         }
 
+        if (tabbarContainer != null) {
+            int rootWidth = root.getWidth() > 0 ? root.getWidth() : Resources.getSystem().getDisplayMetrics().widthPixels;
+            int tabbarWidth = Math.min(Math.max(0, rootWidth - dp(48)), dp(420));
+            FrameLayout.LayoutParams tabbarContainerParams = new FrameLayout.LayoutParams(
+                tabbarWidth,
+                tabbarHeight,
+                Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL
+            );
+            tabbarContainerParams.bottomMargin = tabbarBottomMargin;
+            tabbarContainer.setLayoutParams(tabbarContainerParams);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                tabbarContainer.invalidateOutline();
+            }
+        }
+
         if (tabbar != null) {
             FrameLayout.LayoutParams tabbarParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                tabbarHeight,
-                Gravity.BOTTOM
+                ViewGroup.LayoutParams.MATCH_PARENT
             );
             tabbar.setLayoutParams(tabbarParams);
-            tabbar.setPadding(0, 0, 0, bottom);
+            tabbar.setPadding(0, 0, 0, 0);
         }
 
         bringChromeToFront();
@@ -838,6 +891,9 @@ public class NativeNavigationPlugin extends Plugin {
         }
         if (tabbar != null) {
             tabbar.bringToFront();
+        }
+        if (tabbarContainer != null) {
+            tabbarContainer.bringToFront();
         }
     }
 
@@ -880,7 +936,7 @@ public class NativeNavigationPlugin extends Plugin {
 
     private JSObject currentInsets() {
         int top = navbarVisible ? statusBarInset() + dp(DEFAULT_NAVBAR_DP) : 0;
-        int bottom = tabbarVisible ? navigationBarInset() + dp(DEFAULT_TABBAR_DP) : 0;
+        int bottom = tabbarVisible ? navigationBarInset() + dp(DEFAULT_TABBAR_DP) + dp(10) : 0;
         JSObject insets = new JSObject();
         insets.put("top", top);
         insets.put("right", 0);

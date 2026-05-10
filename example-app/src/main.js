@@ -66,6 +66,11 @@ const pages = {
         <article><strong>Live update shipped</strong><span>Navbar action event received by JS.</span></article>
         <article><strong>Android Material bar</strong><span>Bottom navigation is native on Android.</span></article>
         <article><strong>iOS Liquid Glass</strong><span>UINavigationBar and UITabBar use system rendering.</span></article>
+        <article><strong>Orders synced</strong><span>Seven pending approvals moved to done.</span></article>
+        <article><strong>Review queued</strong><span>Three changes are waiting for owner review.</span></article>
+        <article><strong>Build complete</strong><span>The release candidate finished without errors.</span></article>
+        <article><strong>Archive ready</strong><span>May exports are prepared for download.</span></article>
+        <article><strong>Invoices posted</strong><span>Thirty-two customers were notified.</span></article>
       </section>
     `,
   },

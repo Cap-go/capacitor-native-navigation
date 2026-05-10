@@ -14,27 +14,32 @@
 
 body {
   min-width: 320px;
-  min-height: 100vh;
+  min-height: 100dvh;
   margin: 0;
   overflow: hidden;
-  background:
-    radial-gradient(circle at 20% 10%, rgba(10, 132, 255, 0.16), transparent 30%),
-    linear-gradient(180deg, #ffffff 0%, #eef2f7 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #eef2f7 100%);
 }
 
 .app-shell {
-  height: 100vh;
+  height: 100dvh;
   overflow: auto;
   padding:
-    calc(var(--cap-native-navigation-top) + 16px)
+    calc(var(--cap-native-navigation-top) + 30px)
     max(18px, env(safe-area-inset-right))
-    calc(var(--cap-native-navigation-bottom) + 22px)
+    max(22px, env(safe-area-inset-bottom))
+    max(18px, env(safe-area-inset-left));
+  scroll-padding:
+    calc(var(--cap-native-navigation-top) + 30px)
+    max(18px, env(safe-area-inset-right))
+    calc(var(--cap-native-navigation-bottom) + 24px)
     max(18px, env(safe-area-inset-left));
 }
 
 .page {
   max-width: 680px;
+  min-height: calc(100dvh - var(--cap-native-navigation-top));
   margin: 0 auto;
+  padding-bottom: calc(var(--cap-native-navigation-bottom) + 28px);
 }
 
 .hero {
@@ -111,6 +116,7 @@ p {
 .list {
   display: grid;
   gap: 10px;
+  padding-bottom: 18px;
 }
 
 .list article,
@@ -162,7 +168,7 @@ pre {
 }
 
 .detail {
-  min-height: calc(100vh - var(--cap-native-navigation-top) - var(--cap-native-navigation-bottom) - 40px);
+  min-height: calc(100dvh - var(--cap-native-navigation-top));
   display: grid;
   align-content: center;
   gap: 18px;
@@ -181,9 +187,7 @@ pre {
   }
 
   body {
-    background:
-      radial-gradient(circle at 20% 10%, rgba(10, 132, 255, 0.22), transparent 32%),
-      linear-gradient(180deg, #10131a 0%, #05070b 100%);
+    background: linear-gradient(180deg, #10131a 0%, #05070b 100%);
   }
 
   .tile,
