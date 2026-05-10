@@ -3,7 +3,6 @@
 import Foundation
 import Capacitor
 import UIKit
-import ObjectiveC
 
 private struct NativeNavigationTransitionContext {
     let webView: UIView
@@ -62,6 +61,13 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
     private var activeTransitionDirection = "forward"
     private var activeZoomSourceFrame: CGRect?
     private var activeZoomCornerRadius: CGFloat = 0
+
+    private var usesSystemLiquidGlass: Bool {
+        if #available(iOS 26.0, *) {
+            return true
+        }
+        return false
+    }
 
     override public func load() {
         NotificationCenter.default.addObserver(
@@ -444,21 +450,25 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
         container.isUserInteractionEnabled = true
         container.autoresizingMask = [.flexibleWidth, .flexibleBottomMargin]
 
-        let blurView = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterial))
-        blurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        blurView.isUserInteractionEnabled = false
-        container.addSubview(blurView)
+        if !usesSystemLiquidGlass {
+            let blurView = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterial))
+            blurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            blurView.isUserInteractionEnabled = false
+            container.addSubview(blurView)
+            self.navBlurView = blurView
+        }
 
         let bar = NativeNavigationBar()
         bar.hitSlop = UIEdgeInsets(top: 0, left: 0, bottom: 32, right: 0)
         bar.isTranslucent = true
-        bar.backgroundColor = .clear
+        if !usesSystemLiquidGlass {
+            bar.backgroundColor = .clear
+        }
         bar.autoresizingMask = [.flexibleWidth, .flexibleBottomMargin]
         container.addSubview(bar)
 
         bridge?.viewController?.view.addSubview(container)
         self.navContainer = container
-        self.navBlurView = blurView
         self.navBar = bar
         return bar
     }
@@ -473,29 +483,34 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
         container.isUserInteractionEnabled = true
         container.autoresizingMask = [.flexibleWidth, .flexibleTopMargin]
         container.backgroundColor = .clear
-        container.layer.shadowColor = UIColor.black.cgColor
-        container.layer.shadowOpacity = 0.14
-        container.layer.shadowRadius = 18
-        container.layer.shadowOffset = CGSize(width: 0, height: 10)
 
-        let effectView = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterial))
-        effectView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        effectView.isUserInteractionEnabled = false
-        effectView.clipsToBounds = true
-        container.addSubview(effectView)
+        if !usesSystemLiquidGlass {
+            container.layer.shadowColor = UIColor.black.cgColor
+            container.layer.shadowOpacity = 0.14
+            container.layer.shadowRadius = 18
+            container.layer.shadowOffset = CGSize(width: 0, height: 10)
+
+            let effectView = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterial))
+            effectView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            effectView.isUserInteractionEnabled = false
+            effectView.clipsToBounds = true
+            container.addSubview(effectView)
+            self.tabEffectView = effectView
+        }
 
         let bar = UITabBar()
         bar.isTranslucent = true
-        bar.backgroundColor = .clear
-        bar.backgroundImage = UIImage()
-        bar.shadowImage = UIImage()
+        if !usesSystemLiquidGlass {
+            bar.backgroundColor = .clear
+            bar.backgroundImage = UIImage()
+            bar.shadowImage = UIImage()
+            bar.clipsToBounds = true
+        }
         bar.delegate = self
         bar.autoresizingMask = [.flexibleWidth, .flexibleTopMargin]
-        bar.clipsToBounds = true
         container.addSubview(bar)
         bridge?.viewController?.view.addSubview(container)
         self.tabContainer = container
-        self.tabEffectView = effectView
         self.tabBar = bar
         return bar
     }
@@ -722,15 +737,12 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
     private func applyNavBarAppearance(navBar: UINavigationBar, options call: CAPPluginCall) {
         let appearance = UINavigationBarAppearance()
         let transparent = call.getBool("transparent", false)
-        let backgroundTint = colorOption(call, key: "background")
-        let glassEffect = systemGlassEffect(tintColor: backgroundTint)
-        if let glassEffect = glassEffect {
+        if usesSystemLiquidGlass {
             appearance.configureWithTransparentBackground()
             appearance.backgroundColor = .clear
             appearance.backgroundEffect = nil
             appearance.shadowColor = .clear
-            navBlurView?.effect = glassEffect
-            navBlurView?.isHidden = false
+            navBlurView?.isHidden = true
         } else if transparent {
             appearance.configureWithTransparentBackground()
             appearance.backgroundColor = .clear
@@ -756,7 +768,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
             }
             if let background = colors["background"] as? String,
                let color = colorValue(background),
-               backgroundTint == nil || glassEffect == nil,
+               !usesSystemLiquidGlass,
                !transparent {
                 appearance.backgroundColor = color
             }
@@ -769,15 +781,20 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
 
     private func applyTabBarAppearance(tabBar: UITabBar, options call: CAPPluginCall) {
         let appearance = UITabBarAppearance()
-        let backgroundTint = colorOption(call, key: "background")
-        let glassEffect = systemGlassEffect(tintColor: backgroundTint)
-        if let glassEffect = glassEffect {
-            appearance.configureWithTransparentBackground()
-            appearance.backgroundColor = .clear
-            appearance.backgroundEffect = nil
-            appearance.shadowColor = .clear
-            tabEffectView?.effect = glassEffect
-            tabEffectView?.isHidden = false
+        configureTabBarBackground(appearance, options: call)
+        applyTabBarColorOptions(appearance, tabBar: tabBar, options: call)
+        applyTabBarBadgeOptions(appearance, options: call)
+
+        tabBar.standardAppearance = appearance
+        if #available(iOS 15.0, *) {
+            tabBar.scrollEdgeAppearance = appearance
+        }
+    }
+
+    private func configureTabBarBackground(_ appearance: UITabBarAppearance, options call: CAPPluginCall) {
+        if usesSystemLiquidGlass {
+            appearance.configureWithDefaultBackground()
+            tabEffectView?.isHidden = true
         } else {
             appearance.configureWithDefaultBackground()
             if let effect = blurEffect(from: call.getString("blurEffect"), fallback: nil) {
@@ -789,7 +806,13 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
                 tabEffectView?.isHidden = true
             }
         }
+    }
 
+    private func applyTabBarColorOptions(
+        _ appearance: UITabBarAppearance,
+        tabBar: UITabBar,
+        options call: CAPPluginCall
+    ) {
         if let colors = call.getObject("colors") {
             if let color = colorValue(colors["tint"]) {
                 tabBar.tintColor = color
@@ -819,10 +842,13 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
             }
             if let background = colors["background"] as? String,
                let color = colorValue(background),
-               backgroundTint == nil || glassEffect == nil {
+               !usesSystemLiquidGlass {
                 appearance.backgroundColor = color
             }
         }
+    }
+
+    private func applyTabBarBadgeOptions(_ appearance: UITabBarAppearance, options call: CAPPluginCall) {
         if let color = colorValue(call.getString("badgeBackgroundColor")) {
             applyTabItemAppearances(appearance) { itemAppearance in
                 itemAppearance.normal.badgeBackgroundColor = color
@@ -834,11 +860,6 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
                 itemAppearance.normal.badgeTextAttributes = [.foregroundColor: color]
                 itemAppearance.selected.badgeTextAttributes = [.foregroundColor: color]
             }
-        }
-
-        tabBar.standardAppearance = appearance
-        if #available(iOS 15.0, *) {
-            tabBar.scrollEdgeAppearance = appearance
         }
     }
 
@@ -867,17 +888,32 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
         }
 
         if let container = tabContainer {
-            let availableWidth = max(0, width - (floatingTabbarHorizontalMargin * 2))
-            let tabbarWidth = min(availableWidth, floatingTabbarMaxWidth)
-            let originX = (width - tabbarWidth) / 2
-            let originY = height - safeInsets.bottom - floatingTabbarBottomGap - tabbarHeight
-            container.frame = CGRect(x: originX, y: originY, width: tabbarWidth, height: tabbarHeight)
-            container.layer.cornerRadius = tabbarHeight / 2
-            container.layer.shadowPath = UIBezierPath(roundedRect: container.bounds, cornerRadius: tabbarHeight / 2).cgPath
-            tabEffectView?.frame = container.bounds
-            tabEffectView?.layer.cornerRadius = tabbarHeight / 2
-            tabBar?.frame = container.bounds
-            tabBar?.layer.cornerRadius = tabbarHeight / 2
+            if usesSystemLiquidGlass {
+                container.frame = CGRect(
+                    x: 0,
+                    y: height - safeInsets.bottom - tabbarHeight,
+                    width: width,
+                    height: tabbarHeight + safeInsets.bottom
+                )
+                container.layer.cornerRadius = 0
+                container.layer.shadowOpacity = 0
+                container.layer.shadowPath = nil
+                tabEffectView?.isHidden = true
+                tabBar?.frame = container.bounds
+                tabBar?.layer.cornerRadius = 0
+            } else {
+                let availableWidth = max(0, width - (floatingTabbarHorizontalMargin * 2))
+                let tabbarWidth = min(availableWidth, floatingTabbarMaxWidth)
+                let originX = (width - tabbarWidth) / 2
+                let originY = height - safeInsets.bottom - floatingTabbarBottomGap - tabbarHeight
+                container.frame = CGRect(x: originX, y: originY, width: tabbarWidth, height: tabbarHeight)
+                container.layer.cornerRadius = tabbarHeight / 2
+                container.layer.shadowPath = UIBezierPath(roundedRect: container.bounds, cornerRadius: tabbarHeight / 2).cgPath
+                tabEffectView?.frame = container.bounds
+                tabEffectView?.layer.cornerRadius = tabbarHeight / 2
+                tabBar?.frame = container.bounds
+                tabBar?.layer.cornerRadius = tabbarHeight / 2
+            }
         }
 
         bringChromeToFront()
@@ -890,14 +926,6 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
         if let tabContainer = tabContainer {
             bridge?.viewController?.view.bringSubviewToFront(tabContainer)
         }
-    }
-
-    private func colorOption(_ call: CAPPluginCall, key: String) -> UIColor? {
-        guard let colors = call.getObject("colors"),
-              let value = colors[key] else {
-            return nil
-        }
-        return colorValue(value)
     }
 
     private func colorValue(_ value: Any?) -> UIColor? {
@@ -958,48 +986,19 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarDelega
         ][value]
     }
 
-    private func systemGlassEffect(tintColor: UIColor?) -> UIVisualEffect? {
-        guard #available(iOS 26.0, *),
-              let glassClass = NSClassFromString("UIGlassEffect"),
-              let method = class_getClassMethod(glassClass, NSSelectorFromString("effectWithStyle:")) else {
-            return nil
-        }
-
-        typealias EffectWithStyle = @convention(c) (AnyClass, Selector, Int) -> Unmanaged<UIVisualEffect>
-        let implementation = method_getImplementation(method)
-        let makeEffect = unsafeBitCast(implementation, to: EffectWithStyle.self)
-        let effect = makeEffect(glassClass, NSSelectorFromString("effectWithStyle:"), 0).takeUnretainedValue()
-        let object = effect as NSObject
-        if object.responds(to: NSSelectorFromString("setInteractive:")) {
-            object.setValue(true, forKey: "interactive")
-        }
-        if let tintColor = tintColor,
-           object.responds(to: NSSelectorFromString("setTintColor:")) {
-            object.setValue(tintColor, forKey: "tintColor")
-        }
-        return effect
-    }
-
     private func configureGlassBarButtonItem(_ item: UIBarButtonItem, id: String) {
-        guard #available(iOS 26.0, *) else {
-            return
-        }
-        let object = item as NSObject
-        if object.responds(to: NSSelectorFromString("setIdentifier:")) {
-            object.setValue(id, forKey: "identifier")
-        }
-        if object.responds(to: NSSelectorFromString("setSharesBackground:")) {
-            object.setValue(true, forKey: "sharesBackground")
-        }
-        if object.responds(to: NSSelectorFromString("setHidesSharedBackground:")) {
-            object.setValue(false, forKey: "hidesSharedBackground")
+        if #available(iOS 26.0, *) {
+            item.identifier = id
+            item.sharesBackground = true
+            item.hidesSharedBackground = false
         }
     }
 
     private func currentInsets() -> [String: Any] {
         let safeInsets = bridge?.viewController?.view.safeAreaInsets ?? .zero
         let navHeight = navbarVisible ? navbarHeight + safeInsets.top : 0
-        let tabHeight = tabbarVisible ? tabbarHeight + safeInsets.bottom + floatingTabbarBottomGap : 0
+        let tabbarGap = usesSystemLiquidGlass ? 0 : floatingTabbarBottomGap
+        let tabHeight = tabbarVisible ? tabbarHeight + safeInsets.bottom + tabbarGap : 0
         return [
             "top": navHeight,
             "right": safeInsets.right,

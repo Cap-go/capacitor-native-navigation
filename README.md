@@ -18,6 +18,10 @@ Native navigation chrome for Capacitor apps. Render a native navbar, native tabb
 
 <img src="./docs/demo-svg-icons.webp" alt="Animated native SVG icon demo showing inline SVG icons, native tint, labels, and tab selection" width="320" />
 
+### Native styling and zoom options
+
+<img src="./docs/demo-options.webp" alt="Animated native navigation options demo showing dynamic colors, selected labels, custom indicators, badges, system Liquid Glass, and zoom transitions" width="320" />
+
 ## What It Does
 
 - Renders native top navigation and bottom tab chrome from JavaScript state.
@@ -320,7 +324,7 @@ Inline SVG supports the icon-focused subset used by common sets such as Lucide a
 
 ## Platform Notes
 
-- iOS uses `UINavigationBar` and a floating native UIKit tab capsule. iOS 26+ relies on the system Liquid Glass effect where available; earlier versions use native translucent/material fallback styling.
+- iOS uses UIKit `UINavigationBar` and `UITabBar`. iOS 26+ leaves bar backgrounds to Apple's system Liquid Glass; earlier versions use native translucent/material fallback styling.
 - Android uses an AppCompat `Toolbar` and a floating native tab capsule with edge-to-edge placement.
 - Web fallback does not draw native bars; it mirrors inset variables and events for development.
 
@@ -605,7 +609,7 @@ Native bar colors. Use CSS-style hex strings (`#RRGGBB` or `#AARRGGBB`).
 | **`dynamic`**         | <code>boolean</code> | When `true`, Android 12+ derives unspecified bar colors from Material You system palettes. Explicit color fields still win. |
 | **`tint`**            | <code>string</code>  | Tint color for active buttons/items.                                                                                        |
 | **`inactiveTint`**    | <code>string</code>  | Color for inactive tab items.                                                                                               |
-| **`background`**      | <code>string</code>  | Optional background tint. On iOS 26+ avoid setting this unless you want to override the system Liquid Glass appearance.     |
+| **`background`**      | <code>string</code>  | Optional background tint. Ignored on iOS 26+ so UIKit can preserve the system Liquid Glass navigation appearance.           |
 | **`foreground`**      | <code>string</code>  | Title and label text color where the native platform supports it.                                                           |
 | **`badgeBackground`** | <code>string</code>  | Badge background color for native tab badges.                                                                               |
 | **`badgeText`**       | <code>string</code>  | Badge text color for native tab badges.                                                                                     |

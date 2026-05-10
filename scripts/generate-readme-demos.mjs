@@ -43,6 +43,10 @@ function ease(value) {
   return t * t * (3 - 2 * t);
 }
 
+function lerp(from, to, progress) {
+  return Math.round(from + (to - from) * progress);
+}
+
 function icon(name, x, y, size, color, strokeWidth = 2) {
   return `<g transform="translate(${x} ${y}) scale(${size / 24})" fill="none" stroke="${color}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round">${icons[name].join('')}</g>`;
 }
@@ -141,6 +145,23 @@ function card(x, y, w, h, title, body, accent = '#0a84ff') {
     <circle cx="${x + 27}" cy="${y + 31}" r="13" fill="${accent}" opacity="0.14"/>
     ${text(title, x + 50, y + 34, 16, '#0f172a', 800)}
     ${text(body, x + 22, y + 66, 13, '#64748b', 600)}
+  `;
+}
+
+function optionCard(x, y, w, h, title, value, accent = '#0a84ff') {
+  return `
+    <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="18" fill="#ffffff" stroke="#dbe3ef"/>
+    <rect x="${x + 14}" y="${y + 14}" width="32" height="32" rx="10" fill="${accent}" opacity="0.16"/>
+    <circle cx="${x + 30}" cy="${y + 30}" r="6" fill="${accent}"/>
+    ${text(title, x + 58, y + 30, 14, '#0f172a', 800)}
+    ${text(value, x + 58, y + 54, 12, '#64748b', 650)}
+  `;
+}
+
+function codePanel(x, y, lines) {
+  return `
+    <rect x="${x}" y="${y}" width="330" height="${38 + lines.length * 21}" rx="22" fill="#111827"/>
+    ${lines.map((line, index) => text(line, x + 22, y + 36 + index * 21, 13, '#dbeafe', 700)).join('')}
   `;
 }
 
@@ -278,6 +299,173 @@ function iconDemoFrame(frame) {
   return phoneShell(inner);
 }
 
+function optionsDemoState(frame) {
+  const second = frame / fps;
+  if (second < 0.9) {
+    return {
+      route: 'options',
+      selected: 'home',
+      tint: '#0a84ff',
+      labelMode: 'labeled',
+      callout: 'colors.dynamic follows the platform',
+      touch: null,
+      zoom: 0,
+    };
+  }
+  if (second < 1.65) {
+    return {
+      route: 'options',
+      selected: 'home',
+      tint: '#0a84ff',
+      labelMode: 'selected',
+      callout: 'labelVisibilityMode: selected',
+      touch: [190, 604, 'labels'],
+      zoom: 0,
+    };
+  }
+  if (second < 2.55) {
+    return {
+      route: 'options',
+      selected: 'activity',
+      tint: '#34c759',
+      labelMode: 'selected',
+      callout: 'indicator, ripple, and badge colors',
+      touch: [195, 766, 'tap tab'],
+      zoom: 0,
+    };
+  }
+  if (second < 3.45) {
+    return {
+      route: 'options',
+      selected: 'settings',
+      tint: '#af52de',
+      labelMode: 'selected',
+      callout: 'iOS system Liquid Glass',
+      touch: [284, 766, 'tap tab'],
+      zoom: 0,
+    };
+  }
+  if (second < 4.2) {
+    return {
+      route: 'options',
+      selected: 'settings',
+      tint: '#af52de',
+      labelMode: 'selected',
+      callout: 'beginZoomTransition(card)',
+      touch: [104, 462, 'zoom'],
+      zoom: 0,
+    };
+  }
+  if (second < 5.35) {
+    return {
+      route: 'zooming',
+      selected: 'settings',
+      tint: '#af52de',
+      labelMode: 'selected',
+      callout: 'zoom sourceRect -> targetRect',
+      touch: null,
+      zoom: ease((second - 4.2) / 0.78),
+    };
+  }
+  return {
+    route: 'zoom',
+    selected: 'settings',
+    tint: '#af52de',
+    labelMode: 'selected',
+    callout: 'native snapshot zoom complete',
+    touch: null,
+    zoom: 1,
+  };
+}
+
+function optionsTabbar(state) {
+  const items = [
+    ['home', 'Home', 106],
+    ['activity', 'Activity', 195],
+    ['settings', 'Settings', 284],
+  ];
+  return `
+    <rect x="58" y="742" width="274" height="66" rx="33" fill="url(#glass)" stroke="#dbe3ef" filter="url(#softShadow)"/>
+    ${items
+      .map(([id, label, x]) => {
+        const selected = state.selected === id;
+        const color = selected ? state.tint : '#64748b';
+        const labelOpacity = state.labelMode === 'labeled' || selected ? 1 : 0;
+        return `
+          ${selected ? pill(x - 38, 748, 76, 54, `${state.tint}22`) : ''}
+          ${selected ? `<rect x="${x - 20}" y="751" width="40" height="4" rx="2" fill="${state.tint}"/>` : ''}
+          ${icon(id, x - 12, 756, 24, color, 2)}
+          ${id === 'activity' ? `${pill(x + 10, 750, 22, 18, '#ff3b30')} ${text('3', x + 21, 763, 11, '#ffffff', 800, 'middle')}` : ''}
+          <g opacity="${labelOpacity}">${text(label, x, 793, 11, color, selected ? 800 : 600, 'middle')}</g>
+        `;
+      })
+      .join('')}
+    <rect x="148" y="824" width="94" height="5" rx="2.5" fill="#111827" opacity="0.84"/>
+  `;
+}
+
+function optionsHomeContent(state) {
+  return `
+    ${text('Native Options', 30, 156, 34, '#111827', 850)}
+    ${text('Expo-style chrome controls from JavaScript.', 31, 182, 14, '#64748b', 600)}
+    ${optionCard(30, 222, 158, 82, 'dynamic colors', 'dynamic: true', '#0a84ff')}
+    ${optionCard(202, 222, 158, 82, 'native glass', 'UIKit iOS 26', '#af52de')}
+    ${optionCard(30, 320, 158, 82, 'tab labels', 'selected only', '#34c759')}
+    ${optionCard(202, 320, 158, 82, 'badge style', 'red badge', '#ff3b30')}
+    <rect x="30" y="434" width="330" height="120" rx="26" fill="#111827"/>
+    ${text('beginZoomTransition(card)', 54, 482, 18, '#ffffff', 850)}
+    ${text('sourceRect + targetRect + cornerRadius', 54, 514, 13, '#cbd5e1', 650)}
+    <rect x="54" y="582" width="282" height="52" rx="17" fill="#ffffff" stroke="#dbe3ef"/>
+    ${text(state.callout, 195, 616, 15, '#0f172a', 850, 'middle')}
+  `;
+}
+
+function zoomContent() {
+  return `
+    ${text('Zoom Route', 30, 166, 37, '#111827', 850)}
+    ${text('The WebView route changed; native animated the snapshot.', 31, 196, 14, '#64748b', 600)}
+    ${codePanel(30, 236, [
+      'await beginZoomTransition(card)',
+      'router.push("/details")',
+      'await finishZoomTransition(hero)',
+    ])}
+    ${optionCard(30, 404, 330, 82, 'cornerRadius', 'shared element style route animation', '#af52de')}
+    ${optionCard(30, 506, 330, 82, 'transition shell', 'single WebView, native-feeling motion', '#0a84ff')}
+  `;
+}
+
+function zoomOverlay(progress) {
+  if (progress <= 0 || progress >= 1) return '';
+  const x = lerp(30, 10, progress);
+  const y = lerp(434, 114, progress);
+  const w = lerp(330, width - 20, progress);
+  const h = lerp(120, 628, progress);
+  const radius = lerp(26, 42, progress);
+  const opacity = 0.36 + progress * 0.34;
+  return `
+    <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${radius}" fill="#111827" opacity="${opacity}"/>
+    <rect x="${x + 18}" y="${y + 18}" width="${Math.max(90, w - 36)}" height="${Math.max(44, h - 36)}" rx="${Math.max(12, radius - 10)}" fill="#ffffff" opacity="${0.18 + progress * 0.3}"/>
+    ${text('zoom', x + w / 2, y + h / 2 + 5, 26, '#ffffff', 850, 'middle')}
+  `;
+}
+
+function optionsDemoFrame(frame) {
+  const state = optionsDemoState(frame);
+  const contentLayer = state.route === 'zoom' ? zoomContent() : optionsHomeContent(state);
+  const inner = `
+    ${contentLayer}
+    ${navbar(state.route === 'zoom' ? 'Zoom Detail' : 'Native Options', state.callout, {
+      tint: state.tint,
+      compose: state.route !== 'zoom',
+      detail: state.route === 'zoom',
+    })}
+    ${state.route === 'zoom' ? '' : optionsTabbar(state)}
+    ${zoomOverlay(state.zoom)}
+    ${state.touch ? touch(state.touch[0], state.touch[1], true, state.touch[2]) : ''}
+  `;
+  return phoneShell(inner);
+}
+
 function renderFrames(name, count, factory) {
   const dir = join(frameRoot, name);
   const frameDuration = Math.round(1000 / fps);
@@ -297,4 +485,5 @@ function renderFrames(name, count, factory) {
 ensureEmptyDir(frameRoot);
 renderFrames('demo-navigation', 40, navigationFrame);
 renderFrames('demo-svg-icons', 32, iconDemoFrame);
+renderFrames('demo-options', 36, optionsDemoFrame);
 rmSync(frameRoot, { recursive: true, force: true });

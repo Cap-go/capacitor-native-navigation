@@ -153,8 +153,8 @@ export interface NativeNavigationColors {
   inactiveTint?: string;
 
   /**
-   * Optional background tint. On iOS 26+ avoid setting this unless you want to
-   * override the system Liquid Glass appearance.
+   * Optional background tint. Ignored on iOS 26+ so UIKit can preserve the
+   * system Liquid Glass navigation appearance.
    */
   background?: string;
 
