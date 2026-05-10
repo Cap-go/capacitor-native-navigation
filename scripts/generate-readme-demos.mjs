@@ -150,8 +150,8 @@ function content(route, active, progress = 1) {
   if (route === 'activity') {
     return `<g transform="translate(0 ${offset})" opacity="${opacity}">
       ${card(30, 138, 330, 74, 'Live update shipped', 'Navbar action event received by JS.', '#34c759')}
-      ${card(30, 224, 330, 74, 'Android Material bar', 'Bottom navigation is native on Android.', '#0a84ff')}
-      ${card(30, 310, 330, 74, 'iOS Liquid Glass', 'UINavigationBar and UITabBar use system rendering.', '#af52de')}
+      ${card(30, 224, 330, 74, 'Android native bar', 'Bottom navigation is native on Android.', '#0a84ff')}
+      ${card(30, 310, 330, 74, 'iOS Liquid Glass', 'Native chrome uses system glass rendering.', '#af52de')}
       ${card(30, 396, 330, 74, 'Orders synced', 'Seven pending approvals moved to done.', '#34c759')}
       ${card(30, 482, 330, 74, 'Review queued', 'Three changes wait for owner review.', '#0a84ff')}
       ${card(30, 568, 330, 74, 'Build complete', 'Release candidate finished without errors.', '#af52de')}

@@ -198,8 +198,8 @@ Inline SVG supports the icon-focused subset used by common sets such as Lucide a
 
 ## Platform Notes
 
-- iOS uses `UINavigationBar` and a floating `UITabBar` capsule. iOS 26+ relies on the system Liquid Glass bar rendering; earlier versions use native translucent/material fallback styling.
-- Android uses an AppCompat `Toolbar` and a floating Material `BottomNavigationView` capsule with edge-to-edge placement.
+- iOS uses `UINavigationBar` and a floating native UIKit tab capsule. iOS 26+ relies on the system Liquid Glass effect where available; earlier versions use native translucent/material fallback styling.
+- Android uses an AppCompat `Toolbar` and a floating native tab capsule with edge-to-edge placement.
 - Web fallback does not draw native bars; it mirrors inset variables and events for development.
 
 ## Example App
