@@ -44,6 +44,10 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var tabBar: UITabBar?
     private var tabBarController: NativeNavigationTabController?
     private var tabViewControllers: [UIViewController] = []
+    private weak var originalWebViewSuperview: UIView?
+    private var originalWebViewIndex: Int?
+    private var originalWebViewAutoresizingMask: UIView.AutoresizingMask?
+    private var isWebViewHostedInSystemTabController = false
     private var navbarHeight: CGFloat = 44
     private var tabbarHeight: CGFloat = 64
     private let floatingTabbarHorizontalMargin: CGFloat = 24
@@ -96,6 +100,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             if !self.isEnabled {
                 self.navContainer?.isHidden = true
                 self.tabContainer?.isHidden = true
+                self.restoreWebViewFromSystemTabController()
                 self.tabBarController?.view.isHidden = true
                 self.tabBar?.isHidden = true
             }
@@ -170,9 +175,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             self.tabbarVisible = !hidden
 
             guard !hidden else {
-                self.tabContainer?.isHidden = true
-                self.tabBarController?.view.isHidden = true
-                self.tabBar?.isHidden = true
+                self.hideTabBarChrome()
                 self.updateInsetsAndNotify()
                 call.resolve(self.insetsResult())
                 return
@@ -204,9 +207,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             }
 
             self.applyTabBarAppearance(tabBar: tabBar, options: call)
-            self.tabContainer?.isHidden = false
-            self.tabBarController?.view.isHidden = false
-            tabBar.isHidden = false
+            self.showTabBarChrome(tabBar)
             self.layoutChrome()
             self.updateInsetsAndNotify()
             call.resolve(self.insetsResult())
@@ -215,7 +216,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
     @objc func beginTransition(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
-            guard let webView = self.webView, let rootView = self.bridge?.viewController?.view else {
+            guard let webView = self.webView,
+                  let transitionContainer = webView.superview else {
                 call.reject("WebView unavailable")
                 return
             }
@@ -224,7 +226,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             let direction = call.getString("direction") ?? "forward"
             let durationMs = Int((call.getDouble("duration") ?? self.defaultTransitionDuration * 1_000).rounded())
             let zoomSourceRect = direction == "zoom" ? self.transitionRect(call.getObject("sourceRect")) : nil
-            let zoomSourceFrame = zoomSourceRect.map { self.rootFrame(for: $0, webView: webView) }
+            let zoomSourceFrame = zoomSourceRect.map { self.transitionFrame(for: $0, webView: webView) }
             let cornerRadius = CGFloat(call.getDouble("cornerRadius") ?? 0)
 
             self.transitionSnapshot?.removeFromSuperview()
@@ -233,7 +235,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             snapshot.autoresizingMask = zoomSourceFrame == nil ? [.flexibleWidth, .flexibleHeight] : []
             snapshot.layer.cornerRadius = cornerRadius
             snapshot.clipsToBounds = cornerRadius > 0
-            rootView.insertSubview(snapshot, aboveSubview: webView)
+            transitionContainer.insertSubview(snapshot, aboveSubview: webView)
             self.bringChromeToFront()
             self.transitionSnapshot = snapshot
             self.activeTransitionId = transitionId
@@ -274,8 +276,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 let targetRect = self.transitionRect(call.getObject("targetRect"))
                 self.finishZoomTransition(NativeNavigationZoomTransitionContext(
                     transition: transition,
-                    sourceFrame: sourceRect.map { self.rootFrame(for: $0, webView: webView) },
-                    targetFrame: targetRect.map { self.rootFrame(for: $0, webView: webView) },
+                    sourceFrame: sourceRect.map { self.transitionFrame(for: $0, webView: webView) },
+                    targetFrame: targetRect.map { self.transitionFrame(for: $0, webView: webView) },
                     cornerRadius: CGFloat(call.getDouble("cornerRadius") ?? Double(self.activeZoomCornerRadius))
                 ))
                 return
@@ -437,9 +439,11 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
     public func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
         guard !suppressTabSelectEvent else {
+            hostWebViewInSelectedSystemTab()
             return
         }
         let index = tabBarController.viewControllers?.firstIndex(of: viewController) ?? viewController.tabBarItem.tag
+        hostWebViewInSelectedSystemTab()
         notifyTabSelect(index: index)
     }
 
@@ -538,6 +542,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
     private func ensureSystemTabBar() -> UITabBar {
         if let tabBarController = tabBarController {
+            hostWebViewInSelectedSystemTab()
             return tabBarController.tabBar
         }
 
@@ -554,6 +559,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
         self.tabBarController = controller
         self.tabBar = controller.tabBar
+        hostWebViewInSelectedSystemTab()
         return controller.tabBar
     }
 
@@ -577,9 +583,91 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             let index = min(max(fallbackIndex, 0), controllers.count - 1)
             tabBarController.selectedIndex = index
         }
+        hostWebViewInSelectedSystemTab()
         suppressTabSelectEvent = false
 
         tabViewControllers = controllers
+    }
+
+    private func setSystemTabBarHidden(_ hidden: Bool) {
+        guard let tabBarController = tabBarController else {
+            return
+        }
+
+        if #available(iOS 18.0, *) {
+            tabBarController.setTabBarHidden(hidden, animated: false)
+        } else {
+            tabBarController.tabBar.isHidden = hidden
+        }
+    }
+
+    private func hideTabBarChrome() {
+        if usesSystemLiquidGlass {
+            setSystemTabBarHidden(true)
+            tabBarController?.view.isHidden = false
+            hostWebViewInSelectedSystemTab()
+        } else {
+            tabContainer?.isHidden = true
+            tabBar?.isHidden = true
+        }
+    }
+
+    private func showTabBarChrome(_ tabBar: UITabBar) {
+        tabContainer?.isHidden = false
+        tabBarController?.view.isHidden = false
+        if usesSystemLiquidGlass {
+            setSystemTabBarHidden(false)
+            hostWebViewInSelectedSystemTab()
+        } else {
+            tabBar.isHidden = false
+        }
+    }
+
+    private func captureOriginalWebViewPlacementIfNeeded(_ webView: UIView) {
+        guard originalWebViewSuperview == nil, let superview = webView.superview else {
+            return
+        }
+
+        originalWebViewSuperview = superview
+        originalWebViewIndex = superview.subviews.firstIndex(of: webView)
+        originalWebViewAutoresizingMask = webView.autoresizingMask
+    }
+
+    private func hostWebViewInSelectedSystemTab() {
+        guard usesSystemLiquidGlass,
+              let webView = webView,
+              let selectedController = tabBarController?.selectedViewController as? NativeNavigationTabContentController else {
+            return
+        }
+
+        captureOriginalWebViewPlacementIfNeeded(webView)
+        clearHostedWebViews(matching: webView, except: selectedController)
+        selectedController.host(webView: webView)
+        clearHostedWebViews(matching: webView, except: selectedController)
+        isWebViewHostedInSystemTabController = true
+    }
+
+    private func restoreWebViewFromSystemTabController() {
+        guard isWebViewHostedInSystemTabController,
+              let webView = webView,
+              let targetSuperview = originalWebViewSuperview ?? bridge?.viewController?.view else {
+            return
+        }
+
+        let insertionIndex = min(originalWebViewIndex ?? targetSuperview.subviews.count, targetSuperview.subviews.count)
+        clearHostedWebViews(matching: webView)
+        webView.removeFromSuperview()
+        targetSuperview.insertSubview(webView, at: insertionIndex)
+        webView.autoresizingMask = originalWebViewAutoresizingMask ?? [.flexibleWidth, .flexibleHeight]
+        webView.frame = targetSuperview.bounds
+        isWebViewHostedInSystemTabController = false
+    }
+
+    private func clearHostedWebViews(matching webView: UIView, except owner: NativeNavigationTabContentController? = nil) {
+        tabViewControllers
+            .compactMap { $0 as? NativeNavigationTabContentController }
+            .filter { $0 !== owner }
+            .forEach { $0.clearHostedWebView(ifMatching: webView) }
     }
 
     private func makeBarButtonItems(_ rawItems: [[String: Any]], placement: String) -> [UIBarButtonItem] {
@@ -761,13 +849,16 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         )
     }
 
-    private func rootFrame(for viewportRect: CGRect, webView: UIView) -> CGRect {
-        return CGRect(
-            x: webView.frame.minX + viewportRect.minX,
-            y: webView.frame.minY + viewportRect.minY,
-            width: viewportRect.width,
-            height: viewportRect.height
-        )
+    private func transitionFrame(for viewportRect: CGRect, webView: UIView) -> CGRect {
+        guard let transitionContainer = webView.superview else {
+            return CGRect(
+                x: webView.frame.minX + viewportRect.minX,
+                y: webView.frame.minY + viewportRect.minY,
+                width: viewportRect.width,
+                height: viewportRect.height
+            )
+        }
+        return webView.convert(viewportRect, to: transitionContainer)
     }
 
     private func transitionSnapshotView(from webView: UIView, sourceRect: CGRect?) -> UIView {
@@ -1010,6 +1101,13 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
 
     private func bringChromeToFront() {
+        if usesSystemLiquidGlass {
+            if let navContainer = navContainer {
+                bridge?.viewController?.view.bringSubviewToFront(navContainer)
+            }
+            return
+        }
+
         if let navContainer = navContainer {
             bridge?.viewController?.view.bringSubviewToFront(navContainer)
         }
@@ -1233,40 +1331,50 @@ private final class NativeNavigationBar: UINavigationBar {
 }
 
 private final class NativeNavigationTabController: UITabBarController {
-    override func loadView() {
-        let view = NativeNavigationTabControllerView()
-        view.backgroundColor = .clear
-        view.isOpaque = false
-        self.view = view
-    }
-
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .clear
         view.isOpaque = false
         tabBar.isTranslucent = true
-        (view as? NativeNavigationTabControllerView)?.tabBar = tabBar
-    }
-}
-
-private final class NativeNavigationTabControllerView: UIView {
-    weak var tabBar: UITabBar?
-
-    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        guard let tabBar = tabBar, !tabBar.isHidden, tabBar.alpha > 0.01 else {
-            return false
-        }
-        let tabPoint = convert(point, to: tabBar)
-        return tabBar.point(inside: tabPoint, with: event)
     }
 }
 
 private final class NativeNavigationTabContentController: UIViewController {
+    private weak var hostedWebView: UIView?
+
     override func loadView() {
         let view = UIView()
         view.backgroundColor = .clear
         view.isOpaque = false
         self.view = view
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        guard hostedWebView?.superview === view else {
+            hostedWebView = nil
+            return
+        }
+        hostedWebView?.frame = view.bounds
+    }
+
+    func clearHostedWebView(ifMatching webView: UIView? = nil) {
+        guard webView == nil || hostedWebView === webView else {
+            return
+        }
+        hostedWebView = nil
+    }
+
+    func host(webView: UIView) {
+        if hostedWebView !== webView {
+            hostedWebView = webView
+        }
+        if webView.superview !== view {
+            webView.removeFromSuperview()
+            view.addSubview(webView)
+        }
+        webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        webView.frame = view.bounds
     }
 }
 
