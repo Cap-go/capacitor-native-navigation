@@ -9,6 +9,7 @@
  *
  * And (when iOS is declared in package.json capacitor config):
  * - CocoaPods podspec s.name matches SwiftPM Package(name: ...) and .library(name: ...)
+ * - iOS package names match Capacitor's normalized npm package name
  *
  * Usage:
  *   node scripts/check-capacitor-plugin-wiring.mjs            # checks current working dir
@@ -84,6 +85,18 @@ function uniq(arr) {
     if (!out.includes(x)) out.push(x);
   }
   return out;
+}
+
+function capacitorPluginName(packageName) {
+  if (typeof packageName !== "string" || !packageName) return "";
+
+  const name = packageName
+    .replace(/\//g, "_")
+    .replace(/-/g, "_")
+    .replace(/@/g, "")
+    .replace(/_\w/g, (match) => match[1].toUpperCase());
+
+  return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
 function parseArgs(argv) {
@@ -232,14 +245,28 @@ if (supportsIos) {
     errors.push("iOS: missing Package.swift at plugin root");
   } else if (podspecs.length) {
     const podName = parsePodspecName(podspecs[0]);
+    const podFileName = path.basename(podspecs[0], ".podspec");
     const { pkgName, libNames } = parseSpmNames(pkgSwift);
+    const expectedIosName = capacitorPluginName(pkg.name);
     if (!podName) errors.push("Podspec: missing s.name = '...'");
+    if (podName && podFileName !== podName) {
+      errors.push(`Podspec: filename ${podFileName}.podspec != s.name ${podName}`);
+    }
     if (!pkgName) errors.push('SPM: missing Package(name: "...")');
     if (podName && pkgName && podName !== pkgName) {
       errors.push(`Podspec: s.name=${podName} != Package(name)=${pkgName}`);
     }
+    if (expectedIosName && podName && podName !== expectedIosName) {
+      errors.push(`Podspec: s.name=${podName} != Capacitor expected iOS package name ${expectedIosName}`);
+    }
+    if (expectedIosName && pkgName && pkgName !== expectedIosName) {
+      errors.push(`SPM: Package(name)=${pkgName} != Capacitor expected iOS package name ${expectedIosName}`);
+    }
     if (pkgName && libNames.length && !libNames.includes(pkgName)) {
       errors.push(`SPM: Package(name)=${pkgName} not present in .library(name) list ${JSON.stringify(libNames)}`);
+    }
+    if (expectedIosName && libNames.length && !libNames.includes(expectedIosName)) {
+      errors.push(`SPM: expected library product ${expectedIosName} not present in .library(name) list ${JSON.stringify(libNames)}`);
     }
   }
 }
