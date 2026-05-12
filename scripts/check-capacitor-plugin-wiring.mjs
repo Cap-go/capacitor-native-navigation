@@ -9,6 +9,7 @@
  *
  * And (when iOS is declared in package.json capacitor config):
  * - CocoaPods podspec s.name matches SwiftPM Package(name: ...) and .library(name: ...)
+ * - iOS package/spec names match Capacitor's normalized npm package name
  *
  * Usage:
  *   node scripts/check-capacitor-plugin-wiring.mjs            # checks current working dir
@@ -86,6 +87,20 @@ function uniq(arr) {
   return out;
 }
 
+function upperFirst(s) {
+  return s ? `${s[0].toUpperCase()}${s.slice(1)}` : "";
+}
+
+function packageNameToCapacitorIosName(packageName) {
+  return packageName
+    .replace(/^@/, "")
+    .split("/")
+    .flatMap((part) => part.split(/[^A-Za-z0-9]+/))
+    .filter(Boolean)
+    .map((part) => upperFirst(part))
+    .join("");
+}
+
 function parseArgs(argv) {
   const out = { dir: process.cwd() };
   for (let i = 2; i < argv.length; i++) {
@@ -118,6 +133,7 @@ try {
 const cap = typeof pkg.capacitor === "object" && pkg.capacitor ? pkg.capacitor : {};
 const supportsAndroid = typeof cap.android === "object" && cap.android;
 const supportsIos = typeof cap.ios === "object" && cap.ios;
+const expectedIosName = packageNameToCapacitorIosName(pkg.name || "");
 
 // Not a Capacitor plugin package (e.g. meta/workspace package).
 // We only enforce wiring rules for actual plugin packages declaring a `capacitor` config.
@@ -233,8 +249,18 @@ if (supportsIos) {
   } else if (podspecs.length) {
     const podName = parsePodspecName(podspecs[0]);
     const { pkgName, libNames } = parseSpmNames(pkgSwift);
+    const podspecFileName = path.basename(podspecs[0], ".podspec");
     if (!podName) errors.push("Podspec: missing s.name = '...'");
     if (!pkgName) errors.push('SPM: missing Package(name: "...")');
+    if (expectedIosName && podspecFileName !== expectedIosName) {
+      errors.push(`Podspec: filename=${podspecFileName}.podspec != Capacitor iOS package name ${expectedIosName}`);
+    }
+    if (expectedIosName && podName && podName !== expectedIosName) {
+      errors.push(`Podspec: s.name=${podName} != Capacitor iOS package name ${expectedIosName}`);
+    }
+    if (expectedIosName && pkgName && pkgName !== expectedIosName) {
+      errors.push(`SPM: Package(name)=${pkgName} != Capacitor iOS package name ${expectedIosName}`);
+    }
     if (podName && pkgName && podName !== pkgName) {
       errors.push(`Podspec: s.name=${podName} != Package(name)=${pkgName}`);
     }
