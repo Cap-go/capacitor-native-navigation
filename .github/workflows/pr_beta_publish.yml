@@ -202,12 +202,12 @@ jobs:
       - name: Publish to npm beta
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: bunx npm publish --tag beta --provenance --access public --ignore-scripts
+        run: npm publish --tag beta --provenance --access public --ignore-scripts
 
       - name: Add PR dist-tag
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: bunx npm dist-tag add "${{ steps.version.outputs.package_name }}@${{ steps.version.outputs.version }}" "pr-${{ steps.pr.outputs.pr_number }}"
+        run: npm dist-tag add "${{ steps.version.outputs.package_name }}@${{ steps.version.outputs.version }}" "pr-${{ steps.pr.outputs.pr_number }}"
 
       - name: Publish success comment
         if: ${{ success() }}
