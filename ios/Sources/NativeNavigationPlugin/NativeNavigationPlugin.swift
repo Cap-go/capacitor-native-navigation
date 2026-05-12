@@ -553,7 +553,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
         if let parent = bridge?.viewController {
             parent.addChild(controller)
-            parent.view.addSubview(controller.view)
+            insertSystemTabControllerView(controller.view, in: parent.view)
             controller.didMove(toParent: parent)
         }
 
@@ -631,6 +631,43 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         originalWebViewSuperview = superview
         originalWebViewIndex = superview.subviews.firstIndex(of: webView)
         originalWebViewAutoresizingMask = webView.autoresizingMask
+    }
+
+    private func insertSystemTabControllerView(_ controllerView: UIView, in parentView: UIView) {
+        guard let webView = webView else {
+            parentView.addSubview(controllerView)
+            return
+        }
+
+        captureOriginalWebViewPlacementIfNeeded(webView)
+        let insertionIndex = systemTabControllerInsertionIndex(in: parentView, for: webView)
+        parentView.insertSubview(controllerView, at: insertionIndex)
+    }
+
+    private func systemTabControllerInsertionIndex(in parentView: UIView, for webView: UIView) -> Int {
+        if let directChild = directChild(of: parentView, containing: webView),
+           let index = parentView.subviews.firstIndex(of: directChild) {
+            return min(index, parentView.subviews.count)
+        }
+
+        if let originalWebViewSuperview = originalWebViewSuperview,
+           originalWebViewSuperview === parentView {
+            return min(originalWebViewIndex ?? parentView.subviews.count, parentView.subviews.count)
+        }
+
+        return parentView.subviews.count
+    }
+
+    private func directChild(of ancestor: UIView, containing descendant: UIView) -> UIView? {
+        var current: UIView? = descendant
+        while let view = current, let superview = view.superview {
+            if superview === ancestor {
+                return view
+            }
+            current = superview
+        }
+
+        return nil
     }
 
     private func hostWebViewInSelectedSystemTab() {
