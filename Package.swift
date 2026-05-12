@@ -2,11 +2,11 @@
 import PackageDescription
 
 let package = Package(
-    name: "CapgoNativeNavigation",
+    name: "CapgoCapacitorNativeNavigation",
     platforms: [.iOS(.v15)],
     products: [
         .library(
-            name: "CapgoNativeNavigation",
+            name: "CapgoCapacitorNativeNavigation",
             targets: ["NativeNavigationPlugin"])
     ],
     dependencies: [
