@@ -16,4 +16,18 @@ class NativeNavigationTests: XCTestCase {
 
         XCTAssertEqual("native", result)
     }
+
+    func testTabContentControllerHostAvoidsLayerCycle() {
+        let webView = UIView()
+        let controller = NativeNavigationTabContentController()
+        _ = controller.view
+
+        webView.addSubview(controller.view)
+        XCTAssertTrue(controller.view.isDescendant(of: webView))
+
+        controller.host(webView: webView)
+
+        XCTAssertNil(webView.superview)
+        XCTAssertEqual(controller.view.superview, webView)
+    }
 }
