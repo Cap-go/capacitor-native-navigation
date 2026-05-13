@@ -237,7 +237,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
             self.transitionSnapshot?.removeFromSuperview()
             self.restoreTransitionContainerBackground()
-            let transitionSurface = nativeNavigationFallbackBackground(for: webView)
+            let transitionSurface = nativeNavigationFallbackBackground(for: webView).withAlphaComponent(1.0)
             self.prepareTransitionContainerBackground(transitionContainer, surface: transitionSurface)
             let snapshot = self.transitionSnapshotView(from: webView, sourceRect: zoomSourceRect)
             snapshot.frame = zoomSourceFrame ?? webView.frame
@@ -1647,7 +1647,7 @@ private func nativeNavigationFallbackBackground(for view: UIView) -> UIColor {
        color.cgColor.alpha > 0 {
         return color.withAlphaComponent(1)
     }
-    return .systemBackground
+    return UIColor.systemBackground.withAlphaComponent(1.0)
 }
 
 func nativeNavigationUsesStationaryTransitionCrossfade(direction: String) -> Bool {
