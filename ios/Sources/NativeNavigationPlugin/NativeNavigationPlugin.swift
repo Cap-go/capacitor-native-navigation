@@ -48,6 +48,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private weak var originalWebViewSuperview: UIView?
     private var originalWebViewIndex: Int?
     private var originalWebViewAutoresizingMask: UIView.AutoresizingMask?
+    private var liftedWebViewOverlays: [NativeNavigationWeakView] = []
     private var isWebViewHostedInSystemTabController = false
     private var navbarHeight: CGFloat = 44
     private var tabbarHeight: CGFloat = 64
@@ -568,6 +569,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
         self.tabBarController = controller
         self.tabBar = controller.tabBar
+        liftWebViewOverlaysAboveSystemTabs()
         hostWebViewInSelectedSystemTab()
         return controller.tabBar
     }
@@ -605,6 +607,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         originalWebViewSuperview = container
         originalWebViewIndex = 0
         originalWebViewAutoresizingMask = webView.autoresizingMask
+        liftWebViewOverlaysAboveSystemTabs()
         return container
     }
 
@@ -688,6 +691,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         tabBarController?.view.isHidden = false
         if usesSystemLiquidGlass {
             setSystemTabBarHidden(false)
+            liftWebViewOverlaysAboveSystemTabs()
             hostWebViewInSelectedSystemTab()
         } else {
             tabBar.isHidden = false
@@ -752,6 +756,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             return
         }
 
+        liftWebViewOverlaysAboveSystemTabs()
         captureOriginalWebViewPlacementIfNeeded(webView)
         clearHostedWebViews(matching: webView, except: selectedController, preservingSnapshots: true)
         guard selectedController.host(webView: webView) else {
@@ -760,6 +765,34 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         }
         clearHostedWebViews(matching: webView, except: selectedController)
         isWebViewHostedInSystemTabController = true
+        bringLiftedWebViewOverlaysToFront()
+    }
+
+    private func liftWebViewOverlaysAboveSystemTabs() {
+        guard usesSystemLiquidGlass,
+              let webView = webView,
+              let container = systemTabRootContainer else {
+            return
+        }
+
+        nativeNavigationLiftWebViewOverlaySubviews(
+            from: webView,
+            to: container,
+            tracking: &liftedWebViewOverlays,
+            excluding: [navContainer, tabContainer, tabBarController?.view]
+        )
+    }
+
+    private func bringLiftedWebViewOverlaysToFront() {
+        guard let container = systemTabRootContainer else {
+            return
+        }
+
+        liftedWebViewOverlays = liftedWebViewOverlays.filter { $0.value != nil }
+        liftedWebViewOverlays
+            .compactMap(\.value)
+            .filter { $0.superview === container }
+            .forEach { container.bringSubviewToFront($0) }
     }
 
     private func restoreWebViewFromSystemTabController() {
@@ -1224,6 +1257,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             if let navContainer = navContainer {
                 bridge?.viewController?.view.bringSubviewToFront(navContainer)
             }
+            bringLiftedWebViewOverlaysToFront()
             return
         }
 
@@ -1447,6 +1481,65 @@ private final class NativeNavigationBar: UINavigationBar {
         ))
         return expandedBounds.contains(point)
     }
+}
+
+final class NativeNavigationWeakView {
+    weak var value: UIView?
+
+    init(_ value: UIView) {
+        self.value = value
+    }
+}
+
+func nativeNavigationLiftWebViewOverlaySubviews(
+    from webView: UIView,
+    to container: UIView,
+    tracking liftedOverlays: inout [NativeNavigationWeakView],
+    excluding excludedViews: [UIView?] = []
+) {
+    webView.subviews
+        .filter { nativeNavigationShouldLiftWebViewOverlay($0, excluding: excludedViews) }
+        .forEach { overlay in
+            let frame = overlay.convert(overlay.bounds, to: container)
+            let hadParentConstraints = nativeNavigationDeactivateParentConstraints(in: webView, involving: overlay)
+            overlay.removeFromSuperview()
+            overlay.frame = frame
+            if hadParentConstraints {
+                overlay.translatesAutoresizingMaskIntoConstraints = true
+            }
+            overlay.autoresizingMask = overlay.autoresizingMask.isEmpty
+                ? [.flexibleWidth, .flexibleHeight]
+                : overlay.autoresizingMask
+            container.addSubview(overlay)
+            liftedOverlays.append(NativeNavigationWeakView(overlay))
+        }
+
+    liftedOverlays = liftedOverlays.filter { $0.value != nil }
+    liftedOverlays
+        .compactMap(\.value)
+        .filter { $0.superview === container }
+        .forEach { container.bringSubviewToFront($0) }
+}
+
+func nativeNavigationShouldLiftWebViewOverlay(_ view: UIView, excluding excludedViews: [UIView?] = []) -> Bool {
+    if excludedViews.contains(where: { $0 === view }) {
+        return false
+    }
+
+    if view is UIScrollView {
+        return false
+    }
+
+    let className = NSStringFromClass(type(of: view))
+    return !className.contains("WK")
+}
+
+private func nativeNavigationDeactivateParentConstraints(in parent: UIView, involving view: UIView) -> Bool {
+    let constraints = parent.constraints.filter { constraint in
+        constraint.firstItem === view || constraint.secondItem === view
+    }
+    NSLayoutConstraint.deactivate(constraints)
+    return !constraints.isEmpty
 }
 
 final class NativeNavigationTabController: UITabBarController {
