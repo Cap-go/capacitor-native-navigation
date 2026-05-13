@@ -1645,7 +1645,7 @@ final class NativeNavigationTabContentController: UIViewController {
 private func nativeNavigationFallbackBackground(for view: UIView) -> UIColor {
     if let color = view.backgroundColor,
        color.cgColor.alpha > 0 {
-        return color
+        return color.withAlphaComponent(1)
     }
     return .systemBackground
 }
