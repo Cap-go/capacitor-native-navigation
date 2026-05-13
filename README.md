@@ -10,6 +10,8 @@ Native navigation chrome for Capacitor apps. Render a native navbar, native tabb
 
 ## Demo
 
+<img src="./docs/demo.webp" alt="Demo of capacitor-native-navigation in action" width="300" />
+
 ### Native navigation tap flow
 
 <img src="./docs/demo-navigation.webp" alt="Animated native navigation tap flow showing tab selection, push transition, and native back" width="320" />
