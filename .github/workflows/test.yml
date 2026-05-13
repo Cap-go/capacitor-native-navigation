@@ -28,6 +28,10 @@ jobs:
     steps:
       - name: Check out
         uses: actions/checkout@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.x
       - uses: oven-sh/setup-bun@v2
       - name: Install dependencies
         id: install_code
@@ -51,6 +55,10 @@ jobs:
     steps:
       - name: Check out
         uses: actions/checkout@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.x
       - uses: oven-sh/setup-bun@v2
       - name: Install dependencies
         id: install_code
