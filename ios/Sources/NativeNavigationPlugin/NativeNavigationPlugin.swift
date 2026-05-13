@@ -438,6 +438,13 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         notifyTabSelect(index: item.tag)
     }
 
+    public func tabBarController(_ tabBarController: UITabBarController, shouldSelect viewController: UIViewController) -> Bool {
+        if usesSystemLiquidGlass {
+            hostWebView(in: viewController)
+        }
+        return true
+    }
+
     public func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
         guard !suppressTabSelectEvent else {
             hostWebViewInSelectedSystemTab()
@@ -580,8 +587,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         let previousFrame = webView.frame
         let previousAutoresizingMask = webView.autoresizingMask
         let container = UIView(frame: previousFrame)
-        container.backgroundColor = .clear
-        container.isOpaque = false
+        container.backgroundColor = nativeNavigationFallbackBackground(for: webView)
+        container.isOpaque = true
         container.autoresizingMask = previousAutoresizingMask.isEmpty ? [.flexibleWidth, .flexibleHeight] : previousAutoresizingMask
 
         if let previousSuperview = previousSuperview {
@@ -614,24 +621,43 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         }
 
         let previousSelectedIndex = tabBarController.selectedIndex
-        let controllers = items.map { item -> UIViewController in
+        let controllers = systemTabContentControllers(for: items)
+        let currentControllers = tabBarController.viewControllers ?? []
+        let shouldUpdateControllers = currentControllers.count != controllers.count
+            || zip(currentControllers, controllers).contains { currentController, nextController in
+                currentController !== nextController
+            }
+        let shouldAnimate = animated && tabBarController.viewControllers?.count == controllers.count
+
+        suppressTabSelectEvent = true
+        if shouldUpdateControllers {
+            tabBarController.setViewControllers(controllers, animated: shouldAnimate)
+        }
+        if !controllers.isEmpty {
+            let fallbackIndex = selectedIndex ?? previousSelectedIndex
+            let index = min(max(fallbackIndex, 0), controllers.count - 1)
+            hostWebView(in: controllers[index])
+            tabBarController.selectedIndex = index
+        }
+        suppressTabSelectEvent = false
+
+        tabViewControllers = controllers
+    }
+
+    private func systemTabContentControllers(for items: [UITabBarItem]) -> [UIViewController] {
+        let existingControllers = tabViewControllers.compactMap { $0 as? NativeNavigationTabContentController }
+        if existingControllers.count == items.count {
+            zip(existingControllers, items).forEach { controller, item in
+                controller.tabBarItem = item
+            }
+            return existingControllers
+        }
+
+        return items.map { item -> UIViewController in
             let controller = NativeNavigationTabContentController()
             controller.tabBarItem = item
             return controller
         }
-        let shouldAnimate = animated && tabBarController.viewControllers?.count == controllers.count
-
-        suppressTabSelectEvent = true
-        tabBarController.setViewControllers(controllers, animated: shouldAnimate)
-        if !controllers.isEmpty {
-            let fallbackIndex = selectedIndex ?? previousSelectedIndex
-            let index = min(max(fallbackIndex, 0), controllers.count - 1)
-            tabBarController.selectedIndex = index
-        }
-        hostWebViewInSelectedSystemTab()
-        suppressTabSelectEvent = false
-
-        tabViewControllers = controllers
     }
 
     private func setSystemTabBarHidden(_ hidden: Bool) {
@@ -716,14 +742,18 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
 
     private func hostWebViewInSelectedSystemTab() {
+        hostWebView(in: tabBarController?.selectedViewController)
+    }
+
+    private func hostWebView(in viewController: UIViewController?) {
         guard usesSystemLiquidGlass,
               let webView = webView,
-              let selectedController = tabBarController?.selectedViewController as? NativeNavigationTabContentController else {
+              let selectedController = viewController as? NativeNavigationTabContentController else {
             return
         }
 
         captureOriginalWebViewPlacementIfNeeded(webView)
-        clearHostedWebViews(matching: webView, except: selectedController)
+        clearHostedWebViews(matching: webView, except: selectedController, preservingSnapshots: true)
         guard selectedController.host(webView: webView) else {
             isWebViewHostedInSystemTabController = false
             return
@@ -748,11 +778,15 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         isWebViewHostedInSystemTabController = false
     }
 
-    private func clearHostedWebViews(matching webView: UIView, except owner: NativeNavigationTabContentController? = nil) {
+    private func clearHostedWebViews(
+        matching webView: UIView,
+        except owner: NativeNavigationTabContentController? = nil,
+        preservingSnapshots: Bool = false
+    ) {
         tabViewControllers
             .compactMap { $0 as? NativeNavigationTabContentController }
             .filter { $0 !== owner }
-            .forEach { $0.clearHostedWebView(ifMatching: webView) }
+            .forEach { $0.clearHostedWebView(ifMatching: webView, preservingSnapshot: preservingSnapshots) }
     }
 
     private func makeBarButtonItems(_ rawItems: [[String: Any]], placement: String) -> [UIBarButtonItem] {
@@ -948,12 +982,12 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
     private func transitionSnapshotView(from webView: UIView, sourceRect: CGRect?) -> UIView {
         guard let sourceRect = sourceRect else {
-            return webView.snapshotView(afterScreenUpdates: false) ?? UIView(frame: webView.frame)
+            return webView.snapshotView(afterScreenUpdates: false) ?? nativeNavigationSnapshotPlaceholder(for: webView)
         }
 
         let cropRect = sourceRect.intersection(webView.bounds)
         guard cropRect.width > 0, cropRect.height > 0 else {
-            return webView.snapshotView(afterScreenUpdates: false) ?? UIView(frame: webView.frame)
+            return webView.snapshotView(afterScreenUpdates: false) ?? nativeNavigationSnapshotPlaceholder(for: webView)
         }
 
         let renderer = UIGraphicsImageRenderer(bounds: webView.bounds)
@@ -969,7 +1003,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         ).integral
 
         guard let croppedImage = image.cgImage?.cropping(to: scaledCropRect) else {
-            return webView.snapshotView(afterScreenUpdates: false) ?? UIView(frame: webView.frame)
+            return webView.snapshotView(afterScreenUpdates: false) ?? nativeNavigationSnapshotPlaceholder(for: webView)
         }
 
         let imageView = UIImageView(image: UIImage(cgImage: croppedImage, scale: scale, orientation: image.imageOrientation))
@@ -1418,19 +1452,20 @@ private final class NativeNavigationBar: UINavigationBar {
 final class NativeNavigationTabController: UITabBarController {
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .clear
-        view.isOpaque = false
+        view.backgroundColor = .systemBackground
+        view.isOpaque = true
         tabBar.isTranslucent = true
     }
 }
 
 final class NativeNavigationTabContentController: UIViewController {
     private weak var hostedWebView: UIView?
+    private var snapshotPlaceholder: UIView?
 
     override func loadView() {
         let view = UIView()
-        view.backgroundColor = .clear
-        view.isOpaque = false
+        view.backgroundColor = .systemBackground
+        view.isOpaque = true
         self.view = view
     }
 
@@ -1443,10 +1478,20 @@ final class NativeNavigationTabContentController: UIViewController {
         hostedWebView?.frame = view.bounds
     }
 
-    func clearHostedWebView(ifMatching webView: UIView? = nil) {
+    func clearHostedWebView(ifMatching webView: UIView? = nil, preservingSnapshot: Bool = false) {
         guard webView == nil || hostedWebView === webView else {
             return
         }
+
+        if preservingSnapshot, let hostedWebView = hostedWebView, hostedWebView.superview === view {
+            let placeholder = hostedWebView.snapshotView(afterScreenUpdates: false) ?? nativeNavigationSnapshotPlaceholder(for: hostedWebView)
+            placeholder.frame = hostedWebView.frame
+            placeholder.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            snapshotPlaceholder?.removeFromSuperview()
+            view.insertSubview(placeholder, belowSubview: hostedWebView)
+            snapshotPlaceholder = placeholder
+        }
+
         hostedWebView = nil
     }
 
@@ -1457,6 +1502,8 @@ final class NativeNavigationTabContentController: UIViewController {
             return false
         }
 
+        snapshotPlaceholder?.removeFromSuperview()
+        snapshotPlaceholder = nil
         hostedWebView = webView
         if webView.superview !== view {
             webView.removeFromSuperview()
@@ -1466,6 +1513,21 @@ final class NativeNavigationTabContentController: UIViewController {
         webView.frame = view.bounds
         return true
     }
+}
+
+private func nativeNavigationFallbackBackground(for view: UIView) -> UIColor {
+    if let color = view.backgroundColor,
+       color.cgColor.alpha > 0 {
+        return color
+    }
+    return .systemBackground
+}
+
+private func nativeNavigationSnapshotPlaceholder(for view: UIView) -> UIView {
+    let placeholder = UIView(frame: view.frame)
+    placeholder.backgroundColor = nativeNavigationFallbackBackground(for: view)
+    placeholder.isOpaque = true
+    return placeholder
 }
 
 private final class SVGIconRenderer: NSObject, XMLParserDelegate {
