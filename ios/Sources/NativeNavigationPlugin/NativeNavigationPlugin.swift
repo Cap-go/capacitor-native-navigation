@@ -70,6 +70,10 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var activeTransitionDirection = "forward"
     private var activeZoomSourceFrame: CGRect?
     private var activeZoomCornerRadius: CGFloat = 0
+    private weak var activeTransitionContainer: UIView?
+    private var activeTransitionContainerBackgroundColor: UIColor?
+    private var activeTransitionContainerWasOpaque = false
+    private var activeTransitionContainerBackgroundCaptured = false
 
     private var usesSystemLiquidGlass: Bool {
         if #available(iOS 26.0, *) {
@@ -232,9 +236,14 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             let cornerRadius = CGFloat(call.getDouble("cornerRadius") ?? 0)
 
             self.transitionSnapshot?.removeFromSuperview()
+            self.restoreTransitionContainerBackground()
+            let transitionSurface = nativeNavigationFallbackBackground(for: webView)
+            self.prepareTransitionContainerBackground(transitionContainer, surface: transitionSurface)
             let snapshot = self.transitionSnapshotView(from: webView, sourceRect: zoomSourceRect)
             snapshot.frame = zoomSourceFrame ?? webView.frame
             snapshot.autoresizingMask = zoomSourceFrame == nil ? [.flexibleWidth, .flexibleHeight] : []
+            snapshot.backgroundColor = transitionSurface
+            snapshot.isOpaque = true
             snapshot.layer.cornerRadius = cornerRadius
             snapshot.clipsToBounds = cornerRadius > 0
             transitionContainer.insertSubview(snapshot, aboveSubview: webView)
@@ -292,8 +301,9 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private func finishStandardTransition(_ transition: NativeNavigationTransitionContext) {
         let width = transition.webView.bounds.width
         let transforms = standardTransitionTransforms(direction: transition.direction, width: width)
+        let usesStationaryCrossfade = nativeNavigationUsesStationaryTransitionCrossfade(direction: transition.direction)
         transition.webView.transform = transforms.start
-        transition.webView.alpha = transition.direction == "none" ? 1 : 0.01
+        transition.webView.alpha = usesStationaryCrossfade ? 1 : 0.01
 
         UIView.animate(
             withDuration: max(transition.duration, 0),
@@ -303,7 +313,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 transition.webView.transform = .identity
                 transition.webView.alpha = 1
                 transition.snapshot?.transform = transforms.snapshotEnd
-                transition.snapshot?.alpha = transition.direction == "none" ? 0 : 0.75
+                transition.snapshot?.alpha = usesStationaryCrossfade ? 0 : 0.75
             },
             completion: { _ in
                 self.finishTransitionCleanup(transition)
@@ -407,11 +417,35 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         transition.webView.layer.cornerRadius = 0
         transition.webView.clipsToBounds = false
         transitionSnapshot = nil
+        restoreTransitionContainerBackground()
         activeTransitionId = nil
         activeZoomSourceFrame = nil
         let event: [String: Any] = ["id": transition.id, "direction": transition.direction, "duration": transition.durationMs]
         notifyListeners("transitionEnd", data: event)
         transition.resolve(event)
+    }
+
+    private func prepareTransitionContainerBackground(_ container: UIView, surface: UIColor) {
+        activeTransitionContainer = container
+        activeTransitionContainerBackgroundColor = container.backgroundColor
+        activeTransitionContainerWasOpaque = container.isOpaque
+        activeTransitionContainerBackgroundCaptured = true
+        if nativeNavigationNeedsTransitionSurface(container.backgroundColor) {
+            container.backgroundColor = surface
+            container.isOpaque = true
+        }
+    }
+
+    private func restoreTransitionContainerBackground() {
+        guard activeTransitionContainerBackgroundCaptured else {
+            return
+        }
+        activeTransitionContainer?.backgroundColor = activeTransitionContainerBackgroundColor
+        activeTransitionContainer?.isOpaque = activeTransitionContainerWasOpaque
+        activeTransitionContainer = nil
+        activeTransitionContainerBackgroundColor = nil
+        activeTransitionContainerWasOpaque = false
+        activeTransitionContainerBackgroundCaptured = false
     }
 
     @objc func getPluginVersion(_ call: CAPPluginCall) {
@@ -1614,6 +1648,17 @@ private func nativeNavigationFallbackBackground(for view: UIView) -> UIColor {
         return color
     }
     return .systemBackground
+}
+
+func nativeNavigationUsesStationaryTransitionCrossfade(direction: String) -> Bool {
+    direction == "tab" || direction == "root" || direction == "none"
+}
+
+private func nativeNavigationNeedsTransitionSurface(_ color: UIColor?) -> Bool {
+    guard let color else {
+        return true
+    }
+    return color.cgColor.alpha < 1
 }
 
 private func nativeNavigationSnapshotPlaceholder(for view: UIView) -> UIView {

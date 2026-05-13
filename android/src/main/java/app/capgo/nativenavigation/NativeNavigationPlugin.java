@@ -80,6 +80,8 @@ public class NativeNavigationPlugin extends Plugin {
     private String activeTransitionDirection = "forward";
     private RectF activeZoomSourceFrame;
     private float activeZoomCornerRadius = 0f;
+    private Drawable activeTransitionRootBackground;
+    private boolean activeTransitionRootBackgroundCaptured = false;
     private final Map<Integer, String> menuActionIds = new HashMap<>();
     private final Map<Integer, String> menuActionTitles = new HashMap<>();
     private final Map<Integer, String> menuActionPlacements = new HashMap<>();
@@ -290,8 +292,11 @@ public class NativeNavigationPlugin extends Plugin {
 
             if (transitionSnapshot != null) {
                 root.removeView(transitionSnapshot);
+                restoreTransitionRootBackground();
             }
 
+            int transitionSurface = transitionSurfaceColor(webView);
+            prepareTransitionRootBackground(root, transitionSurface);
             Bitmap bitmap = Bitmap.createBitmap(webView.getWidth(), webView.getHeight(), Bitmap.Config.ARGB_8888);
             webView.draw(new Canvas(bitmap));
             if (zoomSourceRect != null) {
@@ -300,6 +305,7 @@ public class NativeNavigationPlugin extends Plugin {
             }
             transitionSnapshot = new ImageView(getContext());
             transitionSnapshot.setImageBitmap(bitmap);
+            transitionSnapshot.setBackgroundColor(transitionSurface);
             transitionSnapshot.setScaleType(ImageView.ScaleType.FIT_XY);
             FrameLayout.LayoutParams params =
                 activeZoomSourceFrame == null
@@ -367,8 +373,9 @@ public class NativeNavigationPlugin extends Plugin {
                 snapshotEndTranslation = -width * 0.3f;
             }
 
+            boolean stationaryTransition = isStationaryTransition(direction);
             webView.setTranslationX(startTranslation);
-            webView.setAlpha("none".equals(direction) ? 1f : 0.01f);
+            webView.setAlpha(stationaryTransition ? 1f : 0.01f);
             View snapshot = transitionSnapshot;
             JSObject event = transitionEvent(transitionId, direction, durationMs);
             Runnable finish = () -> {
@@ -376,6 +383,7 @@ public class NativeNavigationPlugin extends Plugin {
                 if (root != null && transitionSnapshot != null) {
                     root.removeView(transitionSnapshot);
                 }
+                restoreTransitionRootBackground();
                 transitionSnapshot = null;
                 activeTransitionId = null;
                 activeZoomSourceFrame = null;
@@ -395,7 +403,7 @@ public class NativeNavigationPlugin extends Plugin {
                 snapshot
                     .animate()
                     .translationX(snapshotEndTranslation)
-                    .alpha("none".equals(direction) ? 0f : 0.75f)
+                    .alpha(stationaryTransition ? 0f : 0.75f)
                     .setDuration(durationMs)
                     .withEndAction(finish)
                     .start();
@@ -432,6 +440,7 @@ public class NativeNavigationPlugin extends Plugin {
             if (root != null && transitionSnapshot != null) {
                 root.removeView(transitionSnapshot);
             }
+            restoreTransitionRootBackground();
             transitionSnapshot = null;
             activeTransitionId = null;
             activeZoomSourceFrame = null;
@@ -1258,6 +1267,52 @@ public class NativeNavigationPlugin extends Plugin {
         event.put("direction", direction);
         event.put("duration", duration);
         return event;
+    }
+
+    private boolean isStationaryTransition(String direction) {
+        return "tab".equals(direction) || "root".equals(direction) || "none".equals(direction);
+    }
+
+    private void prepareTransitionRootBackground(FrameLayout root, int surfaceColor) {
+        activeTransitionRootBackground = root.getBackground();
+        activeTransitionRootBackgroundCaptured = true;
+        if (needsTransitionSurface(activeTransitionRootBackground)) {
+            root.setBackgroundColor(surfaceColor);
+        }
+    }
+
+    private void restoreTransitionRootBackground() {
+        if (!activeTransitionRootBackgroundCaptured) {
+            return;
+        }
+        FrameLayout root = contentRoot();
+        if (root != null) {
+            root.setBackground(activeTransitionRootBackground);
+        }
+        activeTransitionRootBackground = null;
+        activeTransitionRootBackgroundCaptured = false;
+    }
+
+    private boolean needsTransitionSurface(Drawable background) {
+        if (background == null) {
+            return true;
+        }
+        if (background instanceof ColorDrawable) {
+            return Color.alpha(((ColorDrawable) background).getColor()) < 255;
+        }
+        return false;
+    }
+
+    private int transitionSurfaceColor(View webView) {
+        Drawable background = webView.getBackground();
+        if (background instanceof ColorDrawable) {
+            int color = ((ColorDrawable) background).getColor();
+            if (Color.alpha(color) > 0) {
+                return withAlpha(color, 255);
+            }
+        }
+        int fallback = isNightMode() ? Color.rgb(18, 18, 18) : Color.WHITE;
+        return dynamicColor(isNightMode() ? "system_neutral1_900" : "system_neutral1_50", fallback);
     }
 
     private FrameLayout contentRoot() {
