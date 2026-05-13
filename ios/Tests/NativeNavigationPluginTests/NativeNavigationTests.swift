@@ -51,6 +51,33 @@ class NativeNavigationTests: XCTestCase {
         XCTAssertTrue(firstController.view.subviews.first === webView)
     }
 
+    func testLiftWebViewOverlaySubviewsMovesSplashOverlayAboveContainerContent() {
+        let webView = UIView(frame: CGRect(x: 0, y: 0, width: 320, height: 480))
+        let container = UIView(frame: webView.frame)
+        let tabControllerView = UIView(frame: webView.frame)
+        let scrollView = UIScrollView(frame: webView.bounds)
+        let splashOverlay = UIView(frame: webView.bounds)
+        var liftedOverlays: [NativeNavigationWeakView] = []
+
+        container.addSubview(webView)
+        container.addSubview(tabControllerView)
+        webView.addSubview(scrollView)
+        webView.addSubview(splashOverlay)
+
+        nativeNavigationLiftWebViewOverlaySubviews(
+            from: webView,
+            to: container,
+            tracking: &liftedOverlays,
+            excluding: [tabControllerView]
+        )
+
+        XCTAssertEqual(scrollView.superview, webView)
+        XCTAssertEqual(splashOverlay.superview, container)
+        XCTAssertTrue(container.subviews.last === splashOverlay)
+        XCTAssertEqual(liftedOverlays.count, 1)
+        XCTAssertTrue(liftedOverlays.first?.value === splashOverlay)
+    }
+
     func testTabContentControllerRejectsLayerCycle() {
         let webView = UIView()
         let controller = NativeNavigationTabContentController()
