@@ -31,6 +31,12 @@ const SKIP_DIRS = new Set([
   ".git",
 ]);
 
+/**
+ * Reads a UTF-8 text file, returning an empty string when it is unavailable.
+ *
+ * @param {string} p - Absolute or relative file path.
+ * @returns {string} File contents, or an empty string when reading fails.
+ */
 function readText(p) {
   try {
     return fs.readFileSync(p, "utf8");
@@ -39,6 +45,12 @@ function readText(p) {
   }
 }
 
+/**
+ * Checks whether a filesystem path is accessible.
+ *
+ * @param {string} p - Absolute or relative filesystem path.
+ * @returns {boolean} True when the path exists and can be accessed.
+ */
 function exists(p) {
   try {
     fs.accessSync(p);
@@ -48,6 +60,13 @@ function exists(p) {
   }
 }
 
+/**
+ * Recursively lists files under a root directory that match any extension.
+ *
+ * @param {string} rootDir - Directory to scan.
+ * @param {string[]} exts - File extensions to include, such as ".ts".
+ * @returns {string[]} Sorted absolute or joined file paths.
+ */
 function walkFiles(rootDir, exts) {
   const out = [];
   const stack = [rootDir];
@@ -78,6 +97,12 @@ function walkFiles(rootDir, exts) {
   return out;
 }
 
+/**
+ * Returns unique truthy values while preserving first-seen order.
+ *
+ * @param {string[]} arr - Values to deduplicate.
+ * @returns {string[]} Unique non-empty values.
+ */
 function uniq(arr) {
   const out = [];
   for (const x of arr) {
@@ -87,10 +112,22 @@ function uniq(arr) {
   return out;
 }
 
+/**
+ * Uppercases the first character of a string.
+ *
+ * @param {string} s - Input string.
+ * @returns {string} Input string with its first character uppercased.
+ */
 function upperFirst(s) {
   return s ? `${s[0].toUpperCase()}${s.slice(1)}` : "";
 }
 
+/**
+ * Converts an npm package name into Capacitor's normalized iOS package name.
+ *
+ * @param {string} packageName - npm package name, optionally scoped.
+ * @returns {string} PascalCase iOS package name expected by Capacitor.
+ */
 function packageNameToCapacitorIosName(packageName) {
   return packageName
     .replace(/^@/, "")
@@ -101,6 +138,12 @@ function packageNameToCapacitorIosName(packageName) {
     .join("");
 }
 
+/**
+ * Parses command-line arguments for the plugin directory to inspect.
+ *
+ * @param {string[]} argv - Process argument vector.
+ * @returns {{ dir: string }} Parsed options.
+ */
 function parseArgs(argv) {
   const out = { dir: process.cwd() };
   for (let i = 2; i < argv.length; i++) {
@@ -199,12 +242,24 @@ if (supportsIos) {
 }
 
 // ---------------- Podspec/SPM ----------------
+/**
+ * Extracts the CocoaPods spec name from a podspec file.
+ *
+ * @param {string} podspecPath - Path to a podspec file.
+ * @returns {string} Podspec name, or an empty string when absent.
+ */
 function parsePodspecName(podspecPath) {
   const txt = readText(podspecPath);
   const m = /\bs\.name\s*=\s*'([^']+)'/.exec(txt);
   return m ? m[1] : "";
 }
 
+/**
+ * Extracts Swift Package Manager package and library product names.
+ *
+ * @param {string} packageSwiftPath - Path to Package.swift.
+ * @returns {{ pkgName: string, libNames: string[] }} Package name and library names.
+ */
 function parseSpmNames(packageSwiftPath) {
   const txt = readText(packageSwiftPath);
   const pkg = /Package\(\s*name\s*:\s*"([^"]+)"/.exec(txt)?.[1] || "";
