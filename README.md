@@ -18,7 +18,7 @@
   </h2>
 </div>
 
-Native navbar, tabbar, safe-area, and transition chrome for Capacitor apps. Your web framework keeps routing and page rendering while this plugin owns the platform surfaces users expect to feel native.
+Native navbar, tabbar, safe-area handling, and WebView snapshot transitions for Capacitor apps. Your web framework keeps routing and page rendering while this plugin owns the platform surfaces users expect to feel native.
 
 ## Demo
 
