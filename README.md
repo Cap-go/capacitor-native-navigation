@@ -1,12 +1,24 @@
 # @capgo/capacitor-native-navigation
-<a href="https://capgo.app/"><img src="https://capgo.app/readme-banner.svg?repo=Cap-go/capacitor-native-navigation" alt="Capgo - Instant updates for Capacitor" /></a>
+
+<a href="https://capgo.app/">
+  <img
+    src="https://capgo.app/readme-banner.svg?repo=Cap-go/capacitor-native-navigation"
+    alt="Capgo - Instant updates for Capacitor"
+  />
+</a>
 
 <div align="center">
-  <h2><a href="https://capgo.app/?ref=plugin_native_navigation">Get instant updates for your app with Capgo</a></h2>
-  <h2><a href="https://capgo.app/consulting/?ref=plugin_native_navigation">Missing a feature? We can build the plugin for you</a></h2>
+  <h2>
+    <a href="https://capgo.app/?ref=plugin_native_navigation">Get instant updates for your app with Capgo</a>
+  </h2>
+  <h2>
+    <a href="https://capgo.app/consulting/?ref=plugin_native_navigation">
+      Missing a feature? We can build the plugin for you
+    </a>
+  </h2>
 </div>
 
-Native navigation chrome for Capacitor apps. Render a native navbar, native tabbar, and native transition shell over a single full-screen WebView while your framework keeps owning routes and content.
+Native navbar, tabbar, safe-area, and transition chrome for Capacitor apps. Your web framework keeps routing and page rendering while this plugin owns the platform surfaces users expect to feel native.
 
 ## Demo
 
@@ -14,44 +26,53 @@ Native navigation chrome for Capacitor apps. Render a native navbar, native tabb
 
 ### Native navigation tap flow
 
-<img src="./docs/demo-navigation.webp" alt="Animated native navigation tap flow showing tab selection, push transition, and native back" width="320" />
+<img
+  src="./docs/demo-navigation.webp"
+  alt="Animated native navigation tap flow showing tab selection, push transition, and native back"
+  width="320"
+/>
 
 ### SVG icon descriptors
 
-<img src="./docs/demo-svg-icons.webp" alt="Animated native SVG icon demo showing inline SVG icons, native tint, labels, and tab selection" width="320" />
+<img
+  src="./docs/demo-svg-icons.webp"
+  alt="Animated native SVG icon demo showing inline SVG icons, native tint, labels, and tab selection"
+  width="320"
+/>
 
 ### Native styling and zoom options
 
-<img src="./docs/demo-options.webp" alt="Animated native navigation options demo showing dynamic colors, selected labels, custom indicators, badges, system Liquid Glass, and zoom transitions" width="320" />
+<img
+  src="./docs/demo-options.webp"
+  alt="Animated native navigation options demo showing dynamic colors, selected labels, custom indicators, badges, system Liquid Glass, and zoom transitions"
+  width="320"
+/>
 
-## What It Does
+## Features
 
-- Renders native top navigation and bottom tab chrome from JavaScript state.
-- Emits native intent events such as `navbarBack`, `navbarItemTap`, and `tabSelect`.
-- Captures WebView snapshots for native-feeling push, back, root, tab, and zoom transition shells.
-- Supports native tab styling controls such as Material You dynamic colors, label visibility, indicators, ripples, badges, and selected icons.
-- Writes CSS variables so web content can scroll behind native bars without being hidden.
-- Works with React, Vue, Angular, Svelte, Solid, vanilla JS, and any router that can call imperative methods.
+- Drive native top navigation and bottom tabs from JavaScript state.
+- Use system-owned iOS navigation bars, tab bars, tab gestures, and Liquid Glass rendering.
+- Emit native intent events such as `navbarBack`, `navbarItemTap`, and `tabSelect`.
+- Capture WebView snapshots for native-feeling push, back, root, tab, and zoom transitions.
+- Configure tab labels, selected icons, badges, indicators, ripples, tint colors, and dynamic colors.
+- Write CSS inset variables so web content can scroll behind native bars without being hidden.
+- Work with React, Vue, Angular, Svelte, Solid, vanilla JS, and any router that exposes imperative navigation.
 
-## What It Does Not Do
+## How It Fits
 
-- It does not create one native WebView per route.
-- It does not render React/Vue/Svelte icon nodes natively. Icons must be serializable descriptors such as SVG strings, SF Symbols, or native resource names.
-- It does not replace your router. JS still owns route state and web content rendering.
+- Your router still owns route state and page rendering.
+- The app still uses one full-screen WebView.
+- Icons must be serializable descriptors such as SVG strings, SF Symbols, or native resource names.
 
 ## Compatibility
 
-| Plugin version | Capacitor compatibility | Maintained |
-| -------------- | ----------------------- | ---------- |
-| v8.\*.\*       | v8.\*.\*                | Yes        |
-| v7.\*.\*       | v7.\*.\*                | On demand   |
-| v6.\*.\*       | v6.\*.\*                | On demand   |
+`@capgo/capacitor-native-navigation` targets Capacitor 8 and Node.js 22+.
 
 ## Install
 
 ```bash
-bun add @capgo/capacitor-native-navigation
-bunx cap sync
+npm install @capgo/capacitor-native-navigation
+npx cap sync
 ```
 
 ## Minimal Usage
@@ -105,8 +126,8 @@ await NativeNavigation.setTabbar({
   ],
 });
 
-NativeNavigation.addListener('tabSelect', ({ id }) => {
-  router.navigate(id);
+await NativeNavigation.addListener('tabSelect', ({ id }) => {
+  router.navigate(`/${id}`);
 });
 ```
 
@@ -308,7 +329,7 @@ const icon = {
   width: 24,
   height: 24,
   template: true,
-  src: 'fallback_asset_name',
+  src: 'shared_asset_name',
   ios: {
     svg: '<svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/></svg>',
     sfSymbol: 'house.fill',
@@ -326,9 +347,9 @@ Inline SVG supports the icon-focused subset used by common sets such as Lucide a
 
 ## Platform Notes
 
-- iOS uses UIKit `UINavigationBar` and `UITabBar`. iOS 26+ hosts the tabbar in a real `UITabBarController` so Apple owns the system Liquid Glass background; earlier versions use native translucent/material fallback styling.
-- Android uses an AppCompat `Toolbar` and a floating native tab capsule with edge-to-edge placement.
-- Web fallback does not draw native bars; it mirrors inset variables and events for development.
+- iOS uses UIKit `UINavigationBar`, `UITabBar`, and `UITabBarController` so the system owns tab interaction, Liquid Glass rendering, and safe-area behavior.
+- Android uses an AppCompat `Toolbar` and a native bottom tab surface with edge-to-edge placement.
+- Web mirrors inset variables and events for local development.
 
 ## Example App
 
@@ -336,11 +357,11 @@ The `example-app/` folder is a vanilla JS Capacitor demo linked with `file:..`.
 
 ```bash
 cd example-app
-bun install
-bun run build
-bunx cap add ios
-bunx cap add android
-bunx cap sync
+npm install
+npm run build
+npx cap add ios
+npx cap add android
+npx cap sync
 ```
 
 ## API
