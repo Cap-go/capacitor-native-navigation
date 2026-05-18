@@ -11,9 +11,6 @@ on:
         description: 'Capgo channel'
         required: false
         default: 'production'
-      bundle:
-        description: 'Optional bundle version'
-        required: false
       comment:
         description: 'Optional release comment'
         required: false
@@ -70,17 +67,25 @@ jobs:
           set -euo pipefail
 
           channel="${{ github.event.inputs.channel }}"
-          bundle="${{ github.event.inputs.bundle }}"
           comment="${{ github.event.inputs.comment }}"
+          package_version="$(bun -e "const pkg = require('./package.json'); console.log(pkg.version)")"
+          config_version="$(bun -e "const cfg = require('./example-app/capacitor.config.json'); console.log(cfg.plugins?.CapacitorUpdater?.version ?? '')")"
 
           if [[ -z "$channel" ]]; then
             channel="production"
           fi
 
-          if [[ -z "$bundle" ]]; then
-            safe_channel="$(printf '%s' "$channel" | tr -c '0-9A-Za-z-' '-')"
-            bundle="0.0.1-${safe_channel}.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
+          if [[ -z "$package_version" ]]; then
+            echo "package.json is missing a version."
+            exit 1
           fi
+
+          if [[ "$config_version" != "$package_version" ]]; then
+            echo "CapacitorUpdater.version ($config_version) must match package.json version ($package_version)."
+            exit 1
+          fi
+
+          bundle="$package_version"
 
           if [[ -z "$comment" ]]; then
             comment="Native navigation example ${GITHUB_SHA}"
@@ -97,8 +102,8 @@ jobs:
             --path dist \
             --channel "${{ steps.upload.outputs.channel }}" \
             --bundle "${{ steps.upload.outputs.bundle }}" \
-            --package-json package.json \
-            --node-modules node_modules \
+            --package-json ../package.json,package.json \
+            --node-modules ../node_modules,node_modules \
             --delta \
             --no-key \
             --ignore-checksum-check \
