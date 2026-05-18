@@ -1,5 +1,18 @@
 {
-  "appId": "app.capgo.nativenavigation.example",
+  "appId": "app.capgo.capacitor.navigation",
   "appName": "Native Navigation Example",
-  "webDir": "dist"
+  "webDir": "dist",
+  "plugins": {
+    "CapacitorUpdater": {
+      "appId": "app.capgo.capacitor.navigation",
+      "autoUpdate": true,
+      "autoSplashscreen": true,
+      "directUpdate": "always",
+      "defaultChannel": "production",
+      "version": "0.0.0"
+    }
+  },
+  "android": {
+    "webContentsDebuggingEnabled": true
+  }
 }

@@ -4,15 +4,40 @@ This Vite project links directly to the local plugin source so you can validate 
 
 ## Getting started
 
+From the repository root:
+
 ```bash
 bun install
+bun run example:build
+cd example-app
 bun run start
 ```
 
 To test on native shells:
 
 ```bash
-bunx cap add ios
-bunx cap add android
-bunx cap sync
+bun run cap:sync
+bun run cap:ios
+bun run cap:android
 ```
+
+The iOS and Android commands add the native platform folder the first time they run.
+
+## Capgo Cloud testing
+
+This app is configured for Capgo Cloud with app id `app.capgo.capacitor.navigation` and the `production` channel.
+
+First-time setup in Capgo:
+
+```bash
+bunx @capgo/cli@latest app add app.capgo.capacitor.navigation --name "Native Navigation Example"
+bunx @capgo/cli@latest channel add production app.capgo.capacitor.navigation --default --self-assign
+```
+
+Deploy a new OTA bundle:
+
+```bash
+bun run capgo:deploy
+```
+
+Use `CAPGO_CHANNEL`, `CAPGO_BUNDLE_VERSION`, or `CAPGO_APP_ID` when you need to override the defaults.

@@ -5,3 +5,4 @@ dist/
 .vscode/
 *.map
 .sourcemaps
+.capgo_key*
