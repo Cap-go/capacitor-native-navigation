@@ -1,0 +1,108 @@
+name: Deploy example app to Capgo
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Capgo channel'
+        required: false
+        default: 'production'
+      bundle:
+        description: 'Optional bundle version'
+        required: false
+      comment:
+        description: 'Optional release comment'
+        required: false
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'ios/**'
+      - 'android/**'
+      - 'example-app/**'
+      - 'package.json'
+      - 'bun.lock'
+      - 'rollup.config.mjs'
+      - 'tsconfig.json'
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install plugin dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build plugin
+        run: bun run build
+
+      - name: Install example dependencies
+        working-directory: example-app
+        run: bun install --frozen-lockfile
+
+      - name: Build example app
+        working-directory: example-app
+        run: bun run build
+
+      - name: Resolve Capgo upload metadata
+        id: upload
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          channel="${{ github.event.inputs.channel }}"
+          bundle="${{ github.event.inputs.bundle }}"
+          comment="${{ github.event.inputs.comment }}"
+
+          if [[ -z "$channel" ]]; then
+            channel="production"
+          fi
+
+          if [[ -z "$bundle" ]]; then
+            safe_channel="$(printf '%s' "$channel" | tr -c '0-9A-Za-z-' '-')"
+            bundle="0.0.1-${safe_channel}.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
+          fi
+
+          if [[ -z "$comment" ]]; then
+            comment="Native navigation example ${GITHUB_SHA}"
+          fi
+
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "bundle=$bundle" >> "$GITHUB_OUTPUT"
+          echo "comment=$comment" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy to Capgo
+        working-directory: example-app
+        run: |
+          bunx @capgo/cli@latest bundle upload app.capgo.capacitor.navigation \
+            --path dist \
+            --channel "${{ steps.upload.outputs.channel }}" \
+            --bundle "${{ steps.upload.outputs.bundle }}" \
+            --package-json package.json \
+            --node-modules node_modules \
+            --delta \
+            --no-key \
+            --ignore-checksum-check \
+            --version-exists-ok \
+            --comment "${{ steps.upload.outputs.comment }}"
+        env:
+          CAPGO_TOKEN: ${{ secrets.CAPGO_TOKEN }}

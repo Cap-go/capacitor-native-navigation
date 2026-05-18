@@ -6,12 +6,17 @@
   "scripts": {
     "start": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cap:sync": "cd .. && bun run example:sync",
+    "cap:ios": "cd .. && bun run example:ios",
+    "cap:android": "cd .. && bun run example:android",
+    "capgo:deploy": "cd .. && bun run example:capgo:deploy"
   },
   "dependencies": {
     "@capacitor/core": "^8.0.0",
     "@capacitor/android": "^8.0.0",
     "@capacitor/ios": "^8.0.0",
+    "@capgo/capacitor-updater": "^8.45.11",
     "@capgo/capacitor-native-navigation": "file:.."
   },
   "devDependencies": {
