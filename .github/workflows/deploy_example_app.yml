@@ -68,7 +68,7 @@ jobs:
 
           channel="${{ github.event.inputs.channel }}"
           comment="${{ github.event.inputs.comment }}"
-          package_version="$(bun -e "const pkg = require('./example-app/package.json'); console.log(pkg.version)")"
+          package_version="$(bun -e "const pkg = require('./package.json'); console.log(pkg.version)")"
           config_version="$(bun -e "const cfg = require('./example-app/capacitor.config.json'); console.log(cfg.plugins?.CapacitorUpdater?.version ?? '')")"
 
           if [[ -z "$channel" ]]; then
@@ -76,12 +76,12 @@ jobs:
           fi
 
           if [[ -z "$package_version" ]]; then
-            echo "example-app/package.json is missing a version."
+            echo "package.json is missing a version."
             exit 1
           fi
 
           if [[ "$config_version" != "$package_version" ]]; then
-            echo "CapacitorUpdater.version ($config_version) must match example-app/package.json version ($package_version)."
+            echo "CapacitorUpdater.version ($config_version) must match package.json version ($package_version)."
             exit 1
           fi
 
@@ -102,8 +102,8 @@ jobs:
             --path dist \
             --channel "${{ steps.upload.outputs.channel }}" \
             --bundle "${{ steps.upload.outputs.bundle }}" \
-            --package-json package.json \
-            --node-modules node_modules \
+            --package-json ../package.json,package.json \
+            --node-modules ../node_modules,node_modules \
             --delta \
             --no-key \
             --ignore-checksum-check \

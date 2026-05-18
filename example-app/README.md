@@ -40,4 +40,4 @@ Deploy a new OTA bundle:
 bun run capgo:deploy
 ```
 
-The Capgo bundle version is read from `example-app/package.json` and must match `plugins.CapacitorUpdater.version` in `capacitor.config.json`. Use `CAPGO_CHANNEL` or `CAPGO_APP_ID` when you need to override the deployment target.
+The Capgo bundle version is read from the root plugin `package.json` and must match `plugins.CapacitorUpdater.version` in `capacitor.config.json`. Use `CAPGO_CHANNEL` or `CAPGO_APP_ID` when you need to override the deployment target.

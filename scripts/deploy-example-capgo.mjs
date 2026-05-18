@@ -8,7 +8,7 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, '..');
 const appDir = resolve(repoRoot, 'example-app');
 const distDir = resolve(appDir, 'dist');
-const packageJsonPath = resolve(appDir, 'package.json');
+const packageJsonPath = resolve(repoRoot, 'package.json');
 const capacitorConfigPath = resolve(appDir, 'capacitor.config.json');
 const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
 const capacitorConfig = JSON.parse(readFileSync(capacitorConfigPath, 'utf8'));
@@ -23,13 +23,13 @@ const comment =
   (process.env.GITHUB_SHA ? `Native navigation example ${process.env.GITHUB_SHA}` : 'Native navigation example upload');
 
 if (!packageVersion) {
-  console.error('Missing example-app/package.json version.');
+  console.error('Missing package.json version.');
   process.exit(1);
 }
 
 if (configVersion !== packageVersion) {
   console.error(
-    `CapacitorUpdater.version (${configVersion ?? 'missing'}) must match example-app/package.json version (${packageVersion}).`,
+    `CapacitorUpdater.version (${configVersion ?? 'missing'}) must match package.json version (${packageVersion}).`,
   );
   process.exit(1);
 }
@@ -51,9 +51,9 @@ const args = [
   '--bundle',
   bundle,
   '--package-json',
-  'package.json',
+  '../package.json,package.json',
   '--node-modules',
-  'node_modules',
+  '../node_modules,node_modules',
   '--delta',
   '--no-key',
   '--ignore-checksum-check',
