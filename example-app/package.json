@@ -7,6 +7,9 @@
     "start": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "assets:ios": "capacitor-assets generate --ios --assetPath assets",
+    "assets:android": "capacitor-assets generate --android --assetPath assets",
+    "assets:native": "capacitor-assets generate --ios --android --assetPath assets",
     "cap:sync": "cd .. && bun run example:sync",
     "cap:ios": "cd .. && bun run example:ios",
     "cap:android": "cd .. && bun run example:android",
@@ -20,6 +23,7 @@
     "@capgo/capacitor-native-navigation": "file:.."
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^8.0.0",
     "vite": "^7.3.1"
   }

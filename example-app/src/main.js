@@ -47,6 +47,7 @@ const pages = {
     subtitle: 'Web content, native chrome',
     body: `
       <section class="hero">
+        <img class="app-logo" src="/icon.svg" alt="Native Navigation Example" />
         <p class="eyebrow">Capgo native navigation</p>
         <h1>Native frame, web content.</h1>
         <p>Top and bottom navigation render outside the WebView while this page remains ordinary HTML.</p>
