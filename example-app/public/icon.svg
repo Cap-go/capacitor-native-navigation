@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Native Navigation Example logo">
+  <defs>
+    <linearGradient id="app-bg" x1="176" x2="848" y1="120" y2="904" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#19c7d4" />
+      <stop offset="0.46" stop-color="#0a84ff" />
+      <stop offset="1" stop-color="#0f172a" />
+    </linearGradient>
+    <linearGradient id="panel" x1="328" x2="696" y1="208" y2="816" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff" />
+      <stop offset="1" stop-color="#eef7ff" />
+    </linearGradient>
+    <filter id="shadow" x="264" y="168" width="496" height="720" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="28" flood-color="#07111f" flood-opacity=".22" stdDeviation="28" />
+    </filter>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#app-bg)" />
+  <path fill="#fff" fill-opacity=".16" d="M0 728 728 0h296v1024H0z" />
+  <g filter="url(#shadow)">
+    <rect width="400" height="608" x="312" y="208" fill="url(#panel)" rx="112" />
+  </g>
+  <rect width="232" height="64" x="396" y="304" fill="#111827" rx="32" />
+  <path fill="none" stroke="#111827" stroke-linecap="round" stroke-linejoin="round" stroke-width="56" d="M396 512h232m0 0-80-80m80 80-80 80" />
+  <rect width="232" height="72" x="396" y="656" fill="#0a84ff" rx="36" />
+</svg>

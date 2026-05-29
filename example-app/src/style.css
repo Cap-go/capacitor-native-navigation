@@ -46,7 +46,17 @@ body {
   min-height: 46vh;
   display: grid;
   align-content: center;
-  gap: 12px;
+  gap: 14px;
+}
+
+.app-logo {
+  width: clamp(76px, 18vw, 108px);
+  aspect-ratio: 1;
+  display: block;
+  border-radius: 24%;
+  box-shadow:
+    0 22px 46px rgba(10, 132, 255, 0.22),
+    0 2px 10px rgba(17, 24, 39, 0.1);
 }
 
 .eyebrow {
