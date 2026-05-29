@@ -55,9 +55,9 @@
     "demo:readme": "bun scripts/generate-readme-demos.mjs",
     "example:build": "bun run build && cd example-app && bun install && bun run build",
     "example:capgo:deploy": "bun run example:build && bun scripts/deploy-example-capgo.mjs",
-    "example:sync": "bun run example:build && cd example-app && bunx cap sync && bun run assets:native",
-    "example:ios": "bun run example:build && cd example-app && ([ -d ios ] || bunx cap add ios) && bunx cap sync ios && bun run assets:ios && bunx cap run ios",
-    "example:android": "bun run example:build && cd example-app && ([ -d android ] || bunx cap add android) && bunx cap sync android && bun run assets:android && bunx cap run android"
+    "example:sync": "bun run example:build && cd example-app && bunx cap sync",
+    "example:ios": "bun run example:build && cd example-app && ([ -d ios ] || bunx cap add ios) && bunx cap sync ios && bunx cap run ios",
+    "example:android": "bun run example:build && cd example-app && ([ -d android ] || bunx cap add android) && bunx cap sync android && bunx cap run android"
   },
   "devDependencies": {
     "@capacitor/android": "^8.0.0",
