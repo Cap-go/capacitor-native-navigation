@@ -58,7 +58,12 @@ import org.xmlpull.v1.XmlPullParserFactory;
 public class NativeNavigationPlugin extends Plugin {
 
     private static final int DEFAULT_NAVBAR_DP = 56;
-    private static final int DEFAULT_TABBAR_DP = 64;
+    // Android uses Material bottom navigation metrics; web/iOS keep their own platform-native tab bar heights.
+    private static final int DEFAULT_TABBAR_DP = 80;
+    private static final int TABBAR_ICON_DP = 24;
+    private static final int TABBAR_ITEM_VERTICAL_PADDING_DP = 8;
+    private static final int TABBAR_INDICATOR_DP = 32;
+    private static final int TABBAR_INDICATOR_LABEL_PADDING_DP = 4;
     private static final int DEFAULT_TRANSITION_MS = 350;
     private static final int MENU_ITEM_BASE = 10_000;
 
@@ -635,6 +640,12 @@ public class NativeNavigationPlugin extends Plugin {
 
         tabbar = new BottomNavigationView(getContext());
         tabbar.setElevation(0);
+        tabbar.setMinimumHeight(dp(DEFAULT_TABBAR_DP));
+        tabbar.setItemIconSize(dp(TABBAR_ICON_DP));
+        tabbar.setItemPaddingTop(dp(TABBAR_ITEM_VERTICAL_PADDING_DP));
+        tabbar.setItemPaddingBottom(dp(TABBAR_ITEM_VERTICAL_PADDING_DP));
+        tabbar.setItemActiveIndicatorHeight(dp(TABBAR_INDICATOR_DP));
+        tabbar.setActiveIndicatorLabelPadding(dp(TABBAR_INDICATOR_LABEL_PADDING_DP));
         tabbar.setBackgroundColor(Color.TRANSPARENT);
         tabbar.setOnItemSelectedListener((item) -> {
             int itemId = item.getItemId();
