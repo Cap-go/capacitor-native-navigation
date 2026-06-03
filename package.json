@@ -1,6 +1,6 @@
 {
   "name": "@capgo/capacitor-native-navigation",
-  "version": "8.0.21",
+  "version": "8.0.22",
   "description": "Capacitor plugin for native navbar, tabbar, safe-area handling, and WebView snapshot transitions.",
   "main": "dist/plugin.cjs.js",
   "module": "dist/esm/index.js",
