@@ -58,6 +58,7 @@ import org.xmlpull.v1.XmlPullParserFactory;
 public class NativeNavigationPlugin extends Plugin {
 
     private static final int DEFAULT_NAVBAR_DP = 56;
+    // Android uses Material bottom navigation metrics; web/iOS keep their own platform-native tab bar heights.
     private static final int DEFAULT_TABBAR_DP = 80;
     private static final int TABBAR_ICON_DP = 24;
     private static final int TABBAR_ITEM_VERTICAL_PADDING_DP = 8;
