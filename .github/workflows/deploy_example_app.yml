@@ -5,6 +5,8 @@ concurrency:
   cancel-in-progress: true
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       channel:
@@ -22,6 +24,7 @@ on:
       - 'ios/**'
       - 'android/**'
       - 'example-app/**'
+      - 'scripts/deploy-example-capgo.mjs'
       - 'package.json'
       - 'bun.lock'
       - 'rollup.config.mjs'
@@ -33,19 +36,20 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # Keep this job capped at 10 minutes; never raise it unless explicitly asked.
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
         with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
           fetch-depth: 0
           filter: blob:none
+          persist-credentials: false
 
       - name: Setup bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@v2.2.0
         with:
-          bun-version: latest
+          bun-version: 1.3.11
 
       - name: Install plugin dependencies
         run: bun install --frozen-lockfile
@@ -64,51 +68,40 @@ jobs:
       - name: Resolve Capgo upload metadata
         id: upload
         shell: bash
+        env:
+          INPUT_CHANNEL: ${{ github.event.inputs.channel }}
+          INPUT_COMMENT: ${{ github.event.inputs.comment }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           set -euo pipefail
 
-          channel="${{ github.event.inputs.channel }}"
-          comment="${{ github.event.inputs.comment }}"
-          package_version="$(bun -e "const pkg = require('./package.json'); console.log(pkg.version)")"
-          config_version="$(bun -e "const cfg = require('./example-app/capacitor.config.json'); console.log(cfg.plugins?.CapacitorUpdater?.version ?? '')")"
+          channel="${INPUT_CHANNEL:-}"
+          comment="${INPUT_COMMENT:-}"
+          release_tag="${RELEASE_TAG:-}"
+          repo_name="${GITHUB_REPOSITORY##*/}"
 
           if [[ -z "$channel" ]]; then
             channel="production"
           fi
 
-          if [[ -z "$package_version" ]]; then
-            echo "package.json is missing a version."
-            exit 1
-          fi
-
-          if [[ "$config_version" != "$package_version" ]]; then
-            echo "CapacitorUpdater.version ($config_version) must match package.json version ($package_version)."
-            exit 1
-          fi
-
-          bundle="$package_version"
-
           if [[ -z "$comment" ]]; then
-            comment="Native navigation example ${GITHUB_SHA}"
+            if [[ -n "$release_tag" ]]; then
+              comment="${repo_name} example ${release_tag}"
+            else
+              comment="${repo_name} example ${GITHUB_RUN_NUMBER:-manual}"
+            fi
           fi
 
-          echo "channel=$channel" >> "$GITHUB_OUTPUT"
-          echo "bundle=$bundle" >> "$GITHUB_OUTPUT"
-          echo "comment=$comment" >> "$GITHUB_OUTPUT"
+          {
+            echo "channel=$channel"
+            echo "comment<<__CAPGO_COMMENT__"
+            echo "$comment"
+            echo "__CAPGO_COMMENT__"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Deploy to Capgo
-        working-directory: example-app
-        run: |
-          bunx @capgo/cli@latest bundle upload app.capgo.capacitor.navigation \
-            --path dist \
-            --channel "${{ steps.upload.outputs.channel }}" \
-            --bundle "${{ steps.upload.outputs.bundle }}" \
-            --package-json ../package.json,package.json \
-            --node-modules ../node_modules,node_modules \
-            --delta \
-            --no-key \
-            --ignore-checksum-check \
-            --version-exists-ok \
-            --comment "${{ steps.upload.outputs.comment }}"
+        run: bun scripts/deploy-example-capgo.mjs
         env:
           CAPGO_TOKEN: ${{ secrets.CAPGO_TOKEN }}
+          CAPGO_CHANNEL: ${{ steps.upload.outputs.channel }}
+          CAPGO_COMMENT: ${{ steps.upload.outputs.comment }}
