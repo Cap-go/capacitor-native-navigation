@@ -43,6 +43,34 @@ export type NativeNavigationBlurEffect =
   | 'systemChromeMaterialDark';
 
 /**
+ * Native glass background rendering preference.
+ */
+export type NativeNavigationGlassEffect = 'none' | 'liquidGlass';
+
+/**
+ * Native glass background configuration.
+ */
+export interface NativeNavigationGlassOptions {
+  /**
+   * `liquidGlass` enables the Android 12+ live blurred WebView backdrop for
+   * native bars. Android 11 and older keep a translucent surface fallback. iOS
+   * uses the platform-owned Liquid Glass behavior.
+   */
+  effect?: NativeNavigationGlassEffect;
+
+  /**
+   * Android blur radius in native dp for `liquidGlass`. Defaults to `18`.
+   */
+  blurRadius?: number;
+
+  /**
+   * Alpha multiplier for the tint surface over the glass backdrop. Defaults to
+   * `0.62`.
+   */
+  surfaceAlpha?: number;
+}
+
+/**
  * Native tab label visibility behavior.
  */
 export type NativeNavigationTabLabelVisibilityMode = 'auto' | 'selected' | 'labeled' | 'unlabeled';
@@ -212,6 +240,11 @@ export interface NativeNavigationConfigureOptions {
    * Shared color hints for native bars.
    */
   colors?: NativeNavigationColors;
+
+  /**
+   * Shared glass background defaults for native bars.
+   */
+  glass?: NativeNavigationGlassOptions;
 }
 
 /**
@@ -288,6 +321,12 @@ export interface NativeNavigationNavbarOptions {
    * available. Defaults to `systemChromeMaterial` for transparent bars.
    */
   blurEffect?: NativeNavigationBlurEffect;
+
+  /**
+   * Optional glass background behavior. Overrides `configure({ glass })` for
+   * this navbar update.
+   */
+  glass?: NativeNavigationGlassOptions;
 
   /**
    * Back button state.
@@ -395,6 +434,12 @@ export interface NativeNavigationTabbarOptions {
    * available.
    */
   blurEffect?: NativeNavigationBlurEffect;
+
+  /**
+   * Optional glass background behavior. Overrides `configure({ glass })` for
+   * this tabbar update.
+   */
+  glass?: NativeNavigationGlassOptions;
 
   /**
    * Keep the iOS scroll-edge tabbar appearance from becoming transparent.

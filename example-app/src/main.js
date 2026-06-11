@@ -113,6 +113,11 @@ const configureChrome = async () => {
       tint: '#0a84ff',
       inactiveTint: '#6b7280',
     },
+    glass: {
+      effect: 'liquidGlass',
+      blurRadius: 18,
+      surfaceAlpha: 0.62,
+    },
   });
   await updateNavbar();
   await updateTabbar();
