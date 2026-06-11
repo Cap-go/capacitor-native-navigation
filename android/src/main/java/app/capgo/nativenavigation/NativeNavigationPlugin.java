@@ -284,7 +284,7 @@ public class NativeNavigationPlugin extends Plugin {
                     continue;
                 }
 
-                int itemId = MENU_ITEM_BASE + visibleIndex;
+                int itemId = MENU_ITEM_BASE + sourceIndex;
                 String title = tab.optString("title", "");
                 MenuItem item = nativeTabbar
                     .getMenu()

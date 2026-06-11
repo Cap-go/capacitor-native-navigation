@@ -454,13 +454,15 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             hostWebViewInSelectedSystemTab()
             return
         }
-        let index = tabBarController.viewControllers?.firstIndex(of: viewController) ?? viewController.tabBarItem.tag
+        let index = viewController.tabBarItem.tag
         hostWebViewInSelectedSystemTab()
         notifyTabSelect(index: index)
     }
 
     private func notifyTabSelect(index: Int) {
-        guard index >= 0 && index < tabIds.count else {
+        guard index >= 0,
+              index < tabIds.count,
+              !tabIds[index].isEmpty else {
             return
         }
         notifyListeners("tabSelect", data: [
@@ -877,13 +879,17 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             let image = icons ? self.image(from: tab["icon"] as? [String: Any]) : nil
             let selectedImage = icons ? self.image(from: tab["selectedIcon"] as? [String: Any]) : nil
             let item = UITabBarItem(title: title, image: image, selectedImage: selectedImage)
-            item.tag = visibleIndex
+            item.tag = sourceIndex
             item.isEnabled = tab["enabled"] as? Bool ?? true
             if let badge = tab["badge"] {
                 item.badgeValue = String(describing: badge)
             }
-            tabIds.append(id)
-            tabTitles.append(rawTitle)
+            while tabIds.count <= sourceIndex {
+                tabIds.append("")
+                tabTitles.append("")
+            }
+            tabIds[sourceIndex] = id
+            tabTitles[sourceIndex] = rawTitle
             tabDisplayTitles.append(title)
             tabBaseImages.append(image)
             tabSelectedImages.append(selectedImage ?? image)
@@ -1248,7 +1254,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             let selectedIcon = tabSelectedImages.indices.contains(index)
                 ? (tabSelectedImages[index] ?? icon)
                 : icon
-            item.accessibilityLabel = tabTitles.indices.contains(index) ? tabTitles[index] : title
+            item.accessibilityLabel = tabTitles.indices.contains(item.tag) ? tabTitles[item.tag] : title
             item.title = ""
             item.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: 100)
             item.image = makeTabBarItemImage(icon: icon, title: title, color: inactiveTint)
