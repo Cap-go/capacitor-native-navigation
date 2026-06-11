@@ -18,6 +18,7 @@ import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.os.Build;
+import android.view.ContextThemeWrapper;
 import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -670,8 +671,9 @@ public class NativeNavigationPlugin extends Plugin {
                 }
             );
         }
-
-        tabbar = new BottomNavigationView(getContext());
+        tabbar = new BottomNavigationView(
+            new ContextThemeWrapper(getContext(), com.google.android.material.R.style.Theme_MaterialComponents_DayNight)
+        );
         tabbar.setElevation(0);
         tabbar.setMinimumHeight(dp(DEFAULT_TABBAR_DP));
         tabbar.setItemIconSize(dp(TABBAR_ICON_DP));
