@@ -152,7 +152,7 @@ const tabbarStyle = () =>
         shape: 'curve',
         centerItemId: 'capture',
         height: 80,
-        horizontalMargin: 0,
+        horizontalMargin: 16,
         maxWidth: 0,
         bottomGap: 0,
         cornerRadius: 30,
@@ -176,6 +176,11 @@ const configureChrome = async () => {
     colors: {
       tint: '#0a84ff',
       inactiveTint: '#6b7280',
+    },
+    glass: {
+      effect: 'liquidGlass',
+      blurRadius: 18,
+      surfaceAlpha: 0.62,
     },
   });
   await updateNavbar();

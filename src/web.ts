@@ -36,6 +36,10 @@ export class NativeNavigationWeb extends WebPlugin implements NativeNavigationPl
         ...this.config.colors,
         ...options.colors,
       },
+      glass: {
+        ...this.config.glass,
+        ...options.glass,
+      },
     };
     return this.applyInsets();
   }
@@ -47,6 +51,10 @@ export class NativeNavigationWeb extends WebPlugin implements NativeNavigationPl
       colors: {
         ...this.navbar.colors,
         ...options.colors,
+      },
+      glass: {
+        ...this.navbar.glass,
+        ...options.glass,
       },
     };
     return this.applyInsets();
@@ -63,6 +71,10 @@ export class NativeNavigationWeb extends WebPlugin implements NativeNavigationPl
       style: {
         ...this.tabbar.style,
         ...options.style,
+      },
+      glass: {
+        ...this.tabbar.glass,
+        ...options.glass,
       },
     };
     return this.applyInsets();

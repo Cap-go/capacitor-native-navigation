@@ -48,11 +48,18 @@ Native navbar, tabbar, safe-area handling, and WebView snapshot transitions for 
   width="320"
 />
 
+### Native Liquid Glass screenshots
+
+| iOS native Liquid Glass | Android Liquid Glass style |
+| --- | --- |
+| <img src="./docs/native-liquid-glass-ios.webp" alt="iOS native Liquid Glass navbar and tabbar screenshot" width="260" /> | <img src="./docs/native-liquid-glass-android.webp" alt="Android Liquid Glass-style native navbar and tabbar screenshot" width="260" /> |
+
 ## Features
 
 - Drive native top navigation and bottom tabs from JavaScript state.
 - Use system-owned iOS navigation bars, tab bars, tab gestures, and Liquid Glass rendering.
 - Emit native intent events such as `navbarBack`, `navbarItemTap`, and `tabSelect`.
+- Enable an optional Android Liquid Glass-style blurred backdrop for native bars on Android 12+.
 - Capture WebView snapshots for native-feeling push, back, root, tab, and zoom transitions.
 - Configure tab labels, selected icons, badges, indicators, ripples, tint colors, and dynamic colors.
 - Write CSS inset variables so web content can scroll behind native bars without being hidden.
@@ -154,6 +161,28 @@ await NativeNavigation.setTabbar({
       selectedIcon: { ios: { sfSymbol: 'house.fill' }, android: { resource: 'ic_home_filled' } },
     },
   ],
+});
+```
+
+## Android Liquid Glass
+
+Enable `glass.effect: 'liquidGlass'` to draw a live blurred WebView backdrop behind Android native bars. Android 12+ uses a platform `RenderEffect` blur; older Android versions keep the translucent tint surface without live blur.
+
+```typescript
+await NativeNavigation.configure({
+  glass: {
+    effect: 'liquidGlass',
+    blurRadius: 18,
+    surfaceAlpha: 0.62,
+  },
+});
+
+await NativeNavigation.setTabbar({
+  selectedId: 'home',
+  tabs,
+  colors: {
+    background: '#F8FFFFFF',
+  },
 });
 ```
 
@@ -621,6 +650,7 @@ Global plugin configuration.
 | **`contentInsetMode`**  | <code><a href="#nativenavigationcontentinsetmode">NativeNavigationContentInsetMode</a></code> | When `css`, the plugin writes CSS variables on `document.documentElement`. |
 | **`animationDuration`** | <code>number</code>                                                                           | Default native transition duration in milliseconds.                        |
 | **`colors`**            | <code><a href="#nativenavigationcolors">NativeNavigationColors</a></code>                     | Shared color hints for native bars.                                        |
+| **`glass`**             | <code><a href="#nativenavigationglassoptions">NativeNavigationGlassOptions</a></code>         | Shared glass background defaults for native bars.                          |
 
 
 #### NativeNavigationColors
@@ -640,23 +670,35 @@ Native bar colors. Use CSS-style hex strings (`#RRGGBB` or `#AARRGGBB`).
 | **`ripple`**          | <code>string</code>  | Tab press ripple color on Android.                                                                                          |
 
 
+#### NativeNavigationGlassOptions
+
+Native glass background configuration.
+
+| Prop               | Type                                                                                | Description                                                                                                                                                                                       |
+| ------------------ | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`effect`**       | <code><a href="#nativenavigationglasseffect">NativeNavigationGlassEffect</a></code> | `liquidGlass` enables the Android 12+ live blurred WebView backdrop for native bars. Android 11 and older keep a translucent surface fallback. iOS uses the platform-owned Liquid Glass behavior. |
+| **`blurRadius`**   | <code>number</code>                                                                 | Android blur radius in native dp for `liquidGlass`. Defaults to `18`.                                                                                                                             |
+| **`surfaceAlpha`** | <code>number</code>                                                                 | Alpha multiplier for the tint surface over the glass backdrop. Defaults to `0.62`.                                                                                                                |
+
+
 #### NativeNavigationNavbarOptions
 
 Native navbar state.
 
-| Prop              | Type                                                                              | Description                                                                                                                              |
-| ----------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| **`hidden`**      | <code>boolean</code>                                                              | Hide the native navbar.                                                                                                                  |
-| **`title`**       | <code>string</code>                                                               | Main title.                                                                                                                              |
-| **`subtitle`**    | <code>string</code>                                                               | Secondary title where supported by the platform.                                                                                         |
-| **`large`**       | <code>boolean</code>                                                              | Prefer a large iOS title style.                                                                                                          |
-| **`transparent`** | <code>boolean</code>                                                              | Prefer transparent/scroll-edge style.                                                                                                    |
-| **`blurEffect`**  | <code><a href="#nativenavigationblureffect">NativeNavigationBlurEffect</a></code> | iOS blur/material effect for the navbar background when glass is not available. Defaults to `systemChromeMaterial` for transparent bars. |
-| **`backButton`**  | <code><a href="#nativenavigationbackbutton">NativeNavigationBackButton</a></code> | Back button state.                                                                                                                       |
-| **`leftItems`**   | <code>NativeNavigationBarButton[]</code>                                          | Left-side action buttons.                                                                                                                |
-| **`rightItems`**  | <code>NativeNavigationBarButton[]</code>                                          | Right-side action buttons.                                                                                                               |
-| **`colors`**      | <code><a href="#nativenavigationcolors">NativeNavigationColors</a></code>         | Navbar color hints.                                                                                                                      |
-| **`animated`**    | <code>boolean</code>                                                              | Animate native navbar changes.                                                                                                           |
+| Prop              | Type                                                                                  | Description                                                                                                                              |
+| ----------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **`hidden`**      | <code>boolean</code>                                                                  | Hide the native navbar.                                                                                                                  |
+| **`title`**       | <code>string</code>                                                                   | Main title.                                                                                                                              |
+| **`subtitle`**    | <code>string</code>                                                                   | Secondary title where supported by the platform.                                                                                         |
+| **`large`**       | <code>boolean</code>                                                                  | Prefer a large iOS title style.                                                                                                          |
+| **`transparent`** | <code>boolean</code>                                                                  | Prefer transparent/scroll-edge style.                                                                                                    |
+| **`blurEffect`**  | <code><a href="#nativenavigationblureffect">NativeNavigationBlurEffect</a></code>     | iOS blur/material effect for the navbar background when glass is not available. Defaults to `systemChromeMaterial` for transparent bars. |
+| **`glass`**       | <code><a href="#nativenavigationglassoptions">NativeNavigationGlassOptions</a></code> | Optional glass background behavior. Overrides `configure({ glass })` for this navbar update.                                             |
+| **`backButton`**  | <code><a href="#nativenavigationbackbutton">NativeNavigationBackButton</a></code>     | Back button state.                                                                                                                       |
+| **`leftItems`**   | <code>NativeNavigationBarButton[]</code>                                              | Left-side action buttons.                                                                                                                |
+| **`rightItems`**  | <code>NativeNavigationBarButton[]</code>                                              | Right-side action buttons.                                                                                                               |
+| **`colors`**      | <code><a href="#nativenavigationcolors">NativeNavigationColors</a></code>             | Navbar color hints.                                                                                                                      |
+| **`animated`**    | <code>boolean</code>                                                                  | Animate native navbar changes.                                                                                                           |
 
 
 #### NativeNavigationBackButton
@@ -711,6 +753,7 @@ Native tabbar state.
 | **`icons`**                          | <code>boolean</code>                                                                                      | Show icons. Defaults to `true`.                                                                                                                                      |
 | **`colors`**                         | <code><a href="#nativenavigationcolors">NativeNavigationColors</a></code>                                 | Tabbar color hints.                                                                                                                                                  |
 | **`blurEffect`**                     | <code><a href="#nativenavigationblureffect">NativeNavigationBlurEffect</a></code>                         | iOS blur/material effect for the tabbar background when glass is not available.                                                                                      |
+| **`glass`**                          | <code><a href="#nativenavigationglassoptions">NativeNavigationGlassOptions</a></code>                     | Optional glass background behavior. Overrides `configure({ glass })` for this tabbar update.                                                                         |
 | **`disableTransparentOnScrollEdge`** | <code>boolean</code>                                                                                      | Keep the iOS scroll-edge tabbar appearance from becoming transparent. Mirrors Expo Router native tabs' `disableTransparentOnScrollEdge` option. Defaults to `false`. |
 | **`disableIndicator`**               | <code>boolean</code>                                                                                      | Disable the Android active tab indicator.                                                                                                                            |
 | **`indicatorColor`**                 | <code>string</code>                                                                                       | Active tab indicator color on Android. `colors.indicator` is also supported.                                                                                         |
@@ -877,6 +920,13 @@ Platform rendering preference for the native bars.
 How the plugin exposes native bar sizes to web content.
 
 <code>'css' | 'none'</code>
+
+
+#### NativeNavigationGlassEffect
+
+Native glass background rendering preference.
+
+<code>'none' | 'liquidGlass'</code>
 
 
 #### NativeNavigationBlurEffect
