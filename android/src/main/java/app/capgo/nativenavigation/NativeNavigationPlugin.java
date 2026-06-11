@@ -70,6 +70,10 @@ public class NativeNavigationPlugin extends Plugin {
     private final NativeNavigation implementation = new NativeNavigation();
     private FrameLayout navbarContainer;
     private FrameLayout tabbarContainer;
+    private GlassBackdropView navbarGlassBackdrop;
+    private View navbarGlassSurface;
+    private GlassBackdropView tabbarGlassBackdrop;
+    private View tabbarGlassSurface;
     private Toolbar toolbar;
     private BottomNavigationView tabbar;
     private ImageView transitionSnapshot;
@@ -81,6 +85,9 @@ public class NativeNavigationPlugin extends Plugin {
     private int activeTransitionMs = DEFAULT_TRANSITION_MS;
     private int tintColor = Color.rgb(0, 122, 255);
     private int inactiveTintColor = Color.rgb(120, 126, 137);
+    private GlassOptions defaultGlassOptions = GlassOptions.defaults();
+    private GlassOptions navbarGlassOptions = GlassOptions.defaults();
+    private GlassOptions tabbarGlassOptions = GlassOptions.defaults();
     private String activeTransitionId;
     private String activeTransitionDirection = "forward";
     private RectF activeZoomSourceFrame;
@@ -104,6 +111,7 @@ public class NativeNavigationPlugin extends Plugin {
         runOnUiThread(() -> {
             enabled = call.getBoolean("enabled", true);
             contentInsetMode = call.getString("contentInsetMode", contentInsetMode);
+            defaultGlassOptions = GlassOptions.from(call.getObject("glass", null), defaultGlassOptions);
             Double duration = call.getDouble("animationDuration");
             if (duration != null) {
                 defaultTransitionMs = Math.max(0, duration.intValue());
@@ -166,6 +174,7 @@ public class NativeNavigationPlugin extends Plugin {
 
             addToolbarItems(nativeToolbar, call.getArray("rightItems", new JSArray()), "right");
             JSObject colors = call.getObject("colors", new JSObject());
+            navbarGlassOptions = GlassOptions.from(call.getObject("glass", null), defaultGlassOptions);
             applyToolbarColors(nativeToolbar, colors);
             navbarContainer.setVisibility(View.VISIBLE);
             layoutChrome();
@@ -214,6 +223,7 @@ public class NativeNavigationPlugin extends Plugin {
             JSONArray tabs = call.getArray("tabs", new JSArray());
             String selectedId = call.getString("selectedId", null);
             JSObject colors = call.getObject("colors", new JSObject());
+            tabbarGlassOptions = GlassOptions.from(call.getObject("glass", null), defaultGlassOptions);
             Integer badgeBackground = colorOption(call, colors, "badgeBackgroundColor", "badgeBackground", null);
             Integer badgeText = colorOption(call, colors, "badgeTextColor", "badgeText", null);
             for (int index = 0; index < tabs.length(); index++) {
@@ -595,6 +605,10 @@ public class NativeNavigationPlugin extends Plugin {
         FrameLayout root = contentRoot();
         navbarContainer = new FrameLayout(getContext());
         navbarContainer.setElevation(dp(8));
+        navbarGlassBackdrop = new GlassBackdropView(getContext());
+        navbarGlassSurface = new View(getContext());
+        navbarGlassBackdrop.setVisibility(View.GONE);
+        navbarGlassSurface.setVisibility(View.GONE);
         toolbar = new Toolbar(getContext());
         toolbar.setPopupTheme(androidx.appcompat.R.style.ThemeOverlay_AppCompat_Light);
         toolbar.setOnMenuItemClickListener((item) -> {
@@ -607,6 +621,8 @@ public class NativeNavigationPlugin extends Plugin {
             return true;
         });
 
+        navbarContainer.addView(navbarGlassBackdrop);
+        navbarContainer.addView(navbarGlassSurface);
         navbarContainer.addView(toolbar);
         if (root != null) {
             root.addView(navbarContainer);
@@ -626,6 +642,10 @@ public class NativeNavigationPlugin extends Plugin {
         FrameLayout root = contentRoot();
         tabbarContainer = new FrameLayout(getContext());
         tabbarContainer.setElevation(dp(12));
+        tabbarGlassBackdrop = new GlassBackdropView(getContext());
+        tabbarGlassSurface = new View(getContext());
+        tabbarGlassBackdrop.setVisibility(View.GONE);
+        tabbarGlassSurface.setVisibility(View.GONE);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             tabbarContainer.setClipToOutline(true);
             tabbarContainer.setOutlineProvider(
@@ -659,6 +679,8 @@ public class NativeNavigationPlugin extends Plugin {
             notifyListeners("tabSelect", event);
             return true;
         });
+        tabbarContainer.addView(tabbarGlassBackdrop);
+        tabbarContainer.addView(tabbarGlassSurface);
         tabbarContainer.addView(tabbar);
         if (root != null) {
             root.addView(tabbarContainer);
@@ -1036,9 +1058,8 @@ public class NativeNavigationPlugin extends Plugin {
             tintedIcon.setTint(tint);
             nativeToolbar.setNavigationIcon(tintedIcon);
         }
-        if (navbarContainer != null) {
-            navbarContainer.setBackgroundColor(background);
-        }
+        nativeToolbar.setBackgroundColor(Color.TRANSPARENT);
+        applyChromeBackground(navbarContainer, navbarGlassBackdrop, navbarGlassSurface, background, navbarGlassOptions, 0f);
         for (int index = 0; index < nativeToolbar.getMenu().size(); index++) {
             Drawable icon = nativeToolbar.getMenu().getItem(index).getIcon();
             if (icon != null) {
@@ -1070,12 +1091,72 @@ public class NativeNavigationPlugin extends Plugin {
         Integer ripple = colorOption(call, colors, "rippleColor", "ripple", null);
         nativeTabbar.setItemRippleColor(ripple == null ? null : ColorStateList.valueOf(ripple));
         nativeTabbar.setBackgroundColor(Color.TRANSPARENT);
-        if (tabbarContainer != null) {
-            GradientDrawable capsule = new GradientDrawable();
-            capsule.setColor(background);
-            capsule.setCornerRadius(dp(DEFAULT_TABBAR_DP) / 2f);
-            tabbarContainer.setBackground(capsule);
+        applyChromeBackground(
+            tabbarContainer,
+            tabbarGlassBackdrop,
+            tabbarGlassSurface,
+            background,
+            tabbarGlassOptions,
+            dp(DEFAULT_TABBAR_DP) / 2f
+        );
+    }
+
+    private void applyChromeBackground(
+        ViewGroup container,
+        GlassBackdropView backdrop,
+        View surface,
+        int background,
+        GlassOptions glassOptions,
+        float cornerRadius
+    ) {
+        if (container == null) {
+            return;
         }
+        GlassOptions resolvedGlassOptions = glassOptions == null ? GlassOptions.defaults() : glassOptions;
+        if (!resolvedGlassOptions.isLiquidGlass()) {
+            hideGlassBackground(backdrop, surface);
+            container.setBackground(chromeBackgroundDrawable(background, cornerRadius));
+            return;
+        }
+
+        container.setBackgroundColor(Color.TRANSPARENT);
+        int surfaceColor = glassSurfaceColor(background, resolvedGlassOptions);
+        if (surface != null) {
+            surface.setBackground(chromeBackgroundDrawable(surfaceColor, cornerRadius));
+            surface.setVisibility(View.VISIBLE);
+        }
+        if (backdrop != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            View webView = getBridge() == null ? null : getBridge().getWebView();
+            backdrop.configure(webView, dp(resolvedGlassOptions.blurRadiusDp), surfaceColor);
+            backdrop.setVisibility(View.VISIBLE);
+        } else if (backdrop != null) {
+            backdrop.clearEffect();
+            backdrop.setVisibility(View.GONE);
+        }
+    }
+
+    private void hideGlassBackground(GlassBackdropView backdrop, View surface) {
+        if (backdrop != null) {
+            backdrop.clearEffect();
+            backdrop.setVisibility(View.GONE);
+        }
+        if (surface != null) {
+            surface.setBackground(null);
+            surface.setVisibility(View.GONE);
+        }
+    }
+
+    private Drawable chromeBackgroundDrawable(int color, float cornerRadius) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(color);
+        if (cornerRadius > 0f) {
+            drawable.setCornerRadius(cornerRadius);
+        }
+        return drawable;
+    }
+
+    private int glassSurfaceColor(int background, GlassOptions glassOptions) {
+        return withAlpha(background, Math.round(Color.alpha(background) * (float) glassOptions.surfaceAlpha));
     }
 
     private int parseColor(String value, int fallback) {
@@ -1141,6 +1222,12 @@ public class NativeNavigationPlugin extends Plugin {
         return mode == Configuration.UI_MODE_NIGHT_YES;
     }
 
+    private void fillContainer(View view) {
+        if (view != null) {
+            view.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        }
+    }
+
     private void layoutChrome() {
         FrameLayout root = contentRoot();
         if (root == null) {
@@ -1159,6 +1246,8 @@ public class NativeNavigationPlugin extends Plugin {
                 Gravity.TOP
             );
             navbarContainer.setLayoutParams(containerParams);
+            fillContainer(navbarGlassBackdrop);
+            fillContainer(navbarGlassSurface);
             FrameLayout.LayoutParams toolbarParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 dp(DEFAULT_NAVBAR_DP),
@@ -1178,6 +1267,8 @@ public class NativeNavigationPlugin extends Plugin {
             );
             tabbarContainerParams.bottomMargin = tabbarBottomMargin;
             tabbarContainer.setLayoutParams(tabbarContainerParams);
+            fillContainer(tabbarGlassBackdrop);
+            fillContainer(tabbarGlassSurface);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 tabbarContainer.invalidateOutline();
             }
@@ -1320,6 +1411,119 @@ public class NativeNavigationPlugin extends Plugin {
 
     private int dp(int value) {
         return Math.round(value * getContext().getResources().getDisplayMetrics().density);
+    }
+
+    private float dp(double value) {
+        return (float) (value * getContext().getResources().getDisplayMetrics().density);
+    }
+
+    private static final class GlassOptions {
+
+        private static final String EFFECT_NONE = "none";
+        private static final String EFFECT_LIQUID_GLASS = "liquidGlass";
+        private static final double DEFAULT_BLUR_RADIUS_DP = 18d;
+        private static final double DEFAULT_SURFACE_ALPHA = 0.62d;
+
+        final String effect;
+        final double blurRadiusDp;
+        final double surfaceAlpha;
+
+        GlassOptions(String effect, double blurRadiusDp, double surfaceAlpha) {
+            this.effect = effect;
+            this.blurRadiusDp = Math.max(0d, blurRadiusDp);
+            this.surfaceAlpha = Math.max(0d, Math.min(1d, surfaceAlpha));
+        }
+
+        static GlassOptions defaults() {
+            return new GlassOptions(EFFECT_NONE, DEFAULT_BLUR_RADIUS_DP, DEFAULT_SURFACE_ALPHA);
+        }
+
+        static GlassOptions from(JSObject raw, GlassOptions fallback) {
+            GlassOptions base = fallback == null ? defaults() : fallback;
+            if (raw == null) {
+                return base;
+            }
+
+            String effect = raw.optString("effect", base.effect);
+            if (!EFFECT_NONE.equals(effect) && !EFFECT_LIQUID_GLASS.equals(effect)) {
+                effect = base.effect;
+            }
+            double blurRadiusDp = raw.has("blurRadius") ? raw.optDouble("blurRadius", base.blurRadiusDp) : base.blurRadiusDp;
+            double surfaceAlpha = raw.has("surfaceAlpha") ? raw.optDouble("surfaceAlpha", base.surfaceAlpha) : base.surfaceAlpha;
+            return new GlassOptions(effect, blurRadiusDp, surfaceAlpha);
+        }
+
+        boolean isLiquidGlass() {
+            return EFFECT_LIQUID_GLASS.equals(effect);
+        }
+    }
+
+    private static final class GlassBackdropView extends View {
+
+        private final Paint fallbackPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final int[] sourceLocation = new int[2];
+        private final int[] viewLocation = new int[2];
+        private View source;
+        private int fallbackColor = Color.TRANSPARENT;
+
+        GlassBackdropView(android.content.Context context) {
+            super(context);
+            setWillNotDraw(false);
+        }
+
+        void configure(View source, float blurRadiusPx, int fallbackColor) {
+            this.source = source;
+            this.fallbackColor = fallbackColor;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                Api31RenderEffects.setBlur(this, blurRadiusPx);
+            }
+            invalidate();
+        }
+
+        void clearEffect() {
+            source = null;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                Api31RenderEffects.clear(this);
+            }
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            View currentSource = source;
+            if (currentSource == null || currentSource.getWidth() <= 0 || currentSource.getHeight() <= 0) {
+                fallbackPaint.setColor(fallbackColor);
+                canvas.drawRect(0, 0, getWidth(), getHeight(), fallbackPaint);
+            } else {
+                currentSource.getLocationOnScreen(sourceLocation);
+                getLocationOnScreen(viewLocation);
+                canvas.save();
+                canvas.translate(sourceLocation[0] - viewLocation[0], sourceLocation[1] - viewLocation[1]);
+                currentSource.draw(canvas);
+                canvas.restore();
+            }
+
+            if (getVisibility() == View.VISIBLE && isShown()) {
+                postInvalidateOnAnimation();
+            }
+        }
+    }
+
+    private static final class Api31RenderEffects {
+
+        static void setBlur(View view, float blurRadiusPx) {
+            if (blurRadiusPx <= 0f) {
+                view.setRenderEffect(null);
+                return;
+            }
+            view.setRenderEffect(
+                android.graphics.RenderEffect.createBlurEffect(blurRadiusPx, blurRadiusPx, android.graphics.Shader.TileMode.CLAMP)
+            );
+        }
+
+        static void clear(View view) {
+            view.setRenderEffect(null);
+        }
     }
 
     private void runOnUiThread(Runnable runnable) {

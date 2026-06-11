@@ -38,7 +38,7 @@ export function defineNativeNavigationElements(): void {
 
   class CapNativeNavigationProvider extends HTMLElement {
     static get observedAttributes(): string[] {
-      return ['enabled', 'platform-style', 'content-inset-mode', 'animation-duration', 'colors'];
+      return ['enabled', 'platform-style', 'content-inset-mode', 'animation-duration', 'colors', 'glass'];
     }
 
     connectedCallback(): void {
@@ -64,6 +64,7 @@ export function defineNativeNavigationElements(): void {
             'content-inset-mode',
           ) ?? 'css',
         colors: parseJsonAttribute(this, 'colors', undefined as NativeNavigationConfigureOptions['colors']),
+        glass: parseJsonAttribute(this, 'glass', undefined as NativeNavigationConfigureOptions['glass']),
       };
 
       if (duration) {
@@ -89,6 +90,7 @@ export function defineNativeNavigationElements(): void {
         'left-items',
         'right-items',
         'colors',
+        'glass',
         'animated',
       ];
     }
@@ -118,6 +120,7 @@ export function defineNativeNavigationElements(): void {
         leftItems: parseJsonAttribute(this, 'left-items', []),
         rightItems: parseJsonAttribute(this, 'right-items', []),
         colors: parseJsonAttribute(this, 'colors', undefined as NativeNavigationNavbarOptions['colors']),
+        glass: parseJsonAttribute(this, 'glass', undefined as NativeNavigationNavbarOptions['glass']),
         animated: parseBoolean(this.getAttribute('animated')),
       };
 
@@ -136,6 +139,7 @@ export function defineNativeNavigationElements(): void {
         'label-visibility-mode',
         'icons',
         'colors',
+        'glass',
         'blur-effect',
         'disable-indicator',
         'indicator-color',
@@ -168,6 +172,7 @@ export function defineNativeNavigationElements(): void {
         ),
         icons: parseBoolean(this.getAttribute('icons'), true),
         colors: parseJsonAttribute(this, 'colors', undefined as NativeNavigationTabbarOptions['colors']),
+        glass: parseJsonAttribute(this, 'glass', undefined as NativeNavigationTabbarOptions['glass']),
         blurEffect: typedAttribute<NonNullable<NativeNavigationTabbarOptions['blurEffect']>>(this, 'blur-effect'),
         disableIndicator: parseBoolean(this.getAttribute('disable-indicator')),
         indicatorColor: normalizeAttribute(this.getAttribute('indicator-color')),
