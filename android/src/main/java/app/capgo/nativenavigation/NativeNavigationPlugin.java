@@ -24,10 +24,12 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
+import android.view.ViewTreeObserver;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
+import androidx.annotation.RequiresApi;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.graphics.PathParser;
@@ -1463,8 +1465,22 @@ public class NativeNavigationPlugin extends Plugin {
         private final Paint fallbackPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final int[] sourceLocation = new int[2];
         private final int[] viewLocation = new int[2];
+        private final ViewTreeObserver.OnScrollChangedListener sourceScrollListener = this::markDirty;
+        private final View.OnLayoutChangeListener sourceLayoutListener = (
+            view,
+            left,
+            top,
+            right,
+            bottom,
+            oldLeft,
+            oldTop,
+            oldRight,
+            oldBottom
+        ) -> markDirty();
         private View source;
         private int fallbackColor = Color.TRANSPARENT;
+        private boolean dirty;
+        private boolean redrawPending;
 
         GlassBackdropView(android.content.Context context) {
             super(context);
@@ -1472,19 +1488,55 @@ public class NativeNavigationPlugin extends Plugin {
         }
 
         void configure(View source, float blurRadiusPx, int fallbackColor) {
-            this.source = source;
             this.fallbackColor = fallbackColor;
+            attachSource(source);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 Api31RenderEffects.setBlur(this, blurRadiusPx);
             }
-            invalidate();
+            markDirty();
         }
 
         void clearEffect() {
-            source = null;
+            attachSource(null);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 Api31RenderEffects.clear(this);
             }
+            markDirty();
+        }
+
+        private void attachSource(View nextSource) {
+            if (source == nextSource) {
+                return;
+            }
+            if (source != null) {
+                source.removeOnLayoutChangeListener(sourceLayoutListener);
+                ViewTreeObserver observer = source.getViewTreeObserver();
+                if (observer.isAlive()) {
+                    observer.removeOnScrollChangedListener(sourceScrollListener);
+                }
+            }
+            source = nextSource;
+            if (source != null) {
+                source.addOnLayoutChangeListener(sourceLayoutListener);
+                ViewTreeObserver observer = source.getViewTreeObserver();
+                if (observer.isAlive()) {
+                    observer.addOnScrollChangedListener(sourceScrollListener);
+                }
+            }
+            markDirty();
+        }
+
+        private void markDirty() {
+            dirty = true;
+            scheduleRedrawIfVisible();
+        }
+
+        private void scheduleRedrawIfVisible() {
+            if (redrawPending || getVisibility() != View.VISIBLE || !isShown()) {
+                return;
+            }
+            redrawPending = true;
+            postInvalidateOnAnimation();
         }
 
         @Override
@@ -1503,12 +1555,32 @@ public class NativeNavigationPlugin extends Plugin {
                 canvas.restore();
             }
 
-            if (getVisibility() == View.VISIBLE && isShown()) {
-                postInvalidateOnAnimation();
+            dirty = false;
+            redrawPending = false;
+        }
+
+        @Override
+        protected void onSizeChanged(int width, int height, int oldWidth, int oldHeight) {
+            super.onSizeChanged(width, height, oldWidth, oldHeight);
+            if (width != oldWidth || height != oldHeight) {
+                markDirty();
+            }
+        }
+
+        @Override
+        protected void onVisibilityChanged(View changedView, int visibility) {
+            super.onVisibilityChanged(changedView, visibility);
+            if (visibility != View.VISIBLE) {
+                redrawPending = false;
+                return;
+            }
+            if (dirty) {
+                scheduleRedrawIfVisible();
             }
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.S)
     private static final class Api31RenderEffects {
 
         static void setBlur(View view, float blurRadiusPx) {
