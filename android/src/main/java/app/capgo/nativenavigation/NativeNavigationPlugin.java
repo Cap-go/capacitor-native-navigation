@@ -63,11 +63,18 @@ public class NativeNavigationPlugin extends Plugin {
     private static final int DEFAULT_NAVBAR_DP = 56;
     // Android uses Material bottom navigation metrics; web/iOS keep their own platform-native tab bar heights.
     private static final int DEFAULT_TABBAR_DP = 80;
+    private static final int LIQUID_GLASS_TABBAR_DP = 64;
+    private static final int LIQUID_GLASS_TABBAR_MAX_WIDTH_DP = 300;
+    private static final int LIQUID_GLASS_TABBAR_SIDE_MARGIN_DP = 30;
     private static final int TABBAR_ICON_DP = 24;
     private static final int TABBAR_ITEM_VERTICAL_PADDING_DP = 8;
+    private static final int LIQUID_GLASS_TABBAR_ITEM_VERTICAL_PADDING_DP = 4;
     private static final int TABBAR_INDICATOR_DP = 32;
+    private static final int LIQUID_GLASS_TABBAR_INDICATOR_DP = 28;
     private static final int TABBAR_INDICATOR_LABEL_PADDING_DP = 4;
+    private static final int LIQUID_GLASS_TABBAR_INDICATOR_LABEL_PADDING_DP = 2;
     private static final int TABBAR_FLOATING_BOTTOM_GAP_DP = 8;
+    private static final int LIQUID_GLASS_TABBAR_FLOATING_BOTTOM_GAP_DP = 24;
     private static final int DEFAULT_TRANSITION_MS = 350;
     private static final int MENU_ITEM_BASE = 10_000;
 
@@ -83,6 +90,7 @@ public class NativeNavigationPlugin extends Plugin {
     private ImageView transitionSnapshot;
     private boolean enabled = true;
     private boolean navbarVisible = false;
+    private boolean navbarTransparent = false;
     private boolean tabbarVisible = false;
     private String contentInsetMode = "css";
     private int defaultTransitionMs = DEFAULT_TRANSITION_MS;
@@ -158,6 +166,7 @@ public class NativeNavigationPlugin extends Plugin {
             boolean hidden = call.getBoolean("hidden", false);
             navbarVisible = !hidden;
             if (hidden) {
+                navbarTransparent = false;
                 if (navbarContainer != null) {
                     navbarContainer.setVisibility(View.GONE);
                 }
@@ -165,6 +174,7 @@ public class NativeNavigationPlugin extends Plugin {
                 call.resolve(insetsResult());
                 return;
             }
+            navbarTransparent = call.getBoolean("transparent", false);
 
             Toolbar nativeToolbar = ensureToolbar();
             nativeToolbar.setTitle(call.getString("title", ""));
@@ -676,12 +686,8 @@ public class NativeNavigationPlugin extends Plugin {
             new ContextThemeWrapper(getContext(), com.google.android.material.R.style.Theme_MaterialComponents_DayNight)
         );
         tabbar.setElevation(0);
-        tabbar.setMinimumHeight(dp(DEFAULT_TABBAR_DP));
         tabbar.setItemIconSize(dp(TABBAR_ICON_DP));
-        tabbar.setItemPaddingTop(dp(TABBAR_ITEM_VERTICAL_PADDING_DP));
-        tabbar.setItemPaddingBottom(dp(TABBAR_ITEM_VERTICAL_PADDING_DP));
-        tabbar.setItemActiveIndicatorHeight(dp(TABBAR_INDICATOR_DP));
-        tabbar.setActiveIndicatorLabelPadding(dp(TABBAR_INDICATOR_LABEL_PADDING_DP));
+        applyTabbarMetrics(tabbar);
         tabbar.setBackgroundColor(Color.TRANSPARENT);
         tabbar.setOnItemSelectedListener((item) -> {
             int itemId = item.getItemId();
@@ -701,10 +707,7 @@ public class NativeNavigationPlugin extends Plugin {
         if (root != null) {
             root.addView(tabbarContainer);
         } else {
-            getActivity().addContentView(
-                tabbarContainer,
-                new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(DEFAULT_TABBAR_DP))
-            );
+            getActivity().addContentView(tabbarContainer, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, tabbarHeight()));
         }
         return tabbar;
     }
@@ -1109,13 +1112,14 @@ public class NativeNavigationPlugin extends Plugin {
         Integer ripple = colorOption(call, colors, "rippleColor", "ripple", null);
         nativeTabbar.setItemRippleColor(ripple == null ? null : ColorStateList.valueOf(ripple));
         nativeTabbar.setBackgroundColor(Color.TRANSPARENT);
+        applyTabbarMetrics(nativeTabbar);
         applyChromeBackground(
             tabbarContainer,
             tabbarGlassBackdrop,
             tabbarGlassSurface,
             background,
             tabbarGlassOptions,
-            dp(DEFAULT_TABBAR_DP) / 2f
+            tabbarCornerRadius()
         );
     }
 
@@ -1130,7 +1134,7 @@ public class NativeNavigationPlugin extends Plugin {
                 tabbarGlassSurface,
                 tabbarBackgroundColor,
                 tabbarGlassOptions,
-                dp(DEFAULT_TABBAR_DP) / 2f
+                tabbarCornerRadius()
             );
         }
     }
@@ -1262,8 +1266,41 @@ public class NativeNavigationPlugin extends Plugin {
         }
     }
 
+    private boolean isLiquidGlassTabbar() {
+        return tabbarGlassOptions != null && tabbarGlassOptions.isLiquidGlass();
+    }
+
+    private int tabbarHeight() {
+        return dp(isLiquidGlassTabbar() ? LIQUID_GLASS_TABBAR_DP : DEFAULT_TABBAR_DP);
+    }
+
+    private float tabbarCornerRadius() {
+        return tabbarHeight() / 2f;
+    }
+
+    private int tabbarWidth(int rootWidth) {
+        if (isLiquidGlassTabbar()) {
+            return Math.min(Math.max(0, rootWidth - dp(LIQUID_GLASS_TABBAR_SIDE_MARGIN_DP * 2)), dp(LIQUID_GLASS_TABBAR_MAX_WIDTH_DP));
+        }
+        return Math.min(Math.max(0, rootWidth - dp(48)), dp(420));
+    }
+
     private int floatingTabbarBottomMargin(int navigationInset) {
+        if (isLiquidGlassTabbar()) {
+            return Math.max(dp(LIQUID_GLASS_TABBAR_FLOATING_BOTTOM_GAP_DP), navigationInset);
+        }
         return Math.max(dp(TABBAR_FLOATING_BOTTOM_GAP_DP), navigationInset - dp(TABBAR_FLOATING_BOTTOM_GAP_DP));
+    }
+
+    private void applyTabbarMetrics(BottomNavigationView nativeTabbar) {
+        boolean liquidGlass = isLiquidGlassTabbar();
+        nativeTabbar.setMinimumHeight(tabbarHeight());
+        nativeTabbar.setItemPaddingTop(dp(liquidGlass ? LIQUID_GLASS_TABBAR_ITEM_VERTICAL_PADDING_DP : TABBAR_ITEM_VERTICAL_PADDING_DP));
+        nativeTabbar.setItemPaddingBottom(dp(liquidGlass ? LIQUID_GLASS_TABBAR_ITEM_VERTICAL_PADDING_DP : TABBAR_ITEM_VERTICAL_PADDING_DP));
+        nativeTabbar.setItemActiveIndicatorHeight(dp(liquidGlass ? LIQUID_GLASS_TABBAR_INDICATOR_DP : TABBAR_INDICATOR_DP));
+        nativeTabbar.setActiveIndicatorLabelPadding(
+            dp(liquidGlass ? LIQUID_GLASS_TABBAR_INDICATOR_LABEL_PADDING_DP : TABBAR_INDICATOR_LABEL_PADDING_DP)
+        );
     }
 
     private void layoutChrome() {
@@ -1274,7 +1311,7 @@ public class NativeNavigationPlugin extends Plugin {
         int status = statusBarInset();
         int bottom = navigationBarInset();
         int navbarHeight = navbarVisible ? status + dp(DEFAULT_NAVBAR_DP) : 0;
-        int tabbarHeight = dp(DEFAULT_TABBAR_DP);
+        int tabbarHeight = tabbarHeight();
         int tabbarBottomMargin = tabbarVisible ? floatingTabbarBottomMargin(bottom) : bottom;
 
         if (navbarContainer != null) {
@@ -1297,7 +1334,7 @@ public class NativeNavigationPlugin extends Plugin {
 
         if (tabbarContainer != null) {
             int rootWidth = root.getWidth() > 0 ? root.getWidth() : Resources.getSystem().getDisplayMetrics().widthPixels;
-            int tabbarWidth = Math.min(Math.max(0, rootWidth - dp(48)), dp(420));
+            int tabbarWidth = tabbarWidth(rootWidth);
             FrameLayout.LayoutParams tabbarContainerParams = new FrameLayout.LayoutParams(
                 tabbarWidth,
                 tabbarHeight,
@@ -1313,6 +1350,7 @@ public class NativeNavigationPlugin extends Plugin {
         }
 
         if (tabbar != null) {
+            applyTabbarMetrics(tabbar);
             FrameLayout.LayoutParams tabbarParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -1374,14 +1412,15 @@ public class NativeNavigationPlugin extends Plugin {
     }
 
     private JSObject currentInsets() {
-        int top = navbarVisible ? statusBarInset() + dp(DEFAULT_NAVBAR_DP) : 0;
-        int bottom = tabbarVisible ? floatingTabbarBottomMargin(navigationBarInset()) + dp(DEFAULT_TABBAR_DP) : 0;
+        int navbarHeight = navbarVisible ? statusBarInset() + dp(DEFAULT_NAVBAR_DP) : 0;
+        int top = navbarVisible ? (navbarTransparent ? statusBarInset() : navbarHeight) : 0;
+        int bottom = tabbarVisible ? floatingTabbarBottomMargin(navigationBarInset()) + tabbarHeight() : 0;
         JSObject insets = new JSObject();
         insets.put("top", top);
         insets.put("right", 0);
         insets.put("bottom", bottom);
         insets.put("left", 0);
-        insets.put("navbarHeight", top);
+        insets.put("navbarHeight", navbarHeight);
         insets.put("tabbarHeight", bottom);
         return insets;
     }
