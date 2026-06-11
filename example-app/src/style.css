@@ -17,7 +17,7 @@ body {
   min-height: 100dvh;
   margin: 0;
   overflow: hidden;
-  background: linear-gradient(180deg, #ffffff 0%, #eef2f7 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f3f7fb 48%, #e9eef6 100%);
 }
 
 .app-shell {
@@ -200,20 +200,22 @@ p {
   position: fixed;
   z-index: 20;
   display: grid;
-  color: #8b8f96;
+  color: #9aa0a8;
   pointer-events: auto;
 }
 
 .web-tabbar-preview.floating {
   left: 50%;
-  bottom: max(10px, env(safe-area-inset-bottom));
-  width: min(calc(100vw - 48px), 430px);
-  height: 64px;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  width: min(calc(100vw - 36px), 430px);
+  height: 66px;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  padding: 6px;
-  border-radius: 32px;
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.16);
+  padding: 7px;
+  border-radius: 33px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow:
+    0 20px 48px rgba(15, 23, 42, 0.16),
+    inset 0 0 0 1px rgba(17, 24, 39, 0.06);
   transform: translateX(-50%);
   backdrop-filter: blur(18px);
 }
@@ -222,21 +224,35 @@ p {
   left: 0;
   right: 0;
   bottom: 0;
-  height: 114px;
+  height: 124px;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   align-items: end;
-  padding-top: 38px;
-  filter: drop-shadow(0 -10px 30px rgba(15, 23, 42, 0.13));
+  padding: 44px 12px max(10px, env(safe-area-inset-bottom));
+  filter: drop-shadow(0 -14px 28px rgba(15, 23, 42, 0.12));
 }
 
 .web-tabbar-preview.curve::before {
   content: "";
   position: absolute;
-  inset: 38px 0 0;
-  border-radius: 24px 24px 0 0;
-  background: #f8f8fb;
-  -webkit-mask: radial-gradient(circle 48px at 50% 0, transparent 0 47px, #000 48px);
-  mask: radial-gradient(circle 48px at 50% 0, transparent 0 47px, #000 48px);
+  inset: 40px 0 0;
+  border-radius: 30px 30px 0 0;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  -webkit-mask: radial-gradient(circle 54px at 50% 0, transparent 0 53px, #000 54px);
+  mask: radial-gradient(circle 54px at 50% 0, transparent 0 53px, #000 54px);
+}
+
+.web-tabbar-preview.curve::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 23px;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.96);
+  transform: translateX(-50%);
+  z-index: 0;
 }
 
 .web-tabbar-item {
@@ -244,35 +260,44 @@ p {
   z-index: 1;
   min-width: 0;
   height: 100%;
+  min-height: 56px;
   border: 0;
   border-radius: 28px;
   display: grid;
   align-content: center;
   justify-items: center;
-  gap: 2px;
+  gap: 4px;
   color: inherit;
   background: transparent;
   cursor: pointer;
 }
 
+.web-tabbar-preview.curve .web-tabbar-item {
+  min-height: 64px;
+}
+
 .web-tabbar-item.is-selected:not(.is-center) {
   color: #ff5b45;
-  background: rgba(255, 91, 69, 0.14);
+  background: rgba(255, 91, 69, 0.12);
 }
 
 .web-tabbar-preview.floating .web-tabbar-item.is-selected:not(.is-center) {
   color: #0a84ff;
-  background: rgba(10, 132, 255, 0.14);
+  background: rgba(10, 132, 255, 0.13);
 }
 
 .web-tabbar-item.is-center {
-  width: 76px;
-  height: 76px;
+  width: 82px;
+  height: 82px;
+  min-height: 82px;
   border-radius: 50%;
   place-self: start center;
   color: #ffffff;
-  background: #ff5b45;
-  box-shadow: 0 18px 38px rgba(255, 91, 69, 0.35);
+  background: linear-gradient(160deg, #ff745f 0%, #ff533f 62%, #e33a2f 100%);
+  box-shadow:
+    0 18px 34px rgba(255, 83, 63, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32);
+  transform: translateY(-26px);
 }
 
 .web-tabbar-icon {
@@ -282,8 +307,8 @@ p {
 }
 
 .web-tabbar-item.is-center .web-tabbar-icon {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
 }
 
 .web-tabbar-icon svg {

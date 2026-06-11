@@ -56,7 +56,7 @@ const tabs = [
 let activeTab = 'home';
 let route = 'home';
 let stack = ['home'];
-let labelsEnabled = true;
+let labelsEnabled = false;
 let iconsEnabled = true;
 let tabbarShape = 'curve';
 let tabbarHidden = false;
@@ -162,13 +162,13 @@ const tabbarStyle = () =>
     ? {
         shape: 'curve',
         centerItemId: 'capture',
-        height: 76,
+        height: 80,
         horizontalMargin: 0,
         maxWidth: 0,
         bottomGap: 0,
-        cornerRadius: 24,
-        centerButtonDiameter: 76,
-        centerButtonLift: 38,
+        cornerRadius: 30,
+        centerButtonDiameter: 82,
+        centerButtonLift: 44,
         centerButtonColor: '#ff5b45',
         centerButtonIconColor: '#ffffff',
       }
