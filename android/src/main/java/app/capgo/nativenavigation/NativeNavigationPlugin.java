@@ -949,7 +949,7 @@ public class NativeNavigationPlugin extends Plugin {
         }
 
         static TabbarStyle defaults(int tintColor) {
-            return new TabbarStyle("floating", 64, 24, 420, 10, 32, null, 76, 38, tintColor, Color.WHITE);
+            return new TabbarStyle("floating", 64, 24, 430, 10, 32, null, 76, 38, tintColor, Color.WHITE);
         }
 
         boolean isCurve() {
@@ -1325,7 +1325,7 @@ public class NativeNavigationPlugin extends Plugin {
         int centerButtonLift = Math.max(styleDimension(rawStyle, "centerButtonLift", centerButtonDiameter / 2), 0);
         int bottomGap = Math.max(styleDimension(rawStyle, "bottomGap", curve ? 0 : 10), 0);
         int horizontalMargin = Math.max(styleDimension(rawStyle, "horizontalMargin", curve ? 0 : 24), 0);
-        int maxWidth = Math.max(styleDimension(rawStyle, "maxWidth", curve ? 0 : 420), 0);
+        int maxWidth = Math.max(styleDimension(rawStyle, "maxWidth", curve ? 0 : 430), 0);
         int cornerRadius = Math.max(styleDimension(rawStyle, "cornerRadius", curve ? 24 : height / 2), 0);
         int centerButtonColor = parseColor(rawStyle.getString("centerButtonColor", null), tintColor);
         int centerButtonIconColor = parseColor(rawStyle.getString("centerButtonIconColor", null), Color.WHITE);

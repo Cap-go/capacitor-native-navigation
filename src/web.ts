@@ -116,7 +116,8 @@ export class NativeNavigationWeb extends WebPlugin implements NativeNavigationPl
       return DEFAULT_TABBAR_HEIGHT;
     }
 
-    const height = style.height ?? (style.shape === 'curve' ? 76 : DEFAULT_TABBAR_HEIGHT);
+    const defaultHeight = style.shape === 'curve' ? 76 : style.shape === 'floating' ? 64 : DEFAULT_TABBAR_HEIGHT;
+    const height = style.height ?? defaultHeight;
     const bottomGap = style.bottomGap ?? (style.shape === 'curve' ? 0 : 10);
     const centerButtonLift =
       style.shape === 'curve' ? (style.centerButtonLift ?? (style.centerButtonDiameter ?? 76) / 2) : 0;

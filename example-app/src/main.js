@@ -252,10 +252,12 @@ const renderWebTabbarPreview = () => {
     .map((tab) => {
       const selected = tab.id === activeTab;
       const center = tabbarShape === 'curve' && tab.id === 'capture';
+      const iconMarkup = iconsEnabled ? `<span class="web-tabbar-icon">${tab.icon.svg}</span>` : '';
+      const labelMarkup = labelsEnabled ? `<span class="web-tabbar-label">${tab.title}</span>` : '';
       return `
         <button class="web-tabbar-item${selected ? ' is-selected' : ''}${center ? ' is-center' : ''}" data-web-tab="${tab.id}" aria-label="${tab.title}">
-          <span class="web-tabbar-icon">${tab.icon.svg}</span>
-          <span class="web-tabbar-label">${tab.title}</span>
+          ${iconMarkup}
+          ${labelMarkup}
         </button>
       `;
     })
@@ -327,10 +329,12 @@ app.addEventListener('click', async (event) => {
 app.addEventListener('change', async (event) => {
   if (event.target.id === 'labels-toggle') {
     labelsEnabled = event.target.checked;
+    render();
     await updateTabbar();
   }
   if (event.target.id === 'icons-toggle') {
     iconsEnabled = event.target.checked;
+    render();
     await updateTabbar();
   }
   if (event.target.id === 'curve-toggle') {
