@@ -35,6 +35,12 @@ const tabs = [
     title: 'Settings',
     icon: { svg: icons.settings },
   },
+  {
+    id: 'draft',
+    title: 'Draft',
+    icon: { svg: icons.compose },
+    hidden: true,
+  },
 ];
 
 let activeTab = 'home';
@@ -60,6 +66,10 @@ const pages = {
         <button class="tile" data-action="toggle-tabbar">
           <span>Toggle tabbar</span>
           <small>Dynamic visibility from JavaScript</small>
+        </button>
+        <button class="tile" data-action="open-hidden-tab">
+          <span>Open hidden tab</span>
+          <small>Hidden tabs stay out of the native bar until selected</small>
         </button>
       </section>
     `,
@@ -89,6 +99,17 @@ const pages = {
         <label><input id="icons-toggle" type="checkbox" checked /> Tab icons</label>
         <button data-action="refresh-version">Read native version</button>
         <pre id="version-output">Ready.</pre>
+      </section>
+    `,
+  },
+  draft: {
+    title: 'Draft',
+    subtitle: 'Hidden tab selected',
+    body: `
+      <section class="detail">
+        <p class="eyebrow">Hidden native tab</p>
+        <h1>Visible only while active.</h1>
+        <p>The Draft tab is configured with hidden: true. The native tab bar shows it when selected, then removes it after another tab is chosen.</p>
       </section>
     `,
   },
@@ -193,6 +214,11 @@ app.addEventListener('click', async (event) => {
     const isDetailHidden = route === 'detail';
     await NativeNavigation.setTabbar({ hidden: !isDetailHidden && app.dataset.tabbarHidden !== 'true', tabs, selectedId: activeTab });
     app.dataset.tabbarHidden = app.dataset.tabbarHidden === 'true' ? 'false' : 'true';
+    return;
+  }
+  if (target.dataset.action === 'open-hidden-tab') {
+    activeTab = 'draft';
+    await navigate('draft', 'tab');
     return;
   }
   if (target.dataset.action === 'refresh-version') {
