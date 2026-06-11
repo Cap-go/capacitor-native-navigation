@@ -66,6 +66,9 @@ public class NativeNavigationPlugin extends Plugin {
     private static final int LIQUID_GLASS_TABBAR_DP = 64;
     private static final int LIQUID_GLASS_TABBAR_MAX_WIDTH_DP = 300;
     private static final int LIQUID_GLASS_TABBAR_SIDE_MARGIN_DP = 30;
+    private static final int LIQUID_GLASS_TABBAR_CONTENT_TOP_PADDING_DP = 8;
+    private static final int LIQUID_GLASS_TABBAR_CONTENT_TRANSLATION_Y_DP = 6;
+    private static final int LIQUID_GLASS_TABBAR_BADGE_VERTICAL_OFFSET_DP = 2;
     private static final int TABBAR_ICON_DP = 24;
     private static final int TABBAR_ITEM_VERTICAL_PADDING_DP = 8;
     private static final int LIQUID_GLASS_TABBAR_ITEM_VERTICAL_PADDING_DP = 4;
@@ -268,6 +271,9 @@ public class NativeNavigationPlugin extends Plugin {
                 if (tab.has("badge")) {
                     nativeTabbar.removeBadge(itemId);
                     BadgeDrawable badge = nativeTabbar.getOrCreateBadge(itemId);
+                    if (isLiquidGlassTabbar()) {
+                        badge.setVerticalOffset(dp(LIQUID_GLASS_TABBAR_BADGE_VERTICAL_OFFSET_DP));
+                    }
                     if (badgeBackground != null) {
                         badge.setBackgroundColor(badgeBackground);
                     }
@@ -667,25 +673,32 @@ public class NativeNavigationPlugin extends Plugin {
         FrameLayout root = contentRoot();
         tabbarContainer = new FrameLayout(getContext());
         tabbarContainer.setElevation(dp(12));
+        tabbarContainer.setClipChildren(false);
+        tabbarContainer.setClipToPadding(false);
         tabbarGlassBackdrop = new GlassBackdropView(getContext());
         tabbarGlassSurface = new View(getContext());
         tabbarGlassBackdrop.setVisibility(View.GONE);
         tabbarGlassSurface.setVisibility(View.GONE);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            tabbarContainer.setClipToOutline(true);
-            tabbarContainer.setOutlineProvider(
-                new ViewOutlineProvider() {
-                    @Override
-                    public void getOutline(View view, Outline outline) {
-                        outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), view.getHeight() / 2f);
-                    }
+            ViewOutlineProvider tabbarPillOutlineProvider = new ViewOutlineProvider() {
+                @Override
+                public void getOutline(View view, Outline outline) {
+                    outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), view.getHeight() / 2f);
                 }
-            );
+            };
+            tabbarContainer.setClipToOutline(false);
+            tabbarContainer.setOutlineProvider(tabbarPillOutlineProvider);
+            tabbarGlassBackdrop.setClipToOutline(true);
+            tabbarGlassBackdrop.setOutlineProvider(tabbarPillOutlineProvider);
+            tabbarGlassSurface.setClipToOutline(true);
+            tabbarGlassSurface.setOutlineProvider(tabbarPillOutlineProvider);
         }
         tabbar = new BottomNavigationView(
             new ContextThemeWrapper(getContext(), com.google.android.material.R.style.Theme_MaterialComponents_DayNight)
         );
         tabbar.setElevation(0);
+        tabbar.setClipChildren(false);
+        tabbar.setClipToPadding(false);
         tabbar.setItemIconSize(dp(TABBAR_ICON_DP));
         applyTabbarMetrics(tabbar);
         tabbar.setBackgroundColor(Color.TRANSPARENT);
@@ -1295,12 +1308,39 @@ public class NativeNavigationPlugin extends Plugin {
     private void applyTabbarMetrics(BottomNavigationView nativeTabbar) {
         boolean liquidGlass = isLiquidGlassTabbar();
         nativeTabbar.setMinimumHeight(tabbarHeight());
+        nativeTabbar.setPadding(0, liquidGlass ? dp(LIQUID_GLASS_TABBAR_CONTENT_TOP_PADDING_DP) : 0, 0, 0);
         nativeTabbar.setItemPaddingTop(dp(liquidGlass ? LIQUID_GLASS_TABBAR_ITEM_VERTICAL_PADDING_DP : TABBAR_ITEM_VERTICAL_PADDING_DP));
         nativeTabbar.setItemPaddingBottom(dp(liquidGlass ? LIQUID_GLASS_TABBAR_ITEM_VERTICAL_PADDING_DP : TABBAR_ITEM_VERTICAL_PADDING_DP));
         nativeTabbar.setItemActiveIndicatorHeight(dp(liquidGlass ? LIQUID_GLASS_TABBAR_INDICATOR_DP : TABBAR_INDICATOR_DP));
         nativeTabbar.setActiveIndicatorLabelPadding(
             dp(liquidGlass ? LIQUID_GLASS_TABBAR_INDICATOR_LABEL_PADDING_DP : TABBAR_INDICATOR_LABEL_PADDING_DP)
         );
+        alignTabbarMenu(nativeTabbar, liquidGlass);
+        nativeTabbar.post(() -> alignTabbarMenu(nativeTabbar, isLiquidGlassTabbar()));
+    }
+
+    private void alignTabbarMenu(BottomNavigationView nativeTabbar, boolean liquidGlass) {
+        nativeTabbar.setClipChildren(false);
+        nativeTabbar.setClipToPadding(false);
+        if (nativeTabbar.getChildCount() == 0) {
+            return;
+        }
+        View menuView = nativeTabbar.getChildAt(0);
+        ViewGroup.LayoutParams currentParams = menuView.getLayoutParams();
+        FrameLayout.LayoutParams menuParams =
+            currentParams instanceof FrameLayout.LayoutParams
+                ? (FrameLayout.LayoutParams) currentParams
+                : new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        menuParams.width = ViewGroup.LayoutParams.MATCH_PARENT;
+        menuParams.height = liquidGlass ? ViewGroup.LayoutParams.MATCH_PARENT : ViewGroup.LayoutParams.WRAP_CONTENT;
+        menuParams.gravity = liquidGlass ? Gravity.CENTER : Gravity.TOP;
+        menuView.setLayoutParams(menuParams);
+        menuView.setTranslationY(liquidGlass ? dp(LIQUID_GLASS_TABBAR_CONTENT_TRANSLATION_Y_DP) : 0f);
+        if (menuView instanceof ViewGroup) {
+            ViewGroup menuGroup = (ViewGroup) menuView;
+            menuGroup.setClipChildren(false);
+            menuGroup.setClipToPadding(false);
+        }
     }
 
     private void layoutChrome() {
@@ -1346,6 +1386,8 @@ public class NativeNavigationPlugin extends Plugin {
             fillContainer(tabbarGlassSurface);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 tabbarContainer.invalidateOutline();
+                tabbarGlassBackdrop.invalidateOutline();
+                tabbarGlassSurface.invalidateOutline();
             }
         }
 
@@ -1356,7 +1398,7 @@ public class NativeNavigationPlugin extends Plugin {
                 ViewGroup.LayoutParams.MATCH_PARENT
             );
             tabbar.setLayoutParams(tabbarParams);
-            tabbar.setPadding(0, 0, 0, 0);
+            tabbar.setPadding(0, isLiquidGlassTabbar() ? dp(LIQUID_GLASS_TABBAR_CONTENT_TOP_PADDING_DP) : 0, 0, 0);
         }
 
         bringChromeToFront();
