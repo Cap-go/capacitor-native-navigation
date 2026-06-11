@@ -545,15 +545,16 @@ because icons are rendered by native UI.
 
 Native tabbar state.
 
-| Prop             | Type                                                                      | Description                           |
-| ---------------- | ------------------------------------------------------------------------- | ------------------------------------- |
-| **`hidden`**     | <code>boolean</code>                                                      | Hide the native tabbar.               |
-| **`tabs`**       | <code>NativeNavigationTab[]</code>                                        | Tab definitions.                      |
-| **`selectedId`** | <code>string</code>                                                       | Currently selected tab id.            |
-| **`labels`**     | <code>boolean</code>                                                      | Show text labels. Defaults to `true`. |
-| **`icons`**      | <code>boolean</code>                                                      | Show icons. Defaults to `true`.       |
-| **`colors`**     | <code><a href="#nativenavigationcolors">NativeNavigationColors</a></code> | Tabbar color hints.                   |
-| **`animated`**   | <code>boolean</code>                                                      | Animate native tabbar changes.        |
+| Prop             | Type                                                                                | Description                                            |
+| ---------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| **`hidden`**     | <code>boolean</code>                                                                | Hide the native tabbar.                                |
+| **`tabs`**       | <code>NativeNavigationTab[]</code>                                                  | Tab definitions.                                       |
+| **`selectedId`** | <code>string</code>                                                                 | Currently selected tab id.                             |
+| **`labels`**     | <code>boolean</code>                                                                | Show text labels. Defaults to `true`.                  |
+| **`icons`**      | <code>boolean</code>                                                                | Show icons. Defaults to `true`.                        |
+| **`colors`**     | <code><a href="#nativenavigationcolors">NativeNavigationColors</a></code>           | Tabbar color hints.                                    |
+| **`style`**      | <code><a href="#nativenavigationtabbarstyle">NativeNavigationTabbarStyle</a></code> | Optional native tabbar layout and shape customization. |
+| **`animated`**   | <code>boolean</code>                                                                | Animate native tabbar changes.                         |
 
 
 #### NativeNavigationTab
@@ -568,6 +569,25 @@ A native tab item.
 | **`selectedIcon`** | <code><a href="#nativenavigationicon">NativeNavigationIcon</a></code> | Optional selected-state icon.                                                                                        |
 | **`badge`**        | <code>string \| number</code>                                         | Optional badge. Numeric badges are supported on both platforms; text badge support depends on platform capabilities. |
 | **`enabled`**      | <code>boolean</code>                                                  | Whether the tab is enabled. Defaults to `true`.                                                                      |
+
+
+#### NativeNavigationTabbarStyle
+
+Native tabbar layout and background shape options.
+
+| Prop                        | Type                                                                                | Description                                                                                                                            |
+| --------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **`shape`**                 | <code><a href="#nativenavigationtabbarshape">NativeNavigationTabbarShape</a></code> | `floating` keeps the existing capsule tabbar. `curve` draws a full-width bar with a center notch and raised center tab.                |
+| **`height`**                | <code>number</code>                                                                 | Bar height in native points/dp. Defaults to `64` for `floating` and `76` for `curve`.                                                  |
+| **`horizontalMargin`**      | <code>number</code>                                                                 | Horizontal margin in native points/dp. Defaults to `24` for `floating` and `0` for `curve`.                                            |
+| **`maxWidth`**              | <code>number</code>                                                                 | Maximum tabbar width in native points/dp. Defaults to `430` for `floating`; `curve` uses the available width unless this is set.       |
+| **`bottomGap`**             | <code>number</code>                                                                 | Bottom gap above the platform safe area in native points/dp. Defaults to `10` for `floating` and `0` for `curve`.                      |
+| **`cornerRadius`**          | <code>number</code>                                                                 | Background corner radius in native points/dp. Defaults to a capsule radius for `floating` and `24` for `curve`.                        |
+| **`centerItemId`**          | <code>string</code>                                                                 | Tab id promoted into the raised center button for `curve`. Defaults to the middle tab.                                                 |
+| **`centerButtonDiameter`**  | <code>number</code>                                                                 | Raised center button diameter in native points/dp. Defaults to `76`.                                                                   |
+| **`centerButtonLift`**      | <code>number</code>                                                                 | Distance from the top of the center button to the top edge of the bar in native points/dp. Defaults to half of `centerButtonDiameter`. |
+| **`centerButtonColor`**     | <code>string</code>                                                                 | Raised center button color. Defaults to the active tint color.                                                                         |
+| **`centerButtonIconColor`** | <code>string</code>                                                                 | Raised center button icon color. Defaults to white.                                                                                    |
 
 
 #### NativeNavigationTransitionResult
@@ -675,6 +695,13 @@ Platform rendering preference for the native bars.
 How the plugin exposes native bar sizes to web content.
 
 <code>'css' | 'none'</code>
+
+
+#### NativeNavigationTabbarShape
+
+Native tabbar background shape.
+
+<code>'floating' | 'curve'</code>
 
 
 #### NativeNavigationTransitionDirection
