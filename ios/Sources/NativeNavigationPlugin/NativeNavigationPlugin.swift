@@ -42,6 +42,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var tabContainer: UIView?
     private var tabEffectView: UIVisualEffectView?
     private var tabBar: UITabBar?
+    private var floatingTabBar: NativeNavigationFloatingTabBar?
+    private var tabbarStyle = NativeNavigationTabbarStyleConfig()
     private var tabBarController: NativeNavigationTabController?
     private var tabViewControllers: [UIViewController] = []
     private weak var systemTabRootContainer: UIView?
@@ -51,10 +53,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var liftedWebViewOverlays: [NativeNavigationWeakView] = []
     private var isWebViewHostedInSystemTabController = false
     private var navbarHeight: CGFloat = 44
-    private var tabbarHeight: CGFloat = 64
-    private let floatingTabbarHorizontalMargin: CGFloat = 24
-    private let floatingTabbarMaxWidth: CGFloat = 430
-    private let floatingTabbarBottomGap: CGFloat = 10
+    private var tabbarHeight: CGFloat = NativeNavigationTabbarStyleConfig().totalHeight
     private var navbarVisible = false
     private var tabbarVisible = false
     private var contentInsetMode = "css"
@@ -183,33 +182,56 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 return
             }
 
-            let tabBar = self.ensureTabBar()
+            self.tabbarStyle = self.makeTabbarStyle(from: call)
+            self.tabbarHeight = self.tabbarStyle.totalHeight
+
             let tabs = call.getArray("tabs") as? [[String: Any]] ?? []
             let selectedId = call.getString("selectedId")
             let labels = call.getBool("labels", true)
             let labelVisibilityMode = call.getString("labelVisibilityMode") ?? (labels ? "labeled" : "unlabeled")
             let icons = call.getBool("icons", true)
 
-            let (items, selectedIndex) = self.makeTabBarItems(
-                tabs,
-                selectedId: selectedId,
-                labelVisibilityMode: labelVisibilityMode,
-                icons: icons
-            )
-
-            if self.usesSystemLiquidGlass {
+            if self.usesSystemLiquidGlass && self.tabbarStyle.shape != .curve {
+                let tabBar = self.ensureTabBar()
+                let (items, selectedIndex) = self.makeTabBarItems(
+                    tabs,
+                    selectedId: selectedId,
+                    labelVisibilityMode: labelVisibilityMode,
+                    icons: icons
+                )
+                self.floatingTabBar?.isHidden = true
+                self.tabContainer?.isHidden = true
                 self.applySystemTabBarItems(items, selectedIndex: selectedIndex, animated: call.getBool("animated", false))
+                self.applyTabBarAppearance(tabBar: tabBar, options: call)
+                self.showTabBarChrome(tabBar)
             } else {
-                tabBar.items = items
-                if let selectedIndex = selectedIndex, selectedIndex < items.count {
-                    tabBar.selectedItem = items[selectedIndex]
-                } else if tabBar.selectedItem == nil {
-                    tabBar.selectedItem = items.first
+                self.restoreWebViewFromSystemTabController()
+                self.setSystemTabBarHidden(true)
+                self.tabBarController?.view.isHidden = true
+                let tabBar = self.ensureFloatingTabBar()
+                let (items, selectedIndex) = self.makeFloatingTabBarItems(
+                    tabs,
+                    selectedId: selectedId,
+                    icons: icons
+                )
+                self.applyFloatingTabBarAppearance(tabBar: tabBar, options: call)
+                let resolvedSelectedIndex = selectedIndex ?? (items.indices.contains(tabBar.selectedIndex) ? tabBar.selectedIndex : 0)
+                tabBar.configure(
+                    items: items,
+                    selectedIndex: resolvedSelectedIndex,
+                    labelVisibilityMode: labelVisibilityMode,
+                    icons: icons,
+                    style: self.tabbarStyle
+                )
+                tabBar.onSelect = { [weak self] index, item in
+                    self?.notifyListeners("tabSelect", data: [
+                        "id": item.id,
+                        "index": index,
+                        "title": item.title
+                    ])
                 }
+                self.showFloatingTabBarChrome(tabBar)
             }
-
-            self.applyTabBarAppearance(tabBar: tabBar, options: call)
-            self.showTabBarChrome(tabBar)
             self.layoutChrome()
             self.updateInsetsAndNotify()
             call.resolve(self.insetsResult())
@@ -549,6 +571,40 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         return bar
     }
 
+    private func ensureFloatingTabBar() -> NativeNavigationFloatingTabBar {
+        if let floatingTabBar = floatingTabBar {
+            return floatingTabBar
+        }
+
+        let container = NativeNavigationChromeContainer()
+        container.hitSlop = UIEdgeInsets(top: 32, left: 0, bottom: 24, right: 0)
+        container.isUserInteractionEnabled = true
+        container.autoresizingMask = [.flexibleWidth, .flexibleTopMargin]
+        container.backgroundColor = .clear
+        container.clipsToBounds = false
+
+        container.layer.shadowColor = UIColor.black.cgColor
+        container.layer.shadowOpacity = 0.14
+        container.layer.shadowRadius = 18
+        container.layer.shadowOffset = CGSize(width: 0, height: 10)
+
+        let effectView = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterial))
+        effectView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        effectView.isUserInteractionEnabled = false
+        effectView.clipsToBounds = true
+        container.addSubview(effectView)
+        self.tabEffectView = effectView
+
+        let bar = NativeNavigationFloatingTabBar()
+        bar.autoresizingMask = [.flexibleWidth, .flexibleTopMargin]
+        bar.clipsToBounds = false
+        container.addSubview(bar)
+        bridge?.viewController?.view.addSubview(container)
+        self.tabContainer = container
+        self.floatingTabBar = bar
+        return bar
+    }
+
     private func ensureSystemTabBar() -> UITabBar {
         if let tabBarController = tabBarController {
             hostWebViewInSelectedSystemTab()
@@ -676,26 +732,35 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
 
     private func hideTabBarChrome() {
-        if usesSystemLiquidGlass {
+        if usesSystemLiquidGlass && tabbarStyle.shape != .curve {
             setSystemTabBarHidden(true)
             tabBarController?.view.isHidden = false
             hostWebViewInSelectedSystemTab()
         } else {
             tabContainer?.isHidden = true
+            floatingTabBar?.isHidden = true
             tabBar?.isHidden = true
         }
     }
 
     private func showTabBarChrome(_ tabBar: UITabBar) {
-        tabContainer?.isHidden = false
+        tabContainer?.isHidden = true
+        floatingTabBar?.isHidden = true
         tabBarController?.view.isHidden = false
-        if usesSystemLiquidGlass {
+        if usesSystemLiquidGlass && tabbarStyle.shape != .curve {
             setSystemTabBarHidden(false)
             liftWebViewOverlaysAboveSystemTabs()
             hostWebViewInSelectedSystemTab()
         } else {
             tabBar.isHidden = false
         }
+    }
+
+    private func showFloatingTabBarChrome(_ tabBar: NativeNavigationFloatingTabBar) {
+        restoreWebViewFromSystemTabController()
+        tabBarController?.view.isHidden = true
+        tabContainer?.isHidden = false
+        tabBar.isHidden = false
     }
 
     private func captureOriginalWebViewPlacementIfNeeded(_ webView: UIView) {
@@ -879,6 +944,33 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         return (items, selectedIndex)
     }
 
+    private func makeFloatingTabBarItems(
+        _ tabs: [[String: Any]],
+        selectedId: String?,
+        icons: Bool
+    ) -> ([NativeNavigationFloatingTabItem], Int?) {
+        var selectedIndex: Int?
+        let items = tabs.enumerated().map { index, tab -> NativeNavigationFloatingTabItem in
+            let id = tab["id"] as? String ?? "tab-\(index)"
+            let title = tab["title"] as? String ?? ""
+            let image = icons ? self.image(from: tab["icon"] as? [String: Any]) : nil
+            let selectedImage = icons ? self.image(from: tab["selectedIcon"] as? [String: Any]) : nil
+            if id == selectedId {
+                selectedIndex = index
+            }
+            return NativeNavigationFloatingTabItem(
+                id: id,
+                title: title,
+                accessibilityTitle: title.isEmpty ? id : title,
+                image: image,
+                selectedImage: selectedImage,
+                badge: tab["badge"].map { String(describing: $0) },
+                enabled: tab["enabled"] as? Bool ?? true
+            )
+        }
+        return (items, selectedIndex)
+    }
+
     private func tabTitle(
         _ title: String?,
         id: String,
@@ -1044,6 +1136,35 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         return imageView
     }
 
+    private func makeTabbarStyle(from call: CAPPluginCall) -> NativeNavigationTabbarStyleConfig {
+        let rawStyle = call.getObject("style") ?? [:]
+        let requestedShape = (rawStyle["shape"] as? String)?.lowercased()
+        let shape: NativeNavigationTabbarShape = requestedShape == "curve" ? .curve : .floating
+        let isCurve = shape == .curve
+        let centerDiameter = max(number(from: rawStyle["centerButtonDiameter"]) ?? 76, 44)
+        let height = max(number(from: rawStyle["height"]) ?? (isCurve ? 76 : 64), 44)
+        let centerLift = max(number(from: rawStyle["centerButtonLift"]) ?? (centerDiameter / 2), 0)
+        let bottomGap = max(number(from: rawStyle["bottomGap"]) ?? (isCurve ? 0 : 10), 0)
+        let horizontalMargin = max(number(from: rawStyle["horizontalMargin"]) ?? (isCurve ? 0 : 24), 0)
+        let maxWidth = max(number(from: rawStyle["maxWidth"]) ?? (isCurve ? 0 : 430), 0)
+        let cornerRadius = max(number(from: rawStyle["cornerRadius"]) ?? (isCurve ? 24 : height / 2), 0)
+        let centerButtonColor = (rawStyle["centerButtonColor"] as? String).flatMap { UIColor(hexString: $0) }
+        let centerButtonIconColor = (rawStyle["centerButtonIconColor"] as? String).flatMap { UIColor(hexString: $0) } ?? .white
+
+        return NativeNavigationTabbarStyleConfig(
+            shape: shape,
+            height: height,
+            horizontalMargin: horizontalMargin,
+            maxWidth: maxWidth,
+            bottomGap: bottomGap,
+            cornerRadius: cornerRadius,
+            centerItemId: rawStyle["centerItemId"] as? String,
+            centerButtonDiameter: centerDiameter,
+            centerButtonLift: centerLift,
+            centerButtonColor: centerButtonColor,
+            centerButtonIconColor: centerButtonIconColor
+        )
+    }
     private func applyNavBarAppearance(navBar: UINavigationBar, options call: CAPPluginCall) {
         let appearance = UINavigationBarAppearance()
         let transparent = call.getBool("transparent", false)
@@ -1190,6 +1311,37 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         }
     }
 
+    private func applyFloatingTabBarAppearance(tabBar: NativeNavigationFloatingTabBar, options call: CAPPluginCall) {
+        let colors = call.getObject("colors")
+        let backgroundTint = colorValue(colors?["background"])
+        let backgroundColor = (backgroundTint ?? .systemBackground).withAlphaComponent(tabbarStyle.shape == .curve ? 0.96 : 0.46)
+
+        if tabbarStyle.shape == .curve {
+            tabEffectView?.isHidden = true
+        } else if let effect = blurEffect(from: call.getString("blurEffect"), fallback: .systemChromeMaterial) {
+            tabEffectView?.effect = effect
+            tabEffectView?.isHidden = false
+            tabEffectView?.contentView.backgroundColor = backgroundTint?.withAlphaComponent(0.12) ?? backgroundColor
+        } else {
+            tabEffectView?.isHidden = true
+        }
+
+        tabBar.backgroundFillColor = backgroundColor
+        if let color = colorValue(colors?["tint"]) {
+            tabBar.selectedTintColor = color
+        }
+        if let color = colorValue(colors?["inactiveTint"]) {
+            tabBar.inactiveTintColor = color
+        }
+        if let color = colorValue(call.getString("badgeBackgroundColor")) ?? colorValue(colors?["badgeBackground"]) {
+            tabBar.badgeBackgroundColor = color
+        }
+        if let color = colorValue(call.getString("badgeTextColor")) ?? colorValue(colors?["badgeText"]) {
+            tabBar.badgeTextColor = color
+        }
+        tabBar.setNeedsLayout()
+    }
+
     private func applyTabBarBadgeOptions(_ appearance: UITabBarAppearance, options call: CAPPluginCall) {
         if let color = colorValue(call.getString("badgeBackgroundColor")) {
             applyTabItemAppearances(appearance) { itemAppearance in
@@ -1230,17 +1382,18 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         }
 
         if let container = tabContainer {
-            let availableWidth = max(0, width - (floatingTabbarHorizontalMargin * 2))
-            let tabbarWidth = min(availableWidth, floatingTabbarMaxWidth)
+            let availableWidth = max(0, width - (tabbarStyle.horizontalMargin * 2))
+            let maxWidth = tabbarStyle.maxWidth > 0 ? tabbarStyle.maxWidth : availableWidth
+            let tabbarWidth = min(availableWidth, maxWidth)
             let originX = (width - tabbarWidth) / 2
-            let originY = height - safeInsets.bottom - floatingTabbarBottomGap - tabbarHeight
-            container.frame = CGRect(x: originX, y: originY, width: tabbarWidth, height: tabbarHeight)
-            container.layer.cornerRadius = tabbarHeight / 2
-            container.layer.shadowPath = UIBezierPath(roundedRect: container.bounds, cornerRadius: tabbarHeight / 2).cgPath
+            let originY = height - safeInsets.bottom - tabbarStyle.bottomGap - tabbarStyle.totalHeight
+            container.frame = CGRect(x: originX, y: originY, width: tabbarWidth, height: tabbarStyle.totalHeight)
+            container.layer.cornerRadius = tabbarStyle.shape == .floating ? tabbarStyle.cornerRadius : 0
+            container.layer.shadowPath = NativeNavigationTabbarBackgroundPath.path(in: container.bounds, style: tabbarStyle).cgPath
             tabEffectView?.frame = container.bounds
-            tabEffectView?.layer.cornerRadius = tabbarHeight / 2
-            tabBar?.frame = container.bounds
-            tabBar?.layer.cornerRadius = tabbarHeight / 2
+            tabEffectView?.layer.cornerRadius = tabbarStyle.cornerRadius
+            floatingTabBar?.frame = container.bounds
+            floatingTabBar?.layer.cornerRadius = 0
         }
 
         if let tabBarController = tabBarController {
@@ -1253,7 +1406,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
 
     private func bringChromeToFront() {
-        if usesSystemLiquidGlass {
+        if usesSystemLiquidGlass && tabbarStyle.shape != .curve {
             if let navContainer = navContainer {
                 bridge?.viewController?.view.bringSubviewToFront(navContainer)
             }
@@ -1352,10 +1505,10 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private func currentInsets() -> [String: Any] {
         let safeInsets = bridge?.viewController?.view.safeAreaInsets ?? .zero
         let navHeight = isEnabled && navbarVisible ? navbarHeight + safeInsets.top : 0
+        let usesSystemTabbar = usesSystemLiquidGlass && tabbarStyle.shape != .curve
         let nativeTabHeight = max(tabBar?.frame.height ?? 0, 49 + safeInsets.bottom)
-        let tabHeight = isEnabled && tabbarVisible
-            ? (usesSystemLiquidGlass ? nativeTabHeight : tabbarHeight + safeInsets.bottom + floatingTabbarBottomGap)
-            : 0
+        let customTabHeight = tabbarHeight + safeInsets.bottom + tabbarStyle.bottomGap
+        let tabHeight = isEnabled && tabbarVisible ? (usesSystemTabbar ? nativeTabHeight : customTabHeight) : 0
         return [
             "top": navHeight,
             "right": safeInsets.right,
@@ -1452,6 +1605,422 @@ private struct SVGRenderStyle {
                 lineJoin = .miter
             }
         }
+    }
+}
+
+private struct NativeNavigationFloatingTabItem {
+    let id: String
+    let title: String
+    let accessibilityTitle: String
+    let image: UIImage?
+    let selectedImage: UIImage?
+    let badge: String?
+    let enabled: Bool
+}
+
+private enum NativeNavigationTabbarShape {
+    case floating
+    case curve
+}
+
+private struct NativeNavigationTabbarStyleConfig {
+    var shape: NativeNavigationTabbarShape = .floating
+    var height: CGFloat = 64
+    var horizontalMargin: CGFloat = 24
+    var maxWidth: CGFloat = 430
+    var bottomGap: CGFloat = 10
+    var cornerRadius: CGFloat = 32
+    var centerItemId: String?
+    var centerButtonDiameter: CGFloat = 76
+    var centerButtonLift: CGFloat = 38
+    var centerButtonColor: UIColor?
+    var centerButtonIconColor: UIColor = .white
+
+    var barTop: CGFloat {
+        shape == .curve ? centerButtonLift : 0
+    }
+
+    var totalHeight: CGFloat {
+        height + barTop
+    }
+}
+
+private enum NativeNavigationTabbarBackgroundPath {
+    static func path(in bounds: CGRect, style: NativeNavigationTabbarStyleConfig) -> UIBezierPath {
+        guard style.shape == .curve else {
+            return UIBezierPath(roundedRect: bounds, cornerRadius: style.cornerRadius)
+        }
+
+        let barRect = CGRect(x: 0, y: style.barTop, width: bounds.width, height: max(style.height, 1))
+        let cornerRadius = min(style.cornerRadius, barRect.height / 2)
+        let centerX = bounds.midX
+        let notchRadius = (style.centerButtonDiameter / 2) + 8
+        let notchDepth = min(barRect.height * 0.58, notchRadius)
+        let leftShoulder = max(barRect.minX + cornerRadius, centerX - notchRadius - 22)
+        let rightShoulder = min(barRect.maxX - cornerRadius, centerX + notchRadius + 22)
+        let path = UIBezierPath()
+
+        path.move(to: CGPoint(x: barRect.minX + cornerRadius, y: barRect.minY))
+        path.addLine(to: CGPoint(x: leftShoulder, y: barRect.minY))
+        path.addCurve(
+            to: CGPoint(x: centerX, y: barRect.minY + notchDepth),
+            controlPoint1: CGPoint(x: centerX - notchRadius, y: barRect.minY),
+            controlPoint2: CGPoint(x: centerX - notchRadius, y: barRect.minY + notchDepth)
+        )
+        path.addCurve(
+            to: CGPoint(x: rightShoulder, y: barRect.minY),
+            controlPoint1: CGPoint(x: centerX + notchRadius, y: barRect.minY + notchDepth),
+            controlPoint2: CGPoint(x: centerX + notchRadius, y: barRect.minY)
+        )
+        path.addLine(to: CGPoint(x: barRect.maxX - cornerRadius, y: barRect.minY))
+        path.addQuadCurve(to: CGPoint(x: barRect.maxX, y: barRect.minY + cornerRadius), controlPoint: CGPoint(x: barRect.maxX, y: barRect.minY))
+        path.addLine(to: CGPoint(x: barRect.maxX, y: barRect.maxY - cornerRadius))
+        path.addQuadCurve(to: CGPoint(x: barRect.maxX - cornerRadius, y: barRect.maxY), controlPoint: CGPoint(x: barRect.maxX, y: barRect.maxY))
+        path.addLine(to: CGPoint(x: barRect.minX + cornerRadius, y: barRect.maxY))
+        path.addQuadCurve(to: CGPoint(x: barRect.minX, y: barRect.maxY - cornerRadius), controlPoint: CGPoint(x: barRect.minX, y: barRect.maxY))
+        path.addLine(to: CGPoint(x: barRect.minX, y: barRect.minY + cornerRadius))
+        path.addQuadCurve(to: CGPoint(x: barRect.minX + cornerRadius, y: barRect.minY), controlPoint: CGPoint(x: barRect.minX, y: barRect.minY))
+        path.close()
+        return path
+    }
+}
+
+private struct NativeNavigationFloatingTabStyle {
+    let selected: Bool
+    let labels: Bool
+    let icons: Bool
+    let isCenter: Bool
+    let selectedTint: UIColor
+    let inactiveTint: UIColor
+    let centerButtonColor: UIColor
+    let centerButtonIconColor: UIColor
+    let badgeBackgroundColor: UIColor
+    let badgeTextColor: UIColor
+}
+
+private final class NativeNavigationFloatingTabBar: UIView {
+    private var items: [NativeNavigationFloatingTabItem] = []
+    private var buttons: [NativeNavigationFloatingTabButton] = []
+    private var labelVisibilityMode = "labeled"
+    private var iconsVisible = true
+    private let backgroundShapeView = NativeNavigationTabbarBackgroundView()
+    private var tabbarStyle = NativeNavigationTabbarStyleConfig()
+
+    var selectedIndex = 0
+    var selectedTintColor = UIColor.systemBlue {
+        didSet { updateButtons() }
+    }
+    var inactiveTintColor = UIColor.secondaryLabel {
+        didSet { updateButtons() }
+    }
+    var badgeBackgroundColor = UIColor.systemRed {
+        didSet { updateButtons() }
+    }
+    var badgeTextColor = UIColor.white {
+        didSet { updateButtons() }
+    }
+    var backgroundFillColor = UIColor.systemBackground.withAlphaComponent(0.46) {
+        didSet {
+            backgroundShapeView.fillColor = backgroundFillColor
+        }
+    }
+    var onSelect: ((Int, NativeNavigationFloatingTabItem) -> Void)?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isOpaque = false
+        backgroundShapeView.isUserInteractionEnabled = false
+        backgroundShapeView.fillColor = backgroundFillColor
+        addSubview(backgroundShapeView)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func configure(
+        items: [NativeNavigationFloatingTabItem],
+        selectedIndex: Int,
+        labelVisibilityMode: String,
+        icons: Bool,
+        style: NativeNavigationTabbarStyleConfig
+    ) {
+        self.items = items
+        self.labelVisibilityMode = labelVisibilityMode
+        self.iconsVisible = icons
+        self.tabbarStyle = style
+        self.selectedIndex = items.indices.contains(selectedIndex) ? selectedIndex : 0
+        backgroundShapeView.style = style
+        rebuildButtons()
+        setNeedsLayout()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        backgroundShapeView.frame = bounds
+        guard !buttons.isEmpty else {
+            return
+        }
+
+        if let centerIndex = centerButtonIndex(), buttons.indices.contains(centerIndex) {
+            let buttonDiameter = tabbarStyle.centerButtonDiameter
+            let centerGap = min(buttonDiameter + 22, bounds.width * 0.46)
+            let barFrame = CGRect(x: 0, y: tabbarStyle.barTop, width: bounds.width, height: tabbarStyle.height)
+            let leftWidth = max(0, bounds.midX - centerGap / 2)
+            let rightX = min(bounds.width, bounds.midX + centerGap / 2)
+            let centerFrame = CGRect(
+                x: bounds.midX - buttonDiameter / 2,
+                y: 0,
+                width: buttonDiameter,
+                height: buttonDiameter
+            )
+
+            buttons[centerIndex].frame = centerFrame
+            layoutButtons(Array(0..<centerIndex), in: CGRect(x: 0, y: barFrame.minY, width: leftWidth, height: barFrame.height))
+            layoutButtons(
+                Array((centerIndex + 1)..<buttons.count),
+                in: CGRect(x: rightX, y: barFrame.minY, width: bounds.width - rightX, height: barFrame.height)
+            )
+            return
+        }
+
+        layoutButtons(Array(buttons.indices), in: bounds)
+    }
+
+    private func layoutButtons(_ indices: [Int], in rect: CGRect) {
+        guard !indices.isEmpty else {
+            return
+        }
+        let itemWidth = rect.width / CGFloat(indices.count)
+        for (position, index) in indices.enumerated() where buttons.indices.contains(index) {
+            buttons[index].frame = CGRect(
+                x: rect.minX + CGFloat(position) * itemWidth,
+                y: rect.minY,
+                width: itemWidth,
+                height: rect.height
+            )
+        }
+    }
+
+    private func centerButtonIndex() -> Int? {
+        guard tabbarStyle.shape == .curve, !items.isEmpty else {
+            return nil
+        }
+        if let centerItemId = tabbarStyle.centerItemId,
+           let index = items.firstIndex(where: { $0.id == centerItemId }) {
+            return index
+        }
+        return items.count / 2
+    }
+
+    private func rebuildButtons() {
+        buttons.forEach { $0.removeFromSuperview() }
+        buttons = items.enumerated().map { index, item in
+            let button = NativeNavigationFloatingTabButton()
+            button.tag = index
+            button.configure(
+                item: item,
+                style: style(for: index)
+            )
+            button.addTarget(self, action: #selector(handleTap(_:)), for: .touchUpInside)
+            addSubview(button)
+            return button
+        }
+    }
+
+    private func updateButtons() {
+        for (index, button) in buttons.enumerated() {
+            guard items.indices.contains(index) else {
+                continue
+            }
+            button.configure(
+                item: items[index],
+                style: style(for: index)
+            )
+        }
+    }
+
+    private func style(for index: Int) -> NativeNavigationFloatingTabStyle {
+        let isCenter = centerButtonIndex() == index
+        return NativeNavigationFloatingTabStyle(
+            selected: index == selectedIndex,
+            labels: showsLabel(for: index),
+            icons: iconsVisible,
+            isCenter: isCenter,
+            selectedTint: selectedTintColor,
+            inactiveTint: inactiveTintColor,
+            centerButtonColor: tabbarStyle.centerButtonColor ?? selectedTintColor,
+            centerButtonIconColor: tabbarStyle.centerButtonIconColor,
+            badgeBackgroundColor: badgeBackgroundColor,
+            badgeTextColor: badgeTextColor
+        )
+    }
+
+    private func showsLabel(for index: Int) -> Bool {
+        switch labelVisibilityMode {
+        case "unlabeled":
+            return false
+        case "selected":
+            return index == selectedIndex
+        case "auto":
+            let compact = traitCollection.horizontalSizeClass == .compact || UIDevice.current.userInterfaceIdiom == .phone
+            return !compact || index == selectedIndex
+        default:
+            return true
+        }
+    }
+
+    @objc private func handleTap(_ sender: NativeNavigationFloatingTabButton) {
+        let index = sender.tag
+        guard items.indices.contains(index), items[index].enabled else {
+            return
+        }
+        selectedIndex = index
+        updateButtons()
+        onSelect?(index, items[index])
+    }
+}
+
+private final class NativeNavigationTabbarBackgroundView: UIView {
+    var style = NativeNavigationTabbarStyleConfig() {
+        didSet { setNeedsDisplay() }
+    }
+    var fillColor = UIColor.systemBackground.withAlphaComponent(0.46) {
+        didSet { setNeedsDisplay() }
+    }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isOpaque = false
+        backgroundColor = .clear
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func draw(_ rect: CGRect) {
+        fillColor.setFill()
+        NativeNavigationTabbarBackgroundPath.path(in: bounds, style: style).fill()
+    }
+}
+
+private final class NativeNavigationFloatingTabButton: UIControl {
+    private let selectedView = UIView()
+    private let imageView = UIImageView()
+    private let titleLabel = UILabel()
+    private let badgeLabel = UILabel()
+    private var hasIcon = true
+    private var hasLabel = true
+    private var isCenterButton = false
+    private var badgeText: String?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isAccessibilityElement = true
+
+        selectedView.isUserInteractionEnabled = false
+        selectedView.alpha = 0
+        addSubview(selectedView)
+
+        imageView.contentMode = .scaleAspectFit
+        imageView.isUserInteractionEnabled = false
+        addSubview(imageView)
+
+        titleLabel.textAlignment = .center
+        titleLabel.font = .systemFont(ofSize: 11, weight: .semibold)
+        titleLabel.adjustsFontSizeToFitWidth = true
+        titleLabel.minimumScaleFactor = 0.78
+        titleLabel.isUserInteractionEnabled = false
+        addSubview(titleLabel)
+
+        badgeLabel.textAlignment = .center
+        badgeLabel.font = .systemFont(ofSize: 11, weight: .bold)
+        badgeLabel.textColor = .white
+        badgeLabel.backgroundColor = .systemRed
+        badgeLabel.layer.masksToBounds = true
+        badgeLabel.isUserInteractionEnabled = false
+        addSubview(badgeLabel)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func configure(
+        item: NativeNavigationFloatingTabItem,
+        style: NativeNavigationFloatingTabStyle
+    ) {
+        isEnabled = item.enabled
+        alpha = item.enabled ? 1 : 0.38
+        isCenterButton = style.isCenter
+        hasIcon = style.icons && (item.image != nil || item.selectedImage != nil)
+        hasLabel = style.isCenter ? (!hasIcon && !item.title.isEmpty) : (style.labels && !item.title.isEmpty)
+        badgeText = item.badge
+
+        let color = style.isCenter ? style.centerButtonIconColor : (style.selected ? style.selectedTint : style.inactiveTint)
+        selectedView.backgroundColor = style.isCenter ? style.centerButtonColor : style.selectedTint.withAlphaComponent(style.selected ? 0.16 : 0)
+        selectedView.alpha = style.isCenter || style.selected ? 1 : 0
+
+        layer.shadowColor = UIColor.black.cgColor
+        layer.shadowOpacity = style.isCenter ? 0.2 : 0
+        layer.shadowRadius = style.isCenter ? 14 : 0
+        layer.shadowOffset = CGSize(width: 0, height: 8)
+
+        let image = style.selected ? (item.selectedImage ?? item.image) : item.image
+        imageView.image = image
+        imageView.tintColor = color
+        imageView.isHidden = !hasIcon
+
+        titleLabel.text = item.title
+        titleLabel.textColor = color
+        titleLabel.font = .systemFont(ofSize: style.isCenter ? 12 : 11, weight: style.selected ? .bold : .semibold)
+        titleLabel.isHidden = !hasLabel
+
+        badgeLabel.text = item.badge
+        badgeLabel.textColor = style.badgeTextColor
+        badgeLabel.backgroundColor = style.badgeBackgroundColor
+        badgeLabel.isHidden = item.badge == nil || item.badge == "0"
+        accessibilityLabel = item.accessibilityTitle
+        accessibilityTraits = style.selected ? [.button, .selected] : .button
+        setNeedsLayout()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        selectedView.frame = isCenterButton ? bounds : bounds.insetBy(dx: 7, dy: 7)
+        selectedView.layer.cornerRadius = selectedView.bounds.height / 2
+
+        let iconSize: CGFloat = isCenterButton ? 32 : 23
+        if isCenterButton {
+            if hasIcon {
+                imageView.frame = CGRect(x: (bounds.width - iconSize) / 2, y: (bounds.height - iconSize) / 2, width: iconSize, height: iconSize)
+                titleLabel.frame = .zero
+            } else {
+                imageView.frame = .zero
+                titleLabel.frame = CGRect(x: 8, y: (bounds.height - 18) / 2, width: bounds.width - 16, height: 18)
+            }
+        } else if hasIcon && hasLabel {
+            imageView.frame = CGRect(x: (bounds.width - iconSize) / 2, y: 10, width: iconSize, height: iconSize)
+            titleLabel.frame = CGRect(x: 5, y: bounds.height - 23, width: bounds.width - 10, height: 15)
+        } else if hasIcon {
+            imageView.frame = CGRect(x: (bounds.width - iconSize) / 2, y: (bounds.height - iconSize) / 2, width: iconSize, height: iconSize)
+            titleLabel.frame = .zero
+        } else {
+            imageView.frame = .zero
+            titleLabel.frame = CGRect(x: 5, y: (bounds.height - 18) / 2, width: bounds.width - 10, height: 18)
+        }
+
+        let badgeHeight: CGFloat = 18
+        let badgeWidth = max(badgeHeight, CGFloat((badgeText ?? "").count * 7 + 11))
+        let anchor = hasIcon ? imageView.frame : CGRect(x: bounds.midX - 10, y: bounds.midY - 10, width: 20, height: 20)
+        badgeLabel.frame = CGRect(
+            x: min(bounds.width - badgeWidth - 8, anchor.midX + 7),
+            y: max(6, anchor.minY - 6),
+            width: badgeWidth,
+            height: badgeHeight
+        )
+        badgeLabel.layer.cornerRadius = badgeHeight / 2
     }
 }
 
