@@ -42,51 +42,81 @@ body {
   padding-bottom: calc(var(--cap-native-navigation-bottom) + 28px);
 }
 
-.hero {
-  min-height: 46vh;
-  display: grid;
-  align-content: center;
-  gap: 14px;
+.page[data-route="home"] {
+  max-width: none;
+  padding-bottom: 0;
 }
 
-.app-logo {
-  width: clamp(76px, 18vw, 108px);
-  aspect-ratio: 1;
-  display: block;
-  border-radius: 24%;
-  box-shadow:
-    0 22px 46px rgba(10, 132, 255, 0.22),
-    0 2px 10px rgba(17, 24, 39, 0.1);
+.venue-strip {
+  width: 100%;
+  min-height: calc(100dvh - var(--cap-native-navigation-top) - 20px);
+  display: flex;
+  align-items: start;
+  gap: 28px;
+  overflow-x: auto;
+  padding: 0 0 calc(var(--cap-native-navigation-bottom) + 24px);
+  scroll-snap-type: x mandatory;
 }
 
-.eyebrow {
-  margin: 0;
-  color: #0a84ff;
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.venue-card {
+  position: relative;
+  flex: 0 0 min(86vw, 620px);
+  height: calc(100dvh - var(--cap-native-navigation-top) - 86px);
+  border-radius: 8px;
+  overflow: hidden;
+  scroll-snap-align: start;
+  color: #ffffff;
+  background-position: center;
+  background-size: cover;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.16);
 }
 
-h1,
-p {
-  margin: 0;
+.venue-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.36);
 }
 
-.hero h1,
-.detail h1 {
-  max-width: 10ch;
-  font-size: clamp(2.4rem, 10vw, 4.8rem);
-  line-height: 0.92;
+.venue-card-bar {
+  background-image: linear-gradient(135deg, rgba(45, 53, 62, 0.2), rgba(17, 24, 39, 0.18)), url("https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=1200&q=80");
+}
+
+.venue-card-food {
+  background-image: linear-gradient(135deg, rgba(45, 53, 62, 0.2), rgba(17, 24, 39, 0.18)), url("https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=1200&q=80");
+}
+
+.venue-card span {
+  position: absolute;
+  top: 28px;
+  left: 28px;
+  z-index: 1;
+  border-radius: 8px;
+  padding: 10px 16px;
+  background: #78c900;
+  font-size: 1.6rem;
+  line-height: 1;
   letter-spacing: 0;
 }
 
-.hero p:last-child,
-.detail p {
-  max-width: 32rem;
-  color: #526070;
-  font-size: 1.06rem;
-  line-height: 1.55;
+.venue-card-food span {
+  background: #ff5b45;
+}
+
+.venue-card strong {
+  position: absolute;
+  left: 28px;
+  bottom: 34px;
+  z-index: 1;
+  font-size: clamp(2rem, 8vw, 4rem);
+  line-height: 0.95;
+}
+
+.demo-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding-bottom: calc(var(--cap-native-navigation-bottom) + 20px);
 }
 
 .grid {

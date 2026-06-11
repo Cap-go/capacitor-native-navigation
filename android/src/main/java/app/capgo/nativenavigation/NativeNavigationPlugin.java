@@ -674,11 +674,15 @@ public class NativeNavigationPlugin extends Plugin {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 button.setElevation(dp(10));
             }
-        } else if (selected) {
+        }
+
+        if (!center && selected) {
             GradientDrawable selectedBackground = new GradientDrawable();
+            selectedBackground.setShape(GradientDrawable.OVAL);
             selectedBackground.setColor(withAlpha(tintColor, 34));
-            selectedBackground.setCornerRadius(dp(26));
-            button.setBackground(selectedBackground);
+            View selectedCircle = new View(getContext());
+            selectedCircle.setBackground(selectedBackground);
+            button.addView(selectedCircle, new FrameLayout.LayoutParams(dp(58), dp(58), Gravity.CENTER));
         }
 
         LinearLayout content = new LinearLayout(getContext());
@@ -1079,28 +1083,28 @@ public class NativeNavigationPlugin extends Plugin {
                 path.addRoundRect(new RectF(0, 0, width, height), radius, radius, Path.Direction.CW);
                 return path;
             }
-
             float barTop = dp(style.barTop());
             float barHeight = dp(style.height);
             float cornerRadius = Math.min(dp(style.cornerRadius), barHeight / 2f);
             float centerX = width / 2f;
-            float notchRadius = dp(style.centerButtonDiameter) / 2f + dp(8);
-            float notchDepth = Math.min(barHeight * 0.58f, notchRadius);
-            float leftShoulder = Math.max(cornerRadius, centerX - notchRadius - dp(22));
-            float rightShoulder = Math.min(width - cornerRadius, centerX + notchRadius + dp(22));
+            float notchRadius = dp(style.centerButtonDiameter) / 2f + dp(7);
+            float notchDepth = Math.min(barHeight * 0.78f, notchRadius);
+            float leftShoulder = Math.max(cornerRadius, centerX - notchRadius);
+            float rightShoulder = Math.min(width - cornerRadius, centerX + notchRadius);
+            float control = notchDepth * 0.55228475f;
             RectF barRect = new RectF(0, barTop, width, barTop + barHeight);
 
             path.moveTo(barRect.left + cornerRadius, barRect.top);
             path.lineTo(leftShoulder, barRect.top);
             path.cubicTo(
-                centerX - notchRadius,
-                barRect.top,
-                centerX - notchRadius,
+                leftShoulder,
+                barRect.top + control,
+                centerX - control,
                 barRect.top + notchDepth,
                 centerX,
                 barRect.top + notchDepth
             );
-            path.cubicTo(centerX + notchRadius, barRect.top + notchDepth, centerX + notchRadius, barRect.top, rightShoulder, barRect.top);
+            path.cubicTo(centerX + control, barRect.top + notchDepth, rightShoulder, barRect.top + control, rightShoulder, barRect.top);
             path.lineTo(barRect.right - cornerRadius, barRect.top);
             path.quadTo(barRect.right, barRect.top, barRect.right, barRect.top + cornerRadius);
             path.lineTo(barRect.right, barRect.bottom - cornerRadius);

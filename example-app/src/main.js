@@ -60,31 +60,20 @@ let labelsEnabled = false;
 let iconsEnabled = true;
 let tabbarShape = 'curve';
 let tabbarHidden = false;
-
 const pages = {
   home: {
-    title: 'Native Home',
-    subtitle: 'Web content, native chrome',
+    title: 'Curved Tabbar',
+    subtitle: 'Raised center action',
     body: `
-      <section class="hero">
-        <img class="app-logo" src="/icon.svg" alt="Native Navigation Example" />
-        <p class="eyebrow">Capgo native navigation</p>
-        <h1>Native frame, web content.</h1>
-        <p>Top and bottom navigation render outside the WebView while this page remains ordinary HTML.</p>
-      </section>
-      <section class="grid">
-        <button class="tile" data-push="detail">
-          <span>Open detail</span>
-          <small>Push transition and native back button</small>
-        </button>
-        <button class="tile" data-action="toggle-tabbar">
-          <span>Toggle tabbar</span>
-          <small>Dynamic visibility from JavaScript</small>
-        </button>
-        <button class="tile" data-action="toggle-tabbar-shape">
-          <span>Switch tabbar shape</span>
-          <small>Floating capsule or curved center action</small>
-        </button>
+      <section class="venue-strip" aria-label="Curved tabbar demo content">
+        <article class="venue-card venue-card-bar">
+          <span>BAR</span>
+          <strong>Hidden bar</strong>
+        </article>
+        <article class="venue-card venue-card-food">
+          <span>RESTAURANT</span>
+          <strong>Pizza room</strong>
+        </article>
       </section>
     `,
   },
@@ -167,8 +156,8 @@ const tabbarStyle = () =>
         maxWidth: 0,
         bottomGap: 0,
         cornerRadius: 30,
-        centerButtonDiameter: 82,
-        centerButtonLift: 44,
+        centerButtonDiameter: 96,
+        centerButtonLift: 52,
         centerButtonColor: '#ff5b45',
         centerButtonIconColor: '#ffffff',
       }
@@ -196,10 +185,10 @@ const configureChrome = async () => {
 const updateNavbar = async () => {
   const page = pages[route];
   await NativeNavigation.setNavbar({
-    hidden: false,
+    hidden: route === 'home' && tabbarShape === 'curve',
     title: page.title,
     subtitle: page.subtitle,
-    large: route === 'home',
+    large: route === 'home' && tabbarShape !== 'curve',
     transparent: true,
     backButton: {
       visible: stack.length > 1,
