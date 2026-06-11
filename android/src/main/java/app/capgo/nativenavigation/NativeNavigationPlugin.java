@@ -67,6 +67,7 @@ public class NativeNavigationPlugin extends Plugin {
     private static final int TABBAR_ITEM_VERTICAL_PADDING_DP = 8;
     private static final int TABBAR_INDICATOR_DP = 32;
     private static final int TABBAR_INDICATOR_LABEL_PADDING_DP = 4;
+    private static final int TABBAR_FLOATING_BOTTOM_GAP_DP = 8;
     private static final int DEFAULT_TRANSITION_MS = 350;
     private static final int MENU_ITEM_BASE = 10_000;
 
@@ -1261,6 +1262,10 @@ public class NativeNavigationPlugin extends Plugin {
         }
     }
 
+    private int floatingTabbarBottomMargin(int navigationInset) {
+        return Math.max(dp(TABBAR_FLOATING_BOTTOM_GAP_DP), navigationInset - dp(TABBAR_FLOATING_BOTTOM_GAP_DP));
+    }
+
     private void layoutChrome() {
         FrameLayout root = contentRoot();
         if (root == null) {
@@ -1270,7 +1275,7 @@ public class NativeNavigationPlugin extends Plugin {
         int bottom = navigationBarInset();
         int navbarHeight = navbarVisible ? status + dp(DEFAULT_NAVBAR_DP) : 0;
         int tabbarHeight = dp(DEFAULT_TABBAR_DP);
-        int tabbarBottomMargin = tabbarVisible ? bottom + dp(10) : bottom;
+        int tabbarBottomMargin = tabbarVisible ? floatingTabbarBottomMargin(bottom) : bottom;
 
         if (navbarContainer != null) {
             FrameLayout.LayoutParams containerParams = new FrameLayout.LayoutParams(
@@ -1370,7 +1375,7 @@ public class NativeNavigationPlugin extends Plugin {
 
     private JSObject currentInsets() {
         int top = navbarVisible ? statusBarInset() + dp(DEFAULT_NAVBAR_DP) : 0;
-        int bottom = tabbarVisible ? navigationBarInset() + dp(DEFAULT_TABBAR_DP) + dp(10) : 0;
+        int bottom = tabbarVisible ? floatingTabbarBottomMargin(navigationBarInset()) + dp(DEFAULT_TABBAR_DP) : 0;
         JSObject insets = new JSObject();
         insets.put("top", top);
         insets.put("right", 0);
@@ -1431,7 +1436,10 @@ public class NativeNavigationPlugin extends Plugin {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             WindowInsets insets = getActivity().getWindow().getDecorView().getRootWindowInsets();
             if (insets != null) {
-                return insets.getStableInsetBottom();
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    return insets.getInsets(WindowInsets.Type.navigationBars()).bottom;
+                }
+                return insets.getSystemWindowInsetBottom();
             }
         }
         return systemDimension("navigation_bar_height");
