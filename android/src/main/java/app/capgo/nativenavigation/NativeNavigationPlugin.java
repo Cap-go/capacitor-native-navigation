@@ -30,6 +30,7 @@ import android.view.Window;
 import android.view.WindowInsets;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
+import android.widget.TextView;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.appcompat.widget.Toolbar;
@@ -68,6 +69,7 @@ public class NativeNavigationPlugin extends Plugin {
     private static final int LIQUID_GLASS_TABBAR_SIDE_MARGIN_DP = 30;
     private static final int LIQUID_GLASS_TABBAR_CONTENT_TOP_PADDING_DP = 8;
     private static final int LIQUID_GLASS_TABBAR_CONTENT_TRANSLATION_Y_DP = 6;
+    private static final int LIQUID_GLASS_TABBAR_LABEL_TRANSLATION_Y_DP = 3;
     private static final int LIQUID_GLASS_TABBAR_BADGE_VERTICAL_OFFSET_DP = 2;
     private static final int TABBAR_ICON_DP = 24;
     private static final int TABBAR_ITEM_VERTICAL_PADDING_DP = 8;
@@ -75,8 +77,8 @@ public class NativeNavigationPlugin extends Plugin {
     private static final int TABBAR_INDICATOR_DP = 32;
     private static final int LIQUID_GLASS_TABBAR_INDICATOR_DP = 28;
     private static final int TABBAR_INDICATOR_LABEL_PADDING_DP = 4;
-    private static final int LIQUID_GLASS_TABBAR_INDICATOR_LABEL_PADDING_DP = 2;
-    private static final int TABBAR_FLOATING_BOTTOM_GAP_DP = 8;
+    private static final int LIQUID_GLASS_TABBAR_INDICATOR_LABEL_PADDING_DP = 6;
+    private static final int TABBAR_FLOATING_BOTTOM_GAP_DP = 10;
     private static final int LIQUID_GLASS_TABBAR_FLOATING_BOTTOM_GAP_DP = 24;
     private static final int DEFAULT_TRANSITION_MS = 350;
     private static final int MENU_ITEM_BASE = 10_000;
@@ -93,7 +95,6 @@ public class NativeNavigationPlugin extends Plugin {
     private ImageView transitionSnapshot;
     private boolean enabled = true;
     private boolean navbarVisible = false;
-    private boolean navbarTransparent = false;
     private boolean tabbarVisible = false;
     private String contentInsetMode = "css";
     private int defaultTransitionMs = DEFAULT_TRANSITION_MS;
@@ -150,6 +151,9 @@ public class NativeNavigationPlugin extends Plugin {
             }
             if (enabled) {
                 reapplyVisibleChromeBackgrounds();
+                if (tabbar != null) {
+                    applyTabbarMetrics(tabbar);
+                }
             }
             updateInsetsAndNotify();
             call.resolve(insetsResult());
@@ -169,7 +173,6 @@ public class NativeNavigationPlugin extends Plugin {
             boolean hidden = call.getBoolean("hidden", false);
             navbarVisible = !hidden;
             if (hidden) {
-                navbarTransparent = false;
                 if (navbarContainer != null) {
                     navbarContainer.setVisibility(View.GONE);
                 }
@@ -177,7 +180,6 @@ public class NativeNavigationPlugin extends Plugin {
                 call.resolve(insetsResult());
                 return;
             }
-            navbarTransparent = call.getBoolean("transparent", false);
 
             Toolbar nativeToolbar = ensureToolbar();
             nativeToolbar.setTitle(call.getString("title", ""));
@@ -1302,7 +1304,7 @@ public class NativeNavigationPlugin extends Plugin {
         if (isLiquidGlassTabbar()) {
             return Math.max(dp(LIQUID_GLASS_TABBAR_FLOATING_BOTTOM_GAP_DP), navigationInset);
         }
-        return Math.max(dp(TABBAR_FLOATING_BOTTOM_GAP_DP), navigationInset - dp(TABBAR_FLOATING_BOTTOM_GAP_DP));
+        return navigationInset + dp(TABBAR_FLOATING_BOTTOM_GAP_DP);
     }
 
     private void applyTabbarMetrics(BottomNavigationView nativeTabbar) {
@@ -1340,6 +1342,21 @@ public class NativeNavigationPlugin extends Plugin {
             ViewGroup menuGroup = (ViewGroup) menuView;
             menuGroup.setClipChildren(false);
             menuGroup.setClipToPadding(false);
+            translateTabbarLabels(menuGroup, liquidGlass ? dp(LIQUID_GLASS_TABBAR_LABEL_TRANSLATION_Y_DP) : 0f);
+        }
+    }
+
+    private void translateTabbarLabels(View view, float translationY) {
+        if (view instanceof TextView) {
+            view.setTranslationY(translationY);
+            return;
+        }
+        if (!(view instanceof ViewGroup)) {
+            return;
+        }
+        ViewGroup group = (ViewGroup) view;
+        for (int index = 0; index < group.getChildCount(); index++) {
+            translateTabbarLabels(group.getChildAt(index), translationY);
         }
     }
 
@@ -1455,7 +1472,7 @@ public class NativeNavigationPlugin extends Plugin {
 
     private JSObject currentInsets() {
         int navbarHeight = navbarVisible ? statusBarInset() + dp(DEFAULT_NAVBAR_DP) : 0;
-        int top = navbarVisible ? (navbarTransparent ? statusBarInset() : navbarHeight) : 0;
+        int top = navbarVisible ? navbarHeight : 0;
         int bottom = tabbarVisible ? floatingTabbarBottomMargin(navigationBarInset()) + tabbarHeight() : 0;
         JSObject insets = new JSObject();
         insets.put("top", top);
@@ -1582,10 +1599,16 @@ public class NativeNavigationPlugin extends Plugin {
 
     private static final class GlassBackdropView extends View {
 
+        private static final long SOURCE_CONTENT_REFRESH_INTERVAL_MS = 250L;
+
         private final Paint fallbackPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final int[] sourceLocation = new int[2];
         private final int[] viewLocation = new int[2];
         private final ViewTreeObserver.OnScrollChangedListener sourceScrollListener = this::markDirty;
+        private final ViewTreeObserver.OnPreDrawListener sourcePreDrawListener = () -> {
+            markDirtyFromSourcePreDraw();
+            return true;
+        };
         private final View.OnLayoutChangeListener sourceLayoutListener = (
             view,
             left,
@@ -1601,6 +1624,7 @@ public class NativeNavigationPlugin extends Plugin {
         private int fallbackColor = Color.TRANSPARENT;
         private boolean dirty;
         private boolean redrawPending;
+        private long lastSourcePreDrawRefreshMs;
 
         GlassBackdropView(android.content.Context context) {
             super(context);
@@ -1633,6 +1657,7 @@ public class NativeNavigationPlugin extends Plugin {
                 ViewTreeObserver observer = source.getViewTreeObserver();
                 if (observer.isAlive()) {
                     observer.removeOnScrollChangedListener(sourceScrollListener);
+                    observer.removeOnPreDrawListener(sourcePreDrawListener);
                 }
             }
             source = nextSource;
@@ -1641,6 +1666,7 @@ public class NativeNavigationPlugin extends Plugin {
                 ViewTreeObserver observer = source.getViewTreeObserver();
                 if (observer.isAlive()) {
                     observer.addOnScrollChangedListener(sourceScrollListener);
+                    observer.addOnPreDrawListener(sourcePreDrawListener);
                 }
             }
             markDirty();
@@ -1648,6 +1674,16 @@ public class NativeNavigationPlugin extends Plugin {
 
         private void markDirty() {
             dirty = true;
+            scheduleRedrawIfVisible();
+        }
+
+        private void markDirtyFromSourcePreDraw() {
+            dirty = true;
+            long now = System.currentTimeMillis();
+            if (now - lastSourcePreDrawRefreshMs < SOURCE_CONTENT_REFRESH_INTERVAL_MS) {
+                return;
+            }
+            lastSourcePreDrawRefreshMs = now;
             scheduleRedrawIfVisible();
         }
 
