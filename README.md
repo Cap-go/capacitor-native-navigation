@@ -48,6 +48,21 @@ Native navbar, tabbar, safe-area handling, and WebView snapshot transitions for 
   width="320"
 />
 
+### Native Liquid Glass screenshots
+
+<p>
+  <img
+    src="./docs/native-liquid-glass-ios.webp"
+    alt="iOS native Liquid Glass navbar and tabbar screenshot"
+    width="260"
+  />
+  <img
+    src="./docs/native-liquid-glass-android.webp"
+    alt="Android Liquid Glass-style native navbar and tabbar screenshot"
+    width="260"
+  />
+</p>
+
 ## Features
 
 - Drive native top navigation and bottom tabs from JavaScript state.
