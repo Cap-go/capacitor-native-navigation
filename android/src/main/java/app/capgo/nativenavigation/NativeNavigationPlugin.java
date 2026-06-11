@@ -90,6 +90,10 @@ public class NativeNavigationPlugin extends Plugin {
     private GlassOptions defaultGlassOptions = GlassOptions.defaults();
     private GlassOptions navbarGlassOptions = GlassOptions.defaults();
     private GlassOptions tabbarGlassOptions = GlassOptions.defaults();
+    private JSObject navbarGlassConfig;
+    private JSObject tabbarGlassConfig;
+    private int navbarBackgroundColor = Color.argb(225, 255, 255, 255);
+    private int tabbarBackgroundColor = Color.argb(235, 255, 255, 255);
     private String activeTransitionId;
     private String activeTransitionDirection = "forward";
     private RectF activeZoomSourceFrame;
@@ -114,6 +118,8 @@ public class NativeNavigationPlugin extends Plugin {
             enabled = call.getBoolean("enabled", true);
             contentInsetMode = call.getString("contentInsetMode", contentInsetMode);
             defaultGlassOptions = GlassOptions.from(call.getObject("glass", null), defaultGlassOptions);
+            navbarGlassOptions = GlassOptions.from(navbarGlassConfig, defaultGlassOptions);
+            tabbarGlassOptions = GlassOptions.from(tabbarGlassConfig, defaultGlassOptions);
             Double duration = call.getDouble("animationDuration");
             if (duration != null) {
                 defaultTransitionMs = Math.max(0, duration.intValue());
@@ -128,6 +134,9 @@ public class NativeNavigationPlugin extends Plugin {
                 if (tabbarContainer != null) {
                     tabbarContainer.setVisibility(View.GONE);
                 }
+            }
+            if (enabled) {
+                reapplyVisibleChromeBackgrounds();
             }
             updateInsetsAndNotify();
             call.resolve(insetsResult());
@@ -176,7 +185,8 @@ public class NativeNavigationPlugin extends Plugin {
 
             addToolbarItems(nativeToolbar, call.getArray("rightItems", new JSArray()), "right");
             JSObject colors = call.getObject("colors", new JSObject());
-            navbarGlassOptions = GlassOptions.from(call.getObject("glass", null), defaultGlassOptions);
+            navbarGlassConfig = call.getObject("glass", null);
+            navbarGlassOptions = GlassOptions.from(navbarGlassConfig, defaultGlassOptions);
             applyToolbarColors(nativeToolbar, colors);
             navbarContainer.setVisibility(View.VISIBLE);
             layoutChrome();
@@ -225,7 +235,8 @@ public class NativeNavigationPlugin extends Plugin {
             JSONArray tabs = call.getArray("tabs", new JSArray());
             String selectedId = call.getString("selectedId", null);
             JSObject colors = call.getObject("colors", new JSObject());
-            tabbarGlassOptions = GlassOptions.from(call.getObject("glass", null), defaultGlassOptions);
+            tabbarGlassConfig = call.getObject("glass", null);
+            tabbarGlassOptions = GlassOptions.from(tabbarGlassConfig, defaultGlassOptions);
             Integer badgeBackground = colorOption(call, colors, "badgeBackgroundColor", "badgeBackground", null);
             Integer badgeText = colorOption(call, colors, "badgeTextColor", "badgeText", null);
             for (int index = 0; index < tabs.length(); index++) {
@@ -1050,6 +1061,7 @@ public class NativeNavigationPlugin extends Plugin {
             : Color.rgb(20, 24, 32);
         int tint = parseColor(colors.getString("tint", null), tintFallback);
         int background = parseColor(colors.getString("background", null), backgroundFallback);
+        navbarBackgroundColor = background;
         int foreground = parseColor(colors.getString("foreground", null), foregroundFallback);
         tintColor = tint;
         nativeToolbar.setTitleTextColor(foreground);
@@ -1080,6 +1092,7 @@ public class NativeNavigationPlugin extends Plugin {
         int tint = parseColor(colors.getString("tint", null), tintFallback);
         int inactiveTint = parseColor(colors.getString("inactiveTint", null), inactiveFallback);
         int background = parseColor(colors.getString("background", null), backgroundFallback);
+        tabbarBackgroundColor = background;
         tintColor = tint;
         inactiveTintColor = inactiveTint;
         int[][] states = new int[][] { new int[] { android.R.attr.state_checked }, new int[] {} };
@@ -1101,6 +1114,22 @@ public class NativeNavigationPlugin extends Plugin {
             tabbarGlassOptions,
             dp(DEFAULT_TABBAR_DP) / 2f
         );
+    }
+
+    private void reapplyVisibleChromeBackgrounds() {
+        if (navbarContainer != null && navbarContainer.getVisibility() == View.VISIBLE) {
+            applyChromeBackground(navbarContainer, navbarGlassBackdrop, navbarGlassSurface, navbarBackgroundColor, navbarGlassOptions, 0f);
+        }
+        if (tabbarContainer != null && tabbarContainer.getVisibility() == View.VISIBLE) {
+            applyChromeBackground(
+                tabbarContainer,
+                tabbarGlassBackdrop,
+                tabbarGlassSurface,
+                tabbarBackgroundColor,
+                tabbarGlassOptions,
+                dp(DEFAULT_TABBAR_DP) / 2f
+            );
+        }
     }
 
     private void applyChromeBackground(
