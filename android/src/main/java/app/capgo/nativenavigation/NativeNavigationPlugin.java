@@ -1,6 +1,7 @@
 package app.capgo.nativenavigation;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.content.res.Resources;
@@ -54,6 +55,18 @@ import org.json.JSONObject;
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserFactory;
 
+class NativeNavigationBottomNavigationView extends BottomNavigationView {
+
+    public NativeNavigationBottomNavigationView(Context context) {
+        super(context);
+    }
+
+    @Override
+    public int getMaxItemCount() {
+        return 100;
+    }
+}
+
 @CapacitorPlugin(name = "NativeNavigation")
 public class NativeNavigationPlugin extends Plugin {
 
@@ -77,6 +90,7 @@ public class NativeNavigationPlugin extends Plugin {
     private boolean navbarVisible = false;
     private boolean tabbarVisible = false;
     private String contentInsetMode = "css";
+    private boolean suppressTabSelectEvent = false;
     private int defaultTransitionMs = DEFAULT_TRANSITION_MS;
     private int activeTransitionMs = DEFAULT_TRANSITION_MS;
     private int tintColor = Color.rgb(0, 122, 255);
@@ -216,15 +230,24 @@ public class NativeNavigationPlugin extends Plugin {
             JSObject colors = call.getObject("colors", new JSObject());
             Integer badgeBackground = colorOption(call, colors, "badgeBackgroundColor", "badgeBackground", null);
             Integer badgeText = colorOption(call, colors, "badgeTextColor", "badgeText", null);
-            for (int index = 0; index < tabs.length(); index++) {
-                JSONObject tab = tabs.optJSONObject(index);
+            int selectedItemId = 0;
+            int visibleIndex = 0;
+            for (int sourceIndex = 0; sourceIndex < tabs.length(); sourceIndex++) {
+                JSONObject tab = tabs.optJSONObject(sourceIndex);
                 if (tab == null) {
                     continue;
                 }
-                int itemId = MENU_ITEM_BASE + index;
-                String id = tab.optString("id", "tab-" + index);
+                String id = tab.optString("id", "tab-" + sourceIndex);
+                boolean isHidden = tab.optBoolean("hidden", false);
+                if (isHidden && !id.equals(selectedId)) {
+                    continue;
+                }
+
+                int itemId = MENU_ITEM_BASE + visibleIndex;
                 String title = tab.optString("title", "");
-                MenuItem item = nativeTabbar.getMenu().add(Menu.NONE, itemId, index, labelVisibilityMode.equals("unlabeled") ? "" : title);
+                MenuItem item = nativeTabbar
+                    .getMenu()
+                    .add(Menu.NONE, itemId, visibleIndex, labelVisibilityMode.equals("unlabeled") ? "" : title);
                 item.setEnabled(tab.optBoolean("enabled", true));
                 Drawable icon = icons ? tabIconFrom(tab) : new ColorDrawable(Color.TRANSPARENT);
                 if (icon != null) {
@@ -255,12 +278,16 @@ public class NativeNavigationPlugin extends Plugin {
                 tabIds.put(itemId, id);
                 tabTitles.put(itemId, title);
                 if (id.equals(selectedId)) {
-                    nativeTabbar.setSelectedItemId(itemId);
+                    selectedItemId = itemId;
                 }
+                visibleIndex++;
             }
 
-            if (nativeTabbar.getSelectedItemId() == 0 && nativeTabbar.getMenu().size() > 0) {
-                nativeTabbar.setSelectedItemId(nativeTabbar.getMenu().getItem(0).getItemId());
+            if (selectedItemId == 0 && nativeTabbar.getMenu().size() > 0) {
+                selectedItemId = nativeTabbar.getMenu().getItem(0).getItemId();
+            }
+            if (selectedItemId != 0) {
+                selectTabbarItem(nativeTabbar, selectedItemId);
             }
 
             applyTabbarColors(nativeTabbar, call, colors);
@@ -638,7 +665,7 @@ public class NativeNavigationPlugin extends Plugin {
             );
         }
 
-        tabbar = new BottomNavigationView(getContext());
+        tabbar = new NativeNavigationBottomNavigationView(getContext());
         tabbar.setElevation(0);
         tabbar.setMinimumHeight(dp(DEFAULT_TABBAR_DP));
         tabbar.setItemIconSize(dp(TABBAR_ICON_DP));
@@ -651,6 +678,9 @@ public class NativeNavigationPlugin extends Plugin {
             int itemId = item.getItemId();
             if (!tabIds.containsKey(itemId)) {
                 return false;
+            }
+            if (suppressTabSelectEvent) {
+                return true;
             }
             JSObject event = new JSObject();
             event.put("id", tabIds.get(itemId));
@@ -669,6 +699,15 @@ public class NativeNavigationPlugin extends Plugin {
             );
         }
         return tabbar;
+    }
+
+    private void selectTabbarItem(BottomNavigationView nativeTabbar, int itemId) {
+        suppressTabSelectEvent = true;
+        try {
+            nativeTabbar.setSelectedItemId(itemId);
+        } finally {
+            suppressTabSelectEvent = false;
+        }
     }
 
     private int labelVisibilityMode(String mode) {

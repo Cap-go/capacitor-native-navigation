@@ -64,6 +64,9 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var navbarItemTitle: [String: String] = [:]
     private var tabIds: [String] = []
     private var tabTitles: [String] = []
+    private var tabDisplayTitles: [String?] = []
+    private var tabBaseImages: [UIImage?] = []
+    private var tabSelectedImages: [UIImage?] = []
     private var suppressTabSelectEvent = false
     private var transitionSnapshot: UIView?
     private var activeTransitionId: String?
@@ -849,31 +852,45 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     ) -> ([UITabBarItem], Int?) {
         tabIds = []
         tabTitles = []
+        tabDisplayTitles = []
+        tabBaseImages = []
+        tabSelectedImages = []
         var selectedIndex: Int?
+        var items: [UITabBarItem] = []
 
-        let items = tabs.enumerated().map { index, tab -> UITabBarItem in
-            let id = tab["id"] as? String ?? "tab-\(index)"
+        for (sourceIndex, tab) in tabs.enumerated() {
+            let id = tab["id"] as? String ?? "tab-\(sourceIndex)"
+            let isHidden = tab["hidden"] as? Bool ?? false
+            if isHidden && id != selectedId {
+                continue
+            }
+
+            let visibleIndex = items.count
+            let rawTitle = tab["title"] as? String ?? ""
             let title = tabTitle(
-                tab["title"] as? String,
+                rawTitle,
                 id: id,
-                index: index,
+                index: visibleIndex,
                 selectedId: selectedId,
                 labelVisibilityMode: labelVisibilityMode
             )
             let image = icons ? self.image(from: tab["icon"] as? [String: Any]) : nil
             let selectedImage = icons ? self.image(from: tab["selectedIcon"] as? [String: Any]) : nil
             let item = UITabBarItem(title: title, image: image, selectedImage: selectedImage)
-            item.tag = index
+            item.tag = visibleIndex
             item.isEnabled = tab["enabled"] as? Bool ?? true
             if let badge = tab["badge"] {
                 item.badgeValue = String(describing: badge)
             }
             tabIds.append(id)
-            tabTitles.append(tab["title"] as? String ?? "")
+            tabTitles.append(rawTitle)
+            tabDisplayTitles.append(title)
+            tabBaseImages.append(image)
+            tabSelectedImages.append(selectedImage ?? image)
             if id == selectedId {
-                selectedIndex = index
+                selectedIndex = visibleIndex
             }
-            return item
+            items.append(item)
         }
 
         return (items, selectedIndex)
@@ -1111,6 +1128,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                     item.scrollEdgeAppearance = scrollEdgeAppearance
                 }
             }
+            applyExperimentalBakedTintColors(tabBar: tabBar, options: call)
             return
         }
 
@@ -1163,7 +1181,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                     itemAppearance.selected.titleTextAttributes = [.foregroundColor: color]
                 }
             }
-            if let color = colorValue(colors["inactiveTint"]) {
+            if let color = colorValue(colors["inactiveTint"]), !usesSystemLiquidGlass {
                 tabBar.unselectedItemTintColor = color
                 applyTabItemAppearances(appearance) { itemAppearance in
                     itemAppearance.normal.iconColor = color
@@ -1203,6 +1221,109 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 itemAppearance.selected.badgeTextAttributes = [.foregroundColor: color]
             }
         }
+    }
+
+    private func applyExperimentalBakedTintColors(tabBar: UITabBar, options call: CAPPluginCall) {
+        guard shouldUseExperimentalBakedTintColors(options: call),
+              let items = tabBar.items,
+              let colors = call.getObject("colors") else {
+            return
+        }
+
+        let activeTint = colorValue(colors["tint"]) ?? tabBar.tintColor ?? .tintColor
+        let inactiveTint = colorValue(colors["inactiveTint"]) ?? tabBar.unselectedItemTintColor ?? .secondaryLabel
+        guard colorValue(colors["tint"]) != nil || colorValue(colors["inactiveTint"]) != nil else {
+            return
+        }
+
+        for (index, item) in items.enumerated() {
+            guard tabDisplayTitles.indices.contains(index),
+                  let title = tabDisplayTitles[index],
+                  !title.isEmpty,
+                  tabBaseImages.indices.contains(index),
+                  let icon = tabBaseImages[index] ?? item.image else {
+                continue
+            }
+
+            let selectedIcon = tabSelectedImages.indices.contains(index)
+                ? (tabSelectedImages[index] ?? icon)
+                : icon
+            item.accessibilityLabel = tabTitles.indices.contains(index) ? tabTitles[index] : title
+            item.title = ""
+            item.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: 100)
+            item.image = makeTabBarItemImage(icon: icon, title: title, color: inactiveTint)
+            item.selectedImage = makeTabBarItemImage(icon: selectedIcon, title: title, color: activeTint)
+        }
+    }
+
+    private func shouldUseExperimentalBakedTintColors(options call: CAPPluginCall) -> Bool {
+        guard usesSystemLiquidGlass,
+              call.getBool("experimentalBakedTintColors", false) else {
+            return false
+        }
+
+        let labels = call.getBool("labels", true)
+        let labelVisibilityMode = call.getString("labelVisibilityMode") ?? (labels ? "labeled" : "unlabeled")
+        return labelVisibilityMode == "labeled"
+    }
+
+    private func makeTabBarItemImage(icon: UIImage, title: String, color: UIColor) -> UIImage {
+        let iconSize = CGSize(width: 27, height: 27)
+        let font = UIFont.systemFont(ofSize: 10, weight: .regular)
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.alignment = .center
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: color,
+            .paragraphStyle: paragraphStyle
+        ]
+        let titleSize = (title as NSString).size(withAttributes: attributes)
+        let imageSize = CGSize(
+            width: max(iconSize.width, ceil(titleSize.width)) + 8,
+            height: iconSize.height + 3 + ceil(titleSize.height)
+        )
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = UIScreen.main.scale
+
+        let image = UIGraphicsImageRenderer(size: imageSize, format: format).image { _ in
+            let tintedIcon = icon.withTintColor(color, renderingMode: .alwaysOriginal)
+            let iconFrame = aspectFitRect(
+                size: tintedIcon.size,
+                in: CGRect(
+                    x: (imageSize.width - iconSize.width) / 2,
+                    y: 0,
+                    width: iconSize.width,
+                    height: iconSize.height
+                )
+            )
+            tintedIcon.draw(in: iconFrame)
+            (title as NSString).draw(
+                in: CGRect(
+                    x: 0,
+                    y: iconSize.height + 3,
+                    width: imageSize.width,
+                    height: ceil(titleSize.height)
+                ),
+                withAttributes: attributes
+            )
+        }
+
+        return image.withRenderingMode(.alwaysOriginal)
+    }
+
+    private func aspectFitRect(size: CGSize, in rect: CGRect) -> CGRect {
+        guard size.width > 0, size.height > 0 else {
+            return rect
+        }
+
+        let scale = min(rect.width / size.width, rect.height / size.height)
+        let fittedSize = CGSize(width: size.width * scale, height: size.height * scale)
+        return CGRect(
+            x: rect.minX + (rect.width - fittedSize.width) / 2,
+            y: rect.minY + (rect.height - fittedSize.height) / 2,
+            width: fittedSize.width,
+            height: fittedSize.height
+        )
     }
 
     private func applyTabItemAppearances(

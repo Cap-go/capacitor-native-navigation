@@ -148,7 +148,8 @@ export interface NativeNavigationColors {
   tint?: string;
 
   /**
-   * Color for inactive tab items.
+   * Color for inactive tab items. Ignored on iOS 26+ unless
+   * `experimentalBakedTintColors` is enabled.
    */
   inactiveTint?: string;
 
@@ -349,6 +350,13 @@ export interface NativeNavigationTab {
    * Whether the tab is enabled. Defaults to `true`.
    */
   enabled?: boolean;
+
+  /**
+   * Hide the tab item from the native tabbar. When the hidden tab is selected,
+   * native platform constraints may keep it visible until another tab is
+   * selected.
+   */
+  hidden?: boolean;
 }
 
 /**
@@ -395,6 +403,13 @@ export interface NativeNavigationTabbarOptions {
    * available.
    */
   blurEffect?: NativeNavigationBlurEffect;
+
+  /**
+   * Opt into the iOS 26 Liquid Glass tint workaround that renders active and
+   * inactive tab labels into icon images. This can affect badge positioning
+   * and icon sizing, so it is disabled by default.
+   */
+  experimentalBakedTintColors?: boolean;
 
   /**
    * Keep the iOS scroll-edge tabbar appearance from becoming transparent.
