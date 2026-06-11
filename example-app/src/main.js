@@ -81,7 +81,7 @@ const pages = {
       <section class="list">
         <article><strong>Live update shipped</strong><span>Navbar action event received by JS.</span></article>
         <article><strong>Android native bar</strong><span>Bottom navigation is native on Android.</span></article>
-        <article><strong>iOS Liquid Glass</strong><span>Native chrome uses system glass rendering.</span></article>
+        <article><strong>Native Liquid Glass</strong><span>Android and iOS chrome use glass rendering where supported.</span></article>
         <article><strong>Orders synced</strong><span>Seven pending approvals moved to done.</span></article>
         <article><strong>Review queued</strong><span>Three changes are waiting for owner review.</span></article>
         <article><strong>Build complete</strong><span>The release candidate finished without errors.</span></article>
@@ -133,6 +133,11 @@ const configureChrome = async () => {
     colors: {
       tint: '#0a84ff',
       inactiveTint: '#6b7280',
+    },
+    glass: {
+      effect: 'liquidGlass',
+      blurRadius: 18,
+      surfaceAlpha: 0.62,
     },
   });
   await updateNavbar();
