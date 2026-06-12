@@ -1,73 +1,114 @@
-#!/usr/bin/env bun
-import { spawnSync } from 'node:child_process';
+#!/usr/bin/env node
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
 
-const scriptDir = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(scriptDir, '..');
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(__dirname, '..');
 const appDir = resolve(repoRoot, 'example-app');
-const distDir = resolve(appDir, 'dist');
-const packageJsonPath = resolve(repoRoot, 'package.json');
-const capacitorConfigPath = resolve(appDir, 'capacitor.config.json');
-const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
-const capacitorConfig = JSON.parse(readFileSync(capacitorConfigPath, 'utf8'));
-const packageVersion = packageJson.version;
-const configVersion = capacitorConfig.plugins?.CapacitorUpdater?.version;
+const rootPackageJson = JSON.parse(readFileSync(resolve(repoRoot, 'package.json'), 'utf8'));
+const examplePackageJson = JSON.parse(readFileSync(resolve(appDir, 'package.json'), 'utf8'));
+const tsConfigPath = resolve(appDir, 'capacitor.config.ts');
+const jsonConfigPath = resolve(appDir, 'capacitor.config.json');
+const configPath = existsSync(tsConfigPath)
+  ? tsConfigPath
+  : existsSync(jsonConfigPath)
+    ? jsonConfigPath
+    : null;
 
-const appId = process.env.CAPGO_APP_ID || 'app.capgo.capacitor.navigation';
-const channel = process.env.CAPGO_CHANNEL || process.argv[2] || 'production';
-const bundle = packageVersion;
-const comment =
-  process.env.CAPGO_COMMENT ||
-  (process.env.GITHUB_SHA ? `Native navigation example ${process.env.GITHUB_SHA}` : 'Native navigation example upload');
-
-if (!packageVersion) {
-  console.error('Missing package.json version.');
+if (!configPath) {
+  console.error('Missing Capacitor config. Expected example-app/capacitor.config.ts or example-app/capacitor.config.json.');
   process.exit(1);
 }
 
-if (configVersion !== packageVersion) {
-  console.error(
-    `CapacitorUpdater.version (${configVersion ?? 'missing'}) must match package.json version (${packageVersion}).`,
-  );
+const configText = readFileSync(configPath, 'utf8');
+
+function readConfigString(key, fallback) {
+  const match = configText.match(new RegExp(`['"]?${key}['"]?\\s*[:=]\\s*['"]([^'"]+)['"]`));
+  return match?.[1] ?? fallback;
+}
+
+function runCapgo(args, allowFailure = false) {
+  const token = process.env.CAPGO_TOKEN;
+  const fullArgs = ['@capgo/cli@8.0.2', ...args];
+  if (token) {
+    fullArgs.push('--apikey', token);
+  }
+  const result = spawnSync('bunx', fullArgs, {
+    cwd: appDir,
+    stdio: 'inherit',
+    env: process.env,
+  });
+  if (!allowFailure && result.status !== 0) {
+    process.exit(result.status ?? 1);
+  }
+  return result.status ?? 1;
+}
+
+const appId = process.env.CAPGO_APP_ID || readConfigString('appId');
+const appName = process.env.CAPGO_APP_NAME || readConfigString('appName', rootPackageJson.name);
+const webDir = process.env.CAPGO_WEB_DIR || readConfigString('webDir', 'dist');
+const distDir = resolve(appDir, webDir);
+const channel = process.env.CAPGO_CHANNEL || process.argv[2] || 'production';
+function usableVersion(version) {
+  return version && version !== '0.0.0' ? version : undefined;
+}
+
+const bundle =
+  process.env.CAPGO_BUNDLE || usableVersion(examplePackageJson.version) || usableVersion(rootPackageJson.version);
+const comment =
+  process.env.CAPGO_COMMENT ||
+  (process.env.GITHUB_RUN_NUMBER
+    ? `${appName} run ${process.env.GITHUB_RUN_NUMBER}`
+    : `${appName} ${bundle}`);
+const iconPath = process.env.CAPGO_ICON || resolve(appDir, 'assets', 'capgo-icon.png');
+
+if (!appId) {
+  console.error('Missing Capgo app id. Set CAPGO_APP_ID or example-app/capacitor.config.* appId.');
   process.exit(1);
 }
 
 if (!existsSync(distDir)) {
-  console.error('Missing example-app/dist. Run bun run --cwd example-app build first.');
+  console.error(`Missing example app bundle at ${distDir}. Run bun run example:build first.`);
   process.exit(1);
 }
 
-const args = [
-  '@capgo/cli@latest',
+if (!bundle) {
+  console.error('Missing Capgo bundle version. Set CAPGO_BUNDLE or add a version to example-app/package.json or package.json.');
+  process.exit(1);
+}
+
+const appArgs = [appId, '--name', appName];
+if (existsSync(iconPath)) {
+  appArgs.push('--icon', iconPath);
+}
+
+const setStatus = runCapgo(['app', 'set', ...appArgs], true);
+if (setStatus !== 0) {
+  runCapgo(['app', 'add', ...appArgs]);
+}
+
+console.log(`Deploying ${appId} to Capgo channel "${channel}"`);
+
+runCapgo([
   'bundle',
   'upload',
   appId,
-  '--path',
-  'dist',
-  '--channel',
-  channel,
   '--bundle',
   bundle,
+  '--path',
+  webDir,
+  '--channel',
+  channel,
   '--package-json',
-  '../package.json,package.json',
+  'package.json,../package.json',
   '--node-modules',
-  '../node_modules,node_modules',
+  'node_modules,../node_modules',
   '--delta',
   '--no-key',
   '--ignore-checksum-check',
   '--version-exists-ok',
   '--comment',
   comment,
-];
-
-console.log(`Deploying ${appId}@${bundle} to Capgo channel "${channel}"`);
-
-const result = spawnSync('bunx', args, {
-  cwd: appDir,
-  stdio: 'inherit',
-  env: process.env,
-});
-
-process.exit(result.status ?? 1);
+]);
