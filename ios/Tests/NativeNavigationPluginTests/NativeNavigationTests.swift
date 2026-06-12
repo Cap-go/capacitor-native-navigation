@@ -89,4 +89,12 @@ class NativeNavigationTests: XCTestCase {
         XCTAssertNil(webView.superview)
         XCTAssertEqual(controller.view.superview, webView)
     }
+
+    func testStationaryTransitionsCrossfadeSnapshotsAway() {
+        XCTAssertTrue(nativeNavigationUsesStationaryTransitionCrossfade(direction: "tab"))
+        XCTAssertTrue(nativeNavigationUsesStationaryTransitionCrossfade(direction: "root"))
+        XCTAssertTrue(nativeNavigationUsesStationaryTransitionCrossfade(direction: "none"))
+        XCTAssertFalse(nativeNavigationUsesStationaryTransitionCrossfade(direction: "forward"))
+        XCTAssertFalse(nativeNavigationUsesStationaryTransitionCrossfade(direction: "back"))
+    }
 }
