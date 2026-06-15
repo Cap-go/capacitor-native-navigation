@@ -761,6 +761,7 @@ Native tabbar state.
 | **`rippleColor`**                    | <code>string</code>                                                                                       | Tab press ripple color on Android. `colors.ripple` is also supported.                                                                                                                           |
 | **`badgeBackgroundColor`**           | <code>string</code>                                                                                       | Badge background color. `colors.badgeBackground` is also supported.                                                                                                                             |
 | **`badgeTextColor`**                 | <code>string</code>                                                                                       | Badge text color. `colors.badgeText` is also supported.                                                                                                                                         |
+| **`style`**                          | <code><a href="#nativenavigationtabbarstyle">NativeNavigationTabbarStyle</a></code>                       | Optional native tabbar layout and shape customization.                                                                                                                                          |
 | **`animated`**                       | <code>boolean</code>                                                                                      | Animate native tabbar changes.                                                                                                                                                                  |
 
 
@@ -777,6 +778,25 @@ A native tab item.
 | **`badge`**        | <code>string \| number</code>                                         | Optional badge. Numeric badges are supported on both platforms; text badge support depends on platform capabilities.                                      |
 | **`enabled`**      | <code>boolean</code>                                                  | Whether the tab is enabled. Defaults to `true`.                                                                                                           |
 | **`hidden`**       | <code>boolean</code>                                                  | Hide the tab item from the native tabbar. When the hidden tab is selected, native platform constraints may keep it visible until another tab is selected. |
+
+
+#### NativeNavigationTabbarStyle
+
+Native tabbar layout and background shape options.
+
+| Prop                        | Type                                                                                | Description                                                                                                                            |
+| --------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **`shape`**                 | <code><a href="#nativenavigationtabbarshape">NativeNavigationTabbarShape</a></code> | `floating` keeps the existing capsule tabbar. `curve` draws a full-width bar with a center notch and raised center tab.                |
+| **`height`**                | <code>number</code>                                                                 | Bar height in native points/dp. Defaults to `64` for `floating` and `76` for `curve`.                                                  |
+| **`horizontalMargin`**      | <code>number</code>                                                                 | Horizontal margin in native points/dp. Defaults to `24` for `floating` and `0` for `curve`.                                            |
+| **`maxWidth`**              | <code>number</code>                                                                 | Maximum tabbar width in native points/dp. Defaults to `430` for `floating`; `curve` uses the available width unless this is set.       |
+| **`bottomGap`**             | <code>number</code>                                                                 | Bottom gap above the platform safe area in native points/dp. Defaults to `10` for `floating` and `0` for `curve`.                      |
+| **`cornerRadius`**          | <code>number</code>                                                                 | Background corner radius in native points/dp. Defaults to a capsule radius for `floating` and `24` for `curve`.                        |
+| **`centerItemId`**          | <code>string</code>                                                                 | Tab id promoted into the raised center button for `curve`. Defaults to the middle tab.                                                 |
+| **`centerButtonDiameter`**  | <code>number</code>                                                                 | Raised center button diameter in native points/dp. Defaults to `76`.                                                                   |
+| **`centerButtonLift`**      | <code>number</code>                                                                 | Distance from the top of the center button to the top edge of the bar in native points/dp. Defaults to half of `centerButtonDiameter`. |
+| **`centerButtonColor`**     | <code>string</code>                                                                 | Raised center button color. Defaults to the active tint color.                                                                         |
+| **`centerButtonIconColor`** | <code>string</code>                                                                 | Raised center button icon color. Defaults to white.                                                                                    |
 
 
 #### NativeNavigationTransitionResult
@@ -923,6 +943,13 @@ Native material/blur effect preference.
 Native tab label visibility behavior.
 
 <code>'auto' | 'selected' | 'labeled' | 'unlabeled'</code>
+
+
+#### NativeNavigationTabbarShape
+
+Native tabbar background shape.
+
+<code>'floating' | 'curve'</code>
 
 
 #### NativeNavigationTransitionDirection

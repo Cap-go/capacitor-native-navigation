@@ -68,6 +68,10 @@ export class NativeNavigationWeb extends WebPlugin implements NativeNavigationPl
         ...this.tabbar.colors,
         ...options.colors,
       },
+      style: {
+        ...this.tabbar.style,
+        ...options.style,
+      },
       glass: {
         ...this.tabbar.glass,
         ...options.glass,
@@ -118,17 +122,32 @@ export class NativeNavigationWeb extends WebPlugin implements NativeNavigationPl
     return { id, direction, duration };
   }
 
+  private currentTabbarHeight(): number {
+    const style = this.tabbar.style;
+    if (!style) {
+      return DEFAULT_TABBAR_HEIGHT;
+    }
+
+    const defaultHeight = style.shape === 'curve' ? 76 : style.shape === 'floating' ? 64 : DEFAULT_TABBAR_HEIGHT;
+    const height = style.height ?? defaultHeight;
+    const bottomGap = style.bottomGap ?? (style.shape === 'curve' ? 0 : 10);
+    const centerButtonLift =
+      style.shape === 'curve' ? (style.centerButtonLift ?? (style.centerButtonDiameter ?? 76) / 2) : 0;
+    return Math.ceil(height + bottomGap + centerButtonLift);
+  }
+
   private applyInsets(): NativeNavigationInsetsResult {
     const enabled = this.config.enabled !== false;
     const navbarVisible = enabled && this.navbar.hidden !== true;
     const tabbarVisible = enabled && this.tabbar.hidden !== true;
+    const tabbarHeight = tabbarVisible ? this.currentTabbarHeight() : 0;
     const insets: NativeNavigationInsets = {
       top: navbarVisible ? DEFAULT_NAVBAR_HEIGHT : 0,
       right: 0,
-      bottom: tabbarVisible ? DEFAULT_TABBAR_HEIGHT : 0,
+      bottom: tabbarHeight,
       left: 0,
       navbarHeight: navbarVisible ? DEFAULT_NAVBAR_HEIGHT : 0,
-      tabbarHeight: tabbarVisible ? DEFAULT_TABBAR_HEIGHT : 0,
+      tabbarHeight,
     };
 
     if (this.config.contentInsetMode !== 'none' && typeof document !== 'undefined') {
