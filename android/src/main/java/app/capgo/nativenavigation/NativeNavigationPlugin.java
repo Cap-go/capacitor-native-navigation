@@ -1,7 +1,7 @@
 package app.capgo.nativenavigation;
 
 import android.app.Activity;
-import android.content.res.ColorStateList;
+import android.content.Context;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
@@ -12,26 +12,25 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Rect;
 import android.graphics.RectF;
+import android.graphics.Typeface;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
-import android.graphics.drawable.StateListDrawable;
 import android.os.Build;
-import android.view.ContextThemeWrapper;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
-import android.view.ViewTreeObserver;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
-import androidx.annotation.RequiresApi;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.graphics.PathParser;
@@ -41,9 +40,6 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
-import com.google.android.material.badge.BadgeDrawable;
-import com.google.android.material.bottomnavigation.BottomNavigationView;
-import com.google.android.material.navigation.NavigationBarView;
 import java.io.StringReader;
 import java.net.URLDecoder;
 import java.util.ArrayDeque;
@@ -62,36 +58,15 @@ import org.xmlpull.v1.XmlPullParserFactory;
 public class NativeNavigationPlugin extends Plugin {
 
     private static final int DEFAULT_NAVBAR_DP = 56;
-    // Android uses Material bottom navigation metrics; web/iOS keep their own platform-native tab bar heights.
-    private static final int DEFAULT_TABBAR_DP = 80;
-    private static final int LIQUID_GLASS_TABBAR_DP = 64;
-    private static final int LIQUID_GLASS_TABBAR_MAX_WIDTH_DP = 300;
-    private static final int LIQUID_GLASS_TABBAR_SIDE_MARGIN_DP = 30;
-    private static final int LIQUID_GLASS_TABBAR_CONTENT_TOP_PADDING_DP = 8;
-    private static final int LIQUID_GLASS_TABBAR_CONTENT_TRANSLATION_Y_DP = 6;
-    private static final int LIQUID_GLASS_TABBAR_LABEL_TRANSLATION_Y_DP = 3;
-    private static final int LIQUID_GLASS_TABBAR_BADGE_VERTICAL_OFFSET_DP = 2;
-    private static final int TABBAR_ICON_DP = 24;
-    private static final int TABBAR_ITEM_VERTICAL_PADDING_DP = 8;
-    private static final int LIQUID_GLASS_TABBAR_ITEM_VERTICAL_PADDING_DP = 4;
-    private static final int TABBAR_INDICATOR_DP = 32;
-    private static final int LIQUID_GLASS_TABBAR_INDICATOR_DP = 28;
-    private static final int TABBAR_INDICATOR_LABEL_PADDING_DP = 4;
-    private static final int LIQUID_GLASS_TABBAR_INDICATOR_LABEL_PADDING_DP = 6;
-    private static final int TABBAR_FLOATING_BOTTOM_GAP_DP = 10;
-    private static final int LIQUID_GLASS_TABBAR_FLOATING_BOTTOM_GAP_DP = 24;
+    private static final int DEFAULT_TABBAR_DP = 64;
     private static final int DEFAULT_TRANSITION_MS = 350;
     private static final int MENU_ITEM_BASE = 10_000;
 
     private final NativeNavigation implementation = new NativeNavigation();
     private FrameLayout navbarContainer;
     private FrameLayout tabbarContainer;
-    private GlassBackdropView navbarGlassBackdrop;
-    private View navbarGlassSurface;
-    private GlassBackdropView tabbarGlassBackdrop;
-    private View tabbarGlassSurface;
     private Toolbar toolbar;
-    private BottomNavigationView tabbar;
+    private NativeTabbarLayout tabbar;
     private ImageView transitionSnapshot;
     private boolean enabled = true;
     private boolean navbarVisible = false;
@@ -101,13 +76,10 @@ public class NativeNavigationPlugin extends Plugin {
     private int activeTransitionMs = DEFAULT_TRANSITION_MS;
     private int tintColor = Color.rgb(0, 122, 255);
     private int inactiveTintColor = Color.rgb(120, 126, 137);
-    private GlassOptions defaultGlassOptions = GlassOptions.defaults();
-    private GlassOptions navbarGlassOptions = GlassOptions.defaults();
-    private GlassOptions tabbarGlassOptions = GlassOptions.defaults();
-    private JSObject navbarGlassConfig;
-    private JSObject tabbarGlassConfig;
-    private int navbarBackgroundColor = Color.argb(225, 255, 255, 255);
     private int tabbarBackgroundColor = Color.argb(235, 255, 255, 255);
+    private int badgeBackgroundColor = Color.rgb(255, 59, 48);
+    private int badgeTextColor = Color.WHITE;
+    private TabbarStyle tabbarStyle = TabbarStyle.defaults(Color.rgb(0, 122, 255));
     private String activeTransitionId;
     private String activeTransitionDirection = "forward";
     private RectF activeZoomSourceFrame;
@@ -117,8 +89,8 @@ public class NativeNavigationPlugin extends Plugin {
     private final Map<Integer, String> menuActionIds = new HashMap<>();
     private final Map<Integer, String> menuActionTitles = new HashMap<>();
     private final Map<Integer, String> menuActionPlacements = new HashMap<>();
-    private final Map<Integer, String> tabIds = new HashMap<>();
-    private final Map<Integer, String> tabTitles = new HashMap<>();
+    private final List<NativeTabItem> tabItems = new ArrayList<>();
+    private int selectedTabIndex = 0;
 
     @Override
     public void load() {
@@ -133,9 +105,6 @@ public class NativeNavigationPlugin extends Plugin {
         runOnUiThread(() -> {
             enabled = call.getBoolean("enabled", true);
             contentInsetMode = call.getString("contentInsetMode", contentInsetMode);
-            defaultGlassOptions = GlassOptions.from(call.getObject("glass", null), defaultGlassOptions);
-            navbarGlassOptions = GlassOptions.from(navbarGlassConfig, defaultGlassOptions);
-            tabbarGlassOptions = GlassOptions.from(tabbarGlassConfig, defaultGlassOptions);
             Double duration = call.getDouble("animationDuration");
             if (duration != null) {
                 defaultTransitionMs = Math.max(0, duration.intValue());
@@ -149,12 +118,6 @@ public class NativeNavigationPlugin extends Plugin {
                 }
                 if (tabbarContainer != null) {
                     tabbarContainer.setVisibility(View.GONE);
-                }
-            }
-            if (enabled) {
-                reapplyVisibleChromeBackgrounds();
-                if (tabbar != null) {
-                    applyTabbarMetrics(tabbar);
                 }
             }
             updateInsetsAndNotify();
@@ -204,8 +167,6 @@ public class NativeNavigationPlugin extends Plugin {
 
             addToolbarItems(nativeToolbar, call.getArray("rightItems", new JSArray()), "right");
             JSObject colors = call.getObject("colors", new JSObject());
-            navbarGlassConfig = call.getObject("glass", null);
-            navbarGlassOptions = GlassOptions.from(navbarGlassConfig, defaultGlassOptions);
             applyToolbarColors(nativeToolbar, colors);
             navbarContainer.setVisibility(View.VISIBLE);
             layoutChrome();
@@ -238,77 +199,44 @@ public class NativeNavigationPlugin extends Plugin {
                 return;
             }
 
-            BottomNavigationView nativeTabbar = ensureTabbar();
-            for (Integer existingItemId : new ArrayList<>(tabIds.keySet())) {
-                nativeTabbar.removeBadge(existingItemId);
-            }
-            nativeTabbar.getMenu().clear();
-            tabIds.clear();
-            tabTitles.clear();
+            NativeTabbarLayout nativeTabbar = ensureTabbar();
+            nativeTabbar.removeAllViews();
+            tabItems.clear();
+            selectedTabIndex = -1;
 
             boolean labels = call.getBoolean("labels", true);
             boolean icons = call.getBoolean("icons", true);
             String labelVisibilityMode = call.getString("labelVisibilityMode", labels ? "labeled" : "unlabeled");
-            nativeTabbar.setLabelVisibilityMode(labelVisibilityMode(labelVisibilityMode));
-
             JSONArray tabs = call.getArray("tabs", new JSArray());
             String selectedId = call.getString("selectedId", null);
             JSObject colors = call.getObject("colors", new JSObject());
-            tabbarGlassConfig = call.getObject("glass", null);
-            tabbarGlassOptions = GlassOptions.from(tabbarGlassConfig, defaultGlassOptions);
-            Integer badgeBackground = colorOption(call, colors, "badgeBackgroundColor", "badgeBackground", null);
-            Integer badgeText = colorOption(call, colors, "badgeTextColor", "badgeText", null);
+            badgeBackgroundColor = colorOption(call, colors, "badgeBackgroundColor", "badgeBackground", Color.rgb(255, 59, 48));
+            badgeTextColor = colorOption(call, colors, "badgeTextColor", "badgeText", Color.WHITE);
+
             for (int index = 0; index < tabs.length(); index++) {
                 JSONObject tab = tabs.optJSONObject(index);
                 if (tab == null) {
                     continue;
                 }
-                int itemId = MENU_ITEM_BASE + index;
                 String id = tab.optString("id", "tab-" + index);
                 String title = tab.optString("title", "");
-                MenuItem item = nativeTabbar.getMenu().add(Menu.NONE, itemId, index, labelVisibilityMode.equals("unlabeled") ? "" : title);
-                item.setEnabled(tab.optBoolean("enabled", true));
-                Drawable icon = icons ? tabIconFrom(tab) : new ColorDrawable(Color.TRANSPARENT);
-                if (icon != null) {
-                    item.setIcon(icon);
-                }
-                if (tab.has("badge")) {
-                    nativeTabbar.removeBadge(itemId);
-                    BadgeDrawable badge = nativeTabbar.getOrCreateBadge(itemId);
-                    if (isLiquidGlassTabbar()) {
-                        badge.setVerticalOffset(dp(LIQUID_GLASS_TABBAR_BADGE_VERTICAL_OFFSET_DP));
-                    }
-                    if (badgeBackground != null) {
-                        badge.setBackgroundColor(badgeBackground);
-                    }
-                    if (badgeText != null) {
-                        badge.setBadgeTextColor(badgeText);
-                    }
-                    Object badgeValue = tab.opt("badge");
-                    if (badgeValue instanceof Number) {
-                        badge.setNumber(((Number) badgeValue).intValue());
-                    } else {
-                        try {
-                            badge.setNumber(Integer.parseInt(String.valueOf(badgeValue)));
-                        } catch (NumberFormatException ignored) {
-                            badge.setVisible(true);
-                        }
-                    }
-                } else {
-                    nativeTabbar.removeBadge(itemId);
-                }
-                tabIds.put(itemId, id);
-                tabTitles.put(itemId, title);
+                Drawable icon = icons ? iconFrom(tab.optJSONObject("icon")) : new ColorDrawable(Color.TRANSPARENT);
+                Drawable selectedIcon = icons ? iconFrom(tab.optJSONObject("selectedIcon")) : null;
+                String badge = tab.has("badge") ? String.valueOf(tab.opt("badge")) : null;
+                tabItems.add(new NativeTabItem(id, title, icon, selectedIcon, badge, tab.optBoolean("enabled", true)));
                 if (id.equals(selectedId)) {
-                    nativeTabbar.setSelectedItemId(itemId);
+                    selectedTabIndex = index;
                 }
             }
 
-            if (nativeTabbar.getSelectedItemId() == 0 && nativeTabbar.getMenu().size() > 0) {
-                nativeTabbar.setSelectedItemId(nativeTabbar.getMenu().getItem(0).getItemId());
+            if (!tabItems.isEmpty() && (selectedTabIndex < 0 || selectedTabIndex >= tabItems.size())) {
+                selectedTabIndex = 0;
             }
 
-            applyTabbarColors(nativeTabbar, call, colors);
+            applyTabbarColors(call, colors);
+            tabbarStyle = makeTabbarStyle(call.getObject("style", new JSObject()));
+            nativeTabbar.setTabbarStyle(tabbarStyle, tabbarBackgroundColor, centerTabIndex());
+            renderTabbarItems(labelVisibilityMode, icons);
             if (tabbarContainer != null) {
                 tabbarContainer.setVisibility(View.VISIBLE);
             }
@@ -647,10 +575,6 @@ public class NativeNavigationPlugin extends Plugin {
         FrameLayout root = contentRoot();
         navbarContainer = new FrameLayout(getContext());
         navbarContainer.setElevation(dp(8));
-        navbarGlassBackdrop = new GlassBackdropView(getContext());
-        navbarGlassSurface = new View(getContext());
-        navbarGlassBackdrop.setVisibility(View.GONE);
-        navbarGlassSurface.setVisibility(View.GONE);
         toolbar = new Toolbar(getContext());
         toolbar.setPopupTheme(androidx.appcompat.R.style.ThemeOverlay_AppCompat_Light);
         toolbar.setOnMenuItemClickListener((item) -> {
@@ -663,8 +587,6 @@ public class NativeNavigationPlugin extends Plugin {
             return true;
         });
 
-        navbarContainer.addView(navbarGlassBackdrop);
-        navbarContainer.addView(navbarGlassSurface);
         navbarContainer.addView(toolbar);
         if (root != null) {
             root.addView(navbarContainer);
@@ -677,90 +599,157 @@ public class NativeNavigationPlugin extends Plugin {
         return toolbar;
     }
 
-    private BottomNavigationView ensureTabbar() {
+    private NativeTabbarLayout ensureTabbar() {
         if (tabbar != null) {
             return tabbar;
         }
         FrameLayout root = contentRoot();
         tabbarContainer = new FrameLayout(getContext());
-        tabbarContainer.setElevation(dp(12));
         tabbarContainer.setClipChildren(false);
         tabbarContainer.setClipToPadding(false);
-        tabbarGlassBackdrop = new GlassBackdropView(getContext());
-        tabbarGlassSurface = new View(getContext());
-        tabbarGlassBackdrop.setVisibility(View.GONE);
-        tabbarGlassSurface.setVisibility(View.GONE);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            ViewOutlineProvider tabbarPillOutlineProvider = new ViewOutlineProvider() {
-                @Override
-                public void getOutline(View view, Outline outline) {
-                    outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), view.getHeight() / 2f);
-                }
-            };
-            tabbarContainer.setClipToOutline(false);
-            tabbarContainer.setOutlineProvider(tabbarPillOutlineProvider);
-            tabbarGlassBackdrop.setClipToOutline(true);
-            tabbarGlassBackdrop.setOutlineProvider(tabbarPillOutlineProvider);
-            tabbarGlassSurface.setClipToOutline(true);
-            tabbarGlassSurface.setOutlineProvider(tabbarPillOutlineProvider);
-        }
-        tabbar = new BottomNavigationView(
-            new ContextThemeWrapper(getContext(), com.google.android.material.R.style.Theme_MaterialComponents_DayNight)
-        );
-        tabbar.setElevation(0);
+        tabbarContainer.setElevation(dp(12));
+
+        tabbar = new NativeTabbarLayout(getContext());
         tabbar.setClipChildren(false);
         tabbar.setClipToPadding(false);
-        tabbar.setItemIconSize(dp(TABBAR_ICON_DP));
-        applyTabbarMetrics(tabbar);
         tabbar.setBackgroundColor(Color.TRANSPARENT);
-        tabbar.setOnItemSelectedListener((item) -> {
-            int itemId = item.getItemId();
-            if (!tabIds.containsKey(itemId)) {
-                return false;
-            }
-            JSObject event = new JSObject();
-            event.put("id", tabIds.get(itemId));
-            event.put("index", itemId - MENU_ITEM_BASE);
-            event.put("title", tabTitles.get(itemId));
-            notifyListeners("tabSelect", event);
-            return true;
-        });
-        tabbarContainer.addView(tabbarGlassBackdrop);
-        tabbarContainer.addView(tabbarGlassSurface);
-        tabbarContainer.addView(tabbar);
+        tabbarContainer.addView(
+            tabbar,
+            new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        );
         if (root != null) {
             root.addView(tabbarContainer);
         } else {
-            getActivity().addContentView(tabbarContainer, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, tabbarHeight()));
+            getActivity().addContentView(
+                tabbarContainer,
+                new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(DEFAULT_TABBAR_DP))
+            );
         }
         return tabbar;
     }
 
-    private int labelVisibilityMode(String mode) {
-        if ("auto".equals(mode)) {
-            return NavigationBarView.LABEL_VISIBILITY_AUTO;
+    private void renderTabbarItems(String labelVisibilityMode, boolean icons) {
+        if (tabbar == null) {
+            return;
         }
-        if ("selected".equals(mode)) {
-            return NavigationBarView.LABEL_VISIBILITY_SELECTED;
+        tabbar.removeAllViews();
+        int centerIndex = centerTabIndex();
+        tabbar.setTabbarStyle(tabbarStyle, tabbarBackgroundColor, centerIndex);
+        for (int index = 0; index < tabItems.size(); index++) {
+            final int itemIndex = index;
+            NativeTabItem item = tabItems.get(index);
+            boolean selected = itemIndex == selectedTabIndex;
+            boolean showLabel = shouldShowTabLabel(labelVisibilityMode, selected);
+            FrameLayout button = makeTabButton(item, selected, showLabel, icons, itemIndex == centerIndex);
+            button.setSelected(selected);
+            button.setEnabled(item.enabled);
+            button.setAlpha(item.enabled ? 1f : 0.38f);
+            button.setOnClickListener((view) -> {
+                if (!item.enabled) {
+                    return;
+                }
+                selectedTabIndex = itemIndex;
+                renderTabbarItems(labelVisibilityMode, icons);
+                JSObject event = new JSObject();
+                event.put("id", item.id);
+                event.put("index", itemIndex);
+                event.put("title", item.title);
+                notifyListeners("tabSelect", event);
+            });
+            tabbar.addView(button, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         }
-        if ("unlabeled".equals(mode)) {
-            return NavigationBarView.LABEL_VISIBILITY_UNLABELED;
-        }
-        return NavigationBarView.LABEL_VISIBILITY_LABELED;
     }
 
-    private Drawable tabIconFrom(JSONObject tab) {
-        Drawable icon = iconFrom(tab.optJSONObject("icon"));
-        Drawable selectedIcon = iconFrom(tab.optJSONObject("selectedIcon"));
-        if (selectedIcon == null) {
-            return icon;
+    private boolean shouldShowTabLabel(String mode, boolean selected) {
+        if ("unlabeled".equals(mode)) {
+            return false;
         }
-        StateListDrawable stateList = new StateListDrawable();
-        stateList.addState(new int[] { android.R.attr.state_checked }, selectedIcon);
-        if (icon != null) {
-            stateList.addState(new int[] {}, icon);
+        if ("selected".equals(mode)) {
+            return selected;
         }
-        return stateList;
+        return true;
+    }
+
+    private FrameLayout makeTabButton(NativeTabItem item, boolean selected, boolean showLabel, boolean icons, boolean center) {
+        FrameLayout button = new FrameLayout(getContext());
+        button.setClipChildren(false);
+        button.setClipToPadding(false);
+        button.setForeground(selectableItemBackground());
+        if (center) {
+            GradientDrawable centerBackground = new GradientDrawable();
+            centerBackground.setShape(GradientDrawable.OVAL);
+            centerBackground.setColor(tabbarStyle.centerButtonColor);
+            button.setBackground(centerBackground);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                button.setElevation(dp(10));
+            }
+        }
+
+        if (!center && selected) {
+            GradientDrawable selectedBackground = new GradientDrawable();
+            selectedBackground.setShape(GradientDrawable.OVAL);
+            selectedBackground.setColor(withAlpha(tintColor, 34));
+            View selectedCircle = new View(getContext());
+            selectedCircle.setBackground(selectedBackground);
+            button.addView(selectedCircle, new FrameLayout.LayoutParams(dp(58), dp(58), Gravity.CENTER));
+        }
+
+        LinearLayout content = new LinearLayout(getContext());
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setGravity(Gravity.CENTER);
+        content.setPadding(dp(4), dp(4), dp(4), dp(4));
+        button.addView(content, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        Drawable currentIcon = selected && item.selectedIcon != null ? item.selectedIcon : item.icon;
+        boolean labelVisible = center ? showLabel && (currentIcon == null || !icons) : showLabel;
+        int itemColor = center ? tabbarStyle.centerButtonIconColor : (selected ? tintColor : inactiveTintColor);
+        if (icons && currentIcon != null) {
+            Drawable icon = currentIcon.mutate();
+            icon.setTint(itemColor);
+            ImageView image = new ImageView(getContext());
+            image.setImageDrawable(icon);
+            image.setColorFilter(itemColor);
+            int imageSize = center ? dp(32) : dp(24);
+            LinearLayout.LayoutParams imageParams = new LinearLayout.LayoutParams(imageSize, imageSize);
+            imageParams.bottomMargin = labelVisible ? dp(2) : 0;
+            content.addView(image, imageParams);
+        }
+
+        if (labelVisible) {
+            TextView label = new TextView(getContext());
+            label.setText(item.title);
+            label.setTextColor(itemColor);
+            label.setTextSize(12);
+            label.setTypeface(Typeface.DEFAULT, selected ? Typeface.BOLD : Typeface.NORMAL);
+            label.setGravity(Gravity.CENTER);
+            label.setSingleLine(true);
+            content.addView(label, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(18)));
+        }
+
+        if (item.badge != null && !item.badge.isEmpty() && !"0".equals(item.badge)) {
+            TextView badge = new TextView(getContext());
+            badge.setText(item.badge);
+            badge.setTextColor(badgeTextColor);
+            badge.setTextSize(11);
+            badge.setTypeface(Typeface.DEFAULT_BOLD);
+            badge.setGravity(Gravity.CENTER);
+            GradientDrawable badgeBackground = new GradientDrawable();
+            badgeBackground.setColor(badgeBackgroundColor);
+            badgeBackground.setCornerRadius(dp(9));
+            badge.setBackground(badgeBackground);
+            int badgeWidth = Math.max(dp(18), item.badge.length() * dp(7) + dp(10));
+            FrameLayout.LayoutParams badgeParams = new FrameLayout.LayoutParams(
+                badgeWidth,
+                dp(18),
+                Gravity.TOP | Gravity.CENTER_HORIZONTAL
+            );
+            badgeParams.topMargin = center ? 0 : dp(4);
+            badge.setTranslationX(center ? dp(18) : dp(16));
+            button.addView(badge, badgeParams);
+        }
+
+        button.setContentDescription(item.title);
+        return button;
     }
 
     private Drawable iconFrom(JSONObject descriptor) {
@@ -910,6 +899,235 @@ public class NativeNavigationPlugin extends Plugin {
             } else if (join != null) {
                 lineJoin = Paint.Join.MITER;
             }
+        }
+    }
+
+    private static final class NativeTabItem {
+
+        final String id;
+        final String title;
+        final Drawable icon;
+        final Drawable selectedIcon;
+        final String badge;
+        final boolean enabled;
+
+        NativeTabItem(String id, String title, Drawable icon, Drawable selectedIcon, String badge, boolean enabled) {
+            this.id = id;
+            this.title = title;
+            this.icon = icon;
+            this.selectedIcon = selectedIcon;
+            this.badge = badge;
+            this.enabled = enabled;
+        }
+    }
+
+    private static final class TabbarStyle {
+
+        final String shape;
+        final int height;
+        final int horizontalMargin;
+        final int maxWidth;
+        final int bottomGap;
+        final int cornerRadius;
+        final String centerItemId;
+        final int centerButtonDiameter;
+        final int centerButtonLift;
+        final int centerButtonColor;
+        final int centerButtonIconColor;
+
+        TabbarStyle(
+            String shape,
+            int height,
+            int horizontalMargin,
+            int maxWidth,
+            int bottomGap,
+            int cornerRadius,
+            String centerItemId,
+            int centerButtonDiameter,
+            int centerButtonLift,
+            int centerButtonColor,
+            int centerButtonIconColor
+        ) {
+            this.shape = shape;
+            this.height = height;
+            this.horizontalMargin = horizontalMargin;
+            this.maxWidth = maxWidth;
+            this.bottomGap = bottomGap;
+            this.cornerRadius = cornerRadius;
+            this.centerItemId = centerItemId;
+            this.centerButtonDiameter = centerButtonDiameter;
+            this.centerButtonLift = centerButtonLift;
+            this.centerButtonColor = centerButtonColor;
+            this.centerButtonIconColor = centerButtonIconColor;
+        }
+
+        static TabbarStyle defaults(int tintColor) {
+            return new TabbarStyle("floating", 64, 24, 430, 10, 32, null, 76, 38, tintColor, Color.WHITE);
+        }
+
+        boolean isCurve() {
+            return "curve".equals(shape);
+        }
+
+        int barTop() {
+            return isCurve() ? centerButtonLift : 0;
+        }
+
+        int totalHeight() {
+            return height + barTop();
+        }
+    }
+
+    private static final class NativeTabbarLayout extends FrameLayout {
+
+        private final Paint backgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private TabbarStyle style = TabbarStyle.defaults(Color.rgb(0, 122, 255));
+        private int backgroundColor = Color.argb(235, 255, 255, 255);
+        private int centerIndex = -1;
+
+        NativeTabbarLayout(Context context) {
+            super(context);
+            setWillNotDraw(false);
+        }
+
+        void setTabbarStyle(TabbarStyle style, int backgroundColor, int centerIndex) {
+            this.style = style;
+            this.backgroundColor = backgroundColor;
+            this.centerIndex = centerIndex;
+            requestLayout();
+            invalidate();
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            backgroundPaint.setColor(backgroundColor);
+            canvas.drawPath(backgroundPath(getWidth(), getHeight()), backgroundPaint);
+        }
+
+        @Override
+        protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+            int width = MeasureSpec.getSize(widthMeasureSpec);
+            int height = MeasureSpec.getSize(heightMeasureSpec);
+            if (hasCenterButton()) {
+                int barHeight = dp(style.height);
+                int barTop = dp(style.barTop());
+                int centerGap = Math.min(dp(style.centerButtonDiameter + 22), Math.round(width * 0.46f));
+                int leftWidth = Math.max(0, Math.round(width / 2f - centerGap / 2f));
+                int rightX = Math.min(width, Math.round(width / 2f + centerGap / 2f));
+                measureRange(0, centerIndex, leftWidth, barHeight);
+                measureChildExact(getChildAt(centerIndex), dp(style.centerButtonDiameter), dp(style.centerButtonDiameter));
+                measureRange(centerIndex + 1, getChildCount(), width - rightX, barHeight);
+                setMeasuredDimension(width, Math.max(height, barTop + barHeight));
+                return;
+            }
+
+            int count = Math.max(getChildCount(), 1);
+            int childWidth = width / count;
+            for (int index = 0; index < getChildCount(); index++) {
+                measureChildExact(getChildAt(index), childWidth, height);
+            }
+            setMeasuredDimension(width, height);
+        }
+
+        @Override
+        protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+            int width = right - left;
+            int height = bottom - top;
+            if (hasCenterButton()) {
+                int barTop = dp(style.barTop());
+                int barHeight = dp(style.height);
+                int buttonDiameter = dp(style.centerButtonDiameter);
+                int centerGap = Math.min(dp(style.centerButtonDiameter + 22), Math.round(width * 0.46f));
+                int leftWidth = Math.max(0, Math.round(width / 2f - centerGap / 2f));
+                int rightX = Math.min(width, Math.round(width / 2f + centerGap / 2f));
+                View center = getChildAt(centerIndex);
+                center.layout((width - buttonDiameter) / 2, 0, (width + buttonDiameter) / 2, buttonDiameter);
+                layoutRange(0, centerIndex, 0, barTop, leftWidth, barHeight);
+                layoutRange(centerIndex + 1, getChildCount(), rightX, barTop, width - rightX, barHeight);
+                return;
+            }
+
+            layoutRange(0, getChildCount(), 0, 0, width, height);
+        }
+
+        private boolean hasCenterButton() {
+            return style.isCurve() && centerIndex >= 0 && centerIndex < getChildCount();
+        }
+
+        private void measureRange(int start, int end, int width, int height) {
+            int count = Math.max(0, end - start);
+            if (count == 0) {
+                return;
+            }
+            int childWidth = Math.max(0, width / count);
+            for (int index = start; index < end; index++) {
+                measureChildExact(getChildAt(index), childWidth, height);
+            }
+        }
+
+        private void layoutRange(int start, int end, int left, int top, int width, int height) {
+            int count = Math.max(0, end - start);
+            if (count == 0) {
+                return;
+            }
+            int childWidth = Math.max(0, width / count);
+            for (int index = start; index < end; index++) {
+                int childLeft = left + (index - start) * childWidth;
+                getChildAt(index).layout(childLeft, top, childLeft + childWidth, top + height);
+            }
+        }
+
+        private void measureChildExact(View child, int width, int height) {
+            child.measure(
+                MeasureSpec.makeMeasureSpec(Math.max(0, width), MeasureSpec.EXACTLY),
+                MeasureSpec.makeMeasureSpec(Math.max(0, height), MeasureSpec.EXACTLY)
+            );
+        }
+
+        private Path backgroundPath(int width, int height) {
+            Path path = new Path();
+            if (!style.isCurve()) {
+                float radius = dp(style.cornerRadius);
+                path.addRoundRect(new RectF(0, 0, width, height), radius, radius, Path.Direction.CW);
+                return path;
+            }
+            float barTop = dp(style.barTop());
+            float barHeight = dp(style.height);
+            float cornerRadius = Math.min(dp(style.cornerRadius), barHeight / 2f);
+            float centerX = width / 2f;
+            float notchRadius = dp(style.centerButtonDiameter) / 2f + dp(7);
+            float notchDepth = Math.min(barHeight * 0.78f, notchRadius);
+            float leftShoulder = Math.max(cornerRadius, centerX - notchRadius);
+            float rightShoulder = Math.min(width - cornerRadius, centerX + notchRadius);
+            float control = notchDepth * 0.55228475f;
+            RectF barRect = new RectF(0, barTop, width, barTop + barHeight);
+
+            path.moveTo(barRect.left + cornerRadius, barRect.top);
+            path.lineTo(leftShoulder, barRect.top);
+            path.cubicTo(
+                leftShoulder,
+                barRect.top + control,
+                centerX - control,
+                barRect.top + notchDepth,
+                centerX,
+                barRect.top + notchDepth
+            );
+            path.cubicTo(centerX + control, barRect.top + notchDepth, rightShoulder, barRect.top + control, rightShoulder, barRect.top);
+            path.lineTo(barRect.right - cornerRadius, barRect.top);
+            path.quadTo(barRect.right, barRect.top, barRect.right, barRect.top + cornerRadius);
+            path.lineTo(barRect.right, barRect.bottom - cornerRadius);
+            path.quadTo(barRect.right, barRect.bottom, barRect.right - cornerRadius, barRect.bottom);
+            path.lineTo(barRect.left + cornerRadius, barRect.bottom);
+            path.quadTo(barRect.left, barRect.bottom, barRect.left, barRect.bottom - cornerRadius);
+            path.lineTo(barRect.left, barRect.top + cornerRadius);
+            path.quadTo(barRect.left, barRect.top, barRect.left + cornerRadius, barRect.top);
+            path.close();
+            return path;
+        }
+
+        private int dp(int value) {
+            return Math.round(value * getResources().getDisplayMetrics().density);
         }
     }
 
@@ -1091,7 +1309,6 @@ public class NativeNavigationPlugin extends Plugin {
             : Color.rgb(20, 24, 32);
         int tint = parseColor(colors.getString("tint", null), tintFallback);
         int background = parseColor(colors.getString("background", null), backgroundFallback);
-        navbarBackgroundColor = background;
         int foreground = parseColor(colors.getString("foreground", null), foregroundFallback);
         tintColor = tint;
         nativeToolbar.setTitleTextColor(foreground);
@@ -1102,8 +1319,9 @@ public class NativeNavigationPlugin extends Plugin {
             tintedIcon.setTint(tint);
             nativeToolbar.setNavigationIcon(tintedIcon);
         }
-        nativeToolbar.setBackgroundColor(Color.TRANSPARENT);
-        applyChromeBackground(navbarContainer, navbarGlassBackdrop, navbarGlassSurface, background, navbarGlassOptions, 0f);
+        if (navbarContainer != null) {
+            navbarContainer.setBackgroundColor(background);
+        }
         for (int index = 0; index < nativeToolbar.getMenu().size(); index++) {
             Drawable icon = nativeToolbar.getMenu().getItem(index).getIcon();
             if (icon != null) {
@@ -1112,113 +1330,67 @@ public class NativeNavigationPlugin extends Plugin {
         }
     }
 
-    private void applyTabbarColors(BottomNavigationView nativeTabbar, PluginCall call, JSObject colors) {
+    private TabbarStyle makeTabbarStyle(JSObject rawStyle) {
+        String requestedShape = rawStyle.getString("shape", "floating");
+        boolean curve = "curve".equalsIgnoreCase(requestedShape);
+        int centerButtonDiameter = Math.max(styleDimension(rawStyle, "centerButtonDiameter", 76), 44);
+        int height = Math.max(styleDimension(rawStyle, "height", curve ? 76 : DEFAULT_TABBAR_DP), 44);
+        int centerButtonLift = Math.max(styleDimension(rawStyle, "centerButtonLift", centerButtonDiameter / 2), 0);
+        int bottomGap = Math.max(styleDimension(rawStyle, "bottomGap", curve ? 0 : 10), 0);
+        int horizontalMargin = Math.max(styleDimension(rawStyle, "horizontalMargin", curve ? 0 : 24), 0);
+        int maxWidth = Math.max(styleDimension(rawStyle, "maxWidth", curve ? 0 : 430), 0);
+        int cornerRadius = Math.max(styleDimension(rawStyle, "cornerRadius", curve ? 24 : height / 2), 0);
+        int centerButtonColor = parseColor(rawStyle.getString("centerButtonColor", null), tintColor);
+        int centerButtonIconColor = parseColor(rawStyle.getString("centerButtonIconColor", null), Color.WHITE);
+        return new TabbarStyle(
+            curve ? "curve" : "floating",
+            height,
+            horizontalMargin,
+            maxWidth,
+            bottomGap,
+            cornerRadius,
+            rawStyle.getString("centerItemId", null),
+            centerButtonDiameter,
+            centerButtonLift,
+            centerButtonColor,
+            centerButtonIconColor
+        );
+    }
+
+    private int styleDimension(JSObject rawStyle, String key, int fallback) {
+        if (rawStyle == null || !rawStyle.has(key)) {
+            return fallback;
+        }
+        return (int) Math.round(rawStyle.optDouble(key, fallback));
+    }
+
+    private int centerTabIndex() {
+        if (!tabbarStyle.isCurve() || tabItems.isEmpty()) {
+            return -1;
+        }
+        if (tabbarStyle.centerItemId != null) {
+            for (int index = 0; index < tabItems.size(); index++) {
+                if (tabbarStyle.centerItemId.equals(tabItems.get(index).id)) {
+                    return index;
+                }
+            }
+        }
+        return tabItems.size() / 2;
+    }
+
+    private void applyTabbarColors(PluginCall call, JSObject colors) {
         boolean dynamic = Boolean.TRUE.equals(colors.getBool("dynamic"));
         int tintFallback = dynamic ? dynamicColor("system_accent1_600", tintColor) : tintColor;
         int inactiveFallback = dynamic ? dynamicColor("system_neutral2_600", inactiveTintColor) : inactiveTintColor;
         int backgroundFallback = dynamic
             ? withAlpha(dynamicColor(isNightMode() ? "system_neutral1_900" : "system_neutral1_50", Color.WHITE), 245)
             : Color.argb(235, 255, 255, 255);
-        int tint = parseColor(colors.getString("tint", null), tintFallback);
-        int inactiveTint = parseColor(colors.getString("inactiveTint", null), inactiveFallback);
-        int background = parseColor(colors.getString("background", null), backgroundFallback);
-        tabbarBackgroundColor = background;
-        tintColor = tint;
-        inactiveTintColor = inactiveTint;
-        int[][] states = new int[][] { new int[] { android.R.attr.state_checked }, new int[] {} };
-        int[] colorState = new int[] { tint, inactiveTint };
-        ColorStateList colorStateList = new ColorStateList(states, colorState);
-        nativeTabbar.setItemIconTintList(colorStateList);
-        nativeTabbar.setItemTextColor(colorStateList);
-        nativeTabbar.setItemActiveIndicatorEnabled(!call.getBoolean("disableIndicator", false));
-        Integer indicator = colorOption(call, colors, "indicatorColor", "indicator", null);
-        nativeTabbar.setItemActiveIndicatorColor(indicator == null ? null : ColorStateList.valueOf(indicator));
-        Integer ripple = colorOption(call, colors, "rippleColor", "ripple", null);
-        nativeTabbar.setItemRippleColor(ripple == null ? null : ColorStateList.valueOf(ripple));
-        nativeTabbar.setBackgroundColor(Color.TRANSPARENT);
-        applyTabbarMetrics(nativeTabbar);
-        applyChromeBackground(
-            tabbarContainer,
-            tabbarGlassBackdrop,
-            tabbarGlassSurface,
-            background,
-            tabbarGlassOptions,
-            tabbarCornerRadius()
-        );
-    }
-
-    private void reapplyVisibleChromeBackgrounds() {
-        if (navbarContainer != null && navbarContainer.getVisibility() == View.VISIBLE) {
-            applyChromeBackground(navbarContainer, navbarGlassBackdrop, navbarGlassSurface, navbarBackgroundColor, navbarGlassOptions, 0f);
+        tintColor = parseColor(colors.getString("tint", null), tintFallback);
+        inactiveTintColor = parseColor(colors.getString("inactiveTint", null), inactiveFallback);
+        tabbarBackgroundColor = parseColor(colors.getString("background", null), backgroundFallback);
+        if (tabbar != null) {
+            tabbar.setTabbarStyle(tabbarStyle, tabbarBackgroundColor, centerTabIndex());
         }
-        if (tabbarContainer != null && tabbarContainer.getVisibility() == View.VISIBLE) {
-            applyChromeBackground(
-                tabbarContainer,
-                tabbarGlassBackdrop,
-                tabbarGlassSurface,
-                tabbarBackgroundColor,
-                tabbarGlassOptions,
-                tabbarCornerRadius()
-            );
-        }
-    }
-
-    private void applyChromeBackground(
-        ViewGroup container,
-        GlassBackdropView backdrop,
-        View surface,
-        int background,
-        GlassOptions glassOptions,
-        float cornerRadius
-    ) {
-        if (container == null) {
-            return;
-        }
-        GlassOptions resolvedGlassOptions = glassOptions == null ? GlassOptions.defaults() : glassOptions;
-        if (!resolvedGlassOptions.isLiquidGlass()) {
-            hideGlassBackground(backdrop, surface);
-            container.setBackground(chromeBackgroundDrawable(background, cornerRadius));
-            return;
-        }
-
-        container.setBackgroundColor(Color.TRANSPARENT);
-        int surfaceColor = glassSurfaceColor(background, resolvedGlassOptions);
-        if (surface != null) {
-            surface.setBackground(chromeBackgroundDrawable(surfaceColor, cornerRadius));
-            surface.setVisibility(View.VISIBLE);
-        }
-        if (backdrop != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            View webView = getBridge() == null ? null : getBridge().getWebView();
-            backdrop.configure(webView, dp(resolvedGlassOptions.blurRadiusDp), surfaceColor);
-            backdrop.setVisibility(View.VISIBLE);
-        } else if (backdrop != null) {
-            backdrop.clearEffect();
-            backdrop.setVisibility(View.GONE);
-        }
-    }
-
-    private void hideGlassBackground(GlassBackdropView backdrop, View surface) {
-        if (backdrop != null) {
-            backdrop.clearEffect();
-            backdrop.setVisibility(View.GONE);
-        }
-        if (surface != null) {
-            surface.setBackground(null);
-            surface.setVisibility(View.GONE);
-        }
-    }
-
-    private Drawable chromeBackgroundDrawable(int color, float cornerRadius) {
-        GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(color);
-        if (cornerRadius > 0f) {
-            drawable.setCornerRadius(cornerRadius);
-        }
-        return drawable;
-    }
-
-    private int glassSurfaceColor(int background, GlassOptions glassOptions) {
-        return withAlpha(background, Math.round(Color.alpha(background) * (float) glassOptions.surfaceAlpha));
     }
 
     private int parseColor(String value, int fallback) {
@@ -1279,94 +1451,15 @@ public class NativeNavigationPlugin extends Plugin {
         return Color.argb(Math.max(0, Math.min(255, alpha)), Color.red(color), Color.green(color), Color.blue(color));
     }
 
+    private Drawable selectableItemBackground() {
+        TypedValue outValue = new TypedValue();
+        getContext().getTheme().resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, outValue, true);
+        return AppCompatResources.getDrawable(getContext(), outValue.resourceId);
+    }
+
     private boolean isNightMode() {
         int mode = getContext().getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
         return mode == Configuration.UI_MODE_NIGHT_YES;
-    }
-
-    private void fillContainer(View view) {
-        if (view != null) {
-            view.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        }
-    }
-
-    private boolean isLiquidGlassTabbar() {
-        return tabbarGlassOptions != null && tabbarGlassOptions.isLiquidGlass();
-    }
-
-    private int tabbarHeight() {
-        return dp(isLiquidGlassTabbar() ? LIQUID_GLASS_TABBAR_DP : DEFAULT_TABBAR_DP);
-    }
-
-    private float tabbarCornerRadius() {
-        return tabbarHeight() / 2f;
-    }
-
-    private int tabbarWidth(int rootWidth) {
-        if (isLiquidGlassTabbar()) {
-            return Math.min(Math.max(0, rootWidth - dp(LIQUID_GLASS_TABBAR_SIDE_MARGIN_DP * 2)), dp(LIQUID_GLASS_TABBAR_MAX_WIDTH_DP));
-        }
-        return Math.min(Math.max(0, rootWidth - dp(48)), dp(420));
-    }
-
-    private int floatingTabbarBottomMargin(int navigationInset) {
-        if (isLiquidGlassTabbar()) {
-            return Math.max(dp(LIQUID_GLASS_TABBAR_FLOATING_BOTTOM_GAP_DP), navigationInset);
-        }
-        return navigationInset + dp(TABBAR_FLOATING_BOTTOM_GAP_DP);
-    }
-
-    private void applyTabbarMetrics(BottomNavigationView nativeTabbar) {
-        boolean liquidGlass = isLiquidGlassTabbar();
-        nativeTabbar.setMinimumHeight(tabbarHeight());
-        nativeTabbar.setPadding(0, liquidGlass ? dp(LIQUID_GLASS_TABBAR_CONTENT_TOP_PADDING_DP) : 0, 0, 0);
-        nativeTabbar.setItemPaddingTop(dp(liquidGlass ? LIQUID_GLASS_TABBAR_ITEM_VERTICAL_PADDING_DP : TABBAR_ITEM_VERTICAL_PADDING_DP));
-        nativeTabbar.setItemPaddingBottom(dp(liquidGlass ? LIQUID_GLASS_TABBAR_ITEM_VERTICAL_PADDING_DP : TABBAR_ITEM_VERTICAL_PADDING_DP));
-        nativeTabbar.setItemActiveIndicatorHeight(dp(liquidGlass ? LIQUID_GLASS_TABBAR_INDICATOR_DP : TABBAR_INDICATOR_DP));
-        nativeTabbar.setActiveIndicatorLabelPadding(
-            dp(liquidGlass ? LIQUID_GLASS_TABBAR_INDICATOR_LABEL_PADDING_DP : TABBAR_INDICATOR_LABEL_PADDING_DP)
-        );
-        alignTabbarMenu(nativeTabbar, liquidGlass);
-        nativeTabbar.post(() -> alignTabbarMenu(nativeTabbar, isLiquidGlassTabbar()));
-    }
-
-    private void alignTabbarMenu(BottomNavigationView nativeTabbar, boolean liquidGlass) {
-        nativeTabbar.setClipChildren(false);
-        nativeTabbar.setClipToPadding(false);
-        if (nativeTabbar.getChildCount() == 0) {
-            return;
-        }
-        View menuView = nativeTabbar.getChildAt(0);
-        ViewGroup.LayoutParams currentParams = menuView.getLayoutParams();
-        FrameLayout.LayoutParams menuParams =
-            currentParams instanceof FrameLayout.LayoutParams
-                ? (FrameLayout.LayoutParams) currentParams
-                : new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-        menuParams.width = ViewGroup.LayoutParams.MATCH_PARENT;
-        menuParams.height = liquidGlass ? ViewGroup.LayoutParams.MATCH_PARENT : ViewGroup.LayoutParams.WRAP_CONTENT;
-        menuParams.gravity = liquidGlass ? Gravity.CENTER : Gravity.TOP;
-        menuView.setLayoutParams(menuParams);
-        menuView.setTranslationY(liquidGlass ? dp(LIQUID_GLASS_TABBAR_CONTENT_TRANSLATION_Y_DP) : 0f);
-        if (menuView instanceof ViewGroup) {
-            ViewGroup menuGroup = (ViewGroup) menuView;
-            menuGroup.setClipChildren(false);
-            menuGroup.setClipToPadding(false);
-            translateTabbarLabels(menuGroup, liquidGlass ? dp(LIQUID_GLASS_TABBAR_LABEL_TRANSLATION_Y_DP) : 0f);
-        }
-    }
-
-    private void translateTabbarLabels(View view, float translationY) {
-        if (view instanceof TextView) {
-            view.setTranslationY(translationY);
-            return;
-        }
-        if (!(view instanceof ViewGroup)) {
-            return;
-        }
-        ViewGroup group = (ViewGroup) view;
-        for (int index = 0; index < group.getChildCount(); index++) {
-            translateTabbarLabels(group.getChildAt(index), translationY);
-        }
     }
 
     private void layoutChrome() {
@@ -1377,8 +1470,8 @@ public class NativeNavigationPlugin extends Plugin {
         int status = statusBarInset();
         int bottom = navigationBarInset();
         int navbarHeight = navbarVisible ? status + dp(DEFAULT_NAVBAR_DP) : 0;
-        int tabbarHeight = tabbarHeight();
-        int tabbarBottomMargin = tabbarVisible ? floatingTabbarBottomMargin(bottom) : bottom;
+        int tabbarHeight = dp(tabbarStyle.totalHeight());
+        int tabbarBottomMargin = tabbarVisible ? bottom + dp(tabbarStyle.bottomGap) : bottom;
 
         if (navbarContainer != null) {
             FrameLayout.LayoutParams containerParams = new FrameLayout.LayoutParams(
@@ -1387,8 +1480,6 @@ public class NativeNavigationPlugin extends Plugin {
                 Gravity.TOP
             );
             navbarContainer.setLayoutParams(containerParams);
-            fillContainer(navbarGlassBackdrop);
-            fillContainer(navbarGlassSurface);
             FrameLayout.LayoutParams toolbarParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 dp(DEFAULT_NAVBAR_DP),
@@ -1400,7 +1491,9 @@ public class NativeNavigationPlugin extends Plugin {
 
         if (tabbarContainer != null) {
             int rootWidth = root.getWidth() > 0 ? root.getWidth() : Resources.getSystem().getDisplayMetrics().widthPixels;
-            int tabbarWidth = tabbarWidth(rootWidth);
+            int availableWidth = Math.max(0, rootWidth - dp(tabbarStyle.horizontalMargin) * 2);
+            int maxWidth = tabbarStyle.maxWidth > 0 ? dp(tabbarStyle.maxWidth) : availableWidth;
+            int tabbarWidth = Math.min(availableWidth, maxWidth);
             FrameLayout.LayoutParams tabbarContainerParams = new FrameLayout.LayoutParams(
                 tabbarWidth,
                 tabbarHeight,
@@ -1408,23 +1501,15 @@ public class NativeNavigationPlugin extends Plugin {
             );
             tabbarContainerParams.bottomMargin = tabbarBottomMargin;
             tabbarContainer.setLayoutParams(tabbarContainerParams);
-            fillContainer(tabbarGlassBackdrop);
-            fillContainer(tabbarGlassSurface);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                tabbarContainer.invalidateOutline();
-                tabbarGlassBackdrop.invalidateOutline();
-                tabbarGlassSurface.invalidateOutline();
-            }
         }
 
         if (tabbar != null) {
-            applyTabbarMetrics(tabbar);
             FrameLayout.LayoutParams tabbarParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             );
             tabbar.setLayoutParams(tabbarParams);
-            tabbar.setPadding(0, isLiquidGlassTabbar() ? dp(LIQUID_GLASS_TABBAR_CONTENT_TOP_PADDING_DP) : 0, 0, 0);
+            tabbar.setPadding(0, 0, 0, 0);
         }
 
         bringChromeToFront();
@@ -1480,15 +1565,14 @@ public class NativeNavigationPlugin extends Plugin {
     }
 
     private JSObject currentInsets() {
-        int navbarHeight = navbarVisible ? statusBarInset() + dp(DEFAULT_NAVBAR_DP) : 0;
-        int top = navbarVisible ? navbarHeight : 0;
-        int bottom = tabbarVisible ? floatingTabbarBottomMargin(navigationBarInset()) + tabbarHeight() : 0;
+        int top = navbarVisible ? statusBarInset() + dp(DEFAULT_NAVBAR_DP) : 0;
+        int bottom = tabbarVisible ? navigationBarInset() + dp(tabbarStyle.totalHeight()) + dp(tabbarStyle.bottomGap) : 0;
         JSObject insets = new JSObject();
         insets.put("top", top);
         insets.put("right", 0);
         insets.put("bottom", bottom);
         insets.put("left", 0);
-        insets.put("navbarHeight", navbarHeight);
+        insets.put("navbarHeight", top);
         insets.put("tabbarHeight", bottom);
         return insets;
     }
@@ -1589,10 +1673,7 @@ public class NativeNavigationPlugin extends Plugin {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             WindowInsets insets = getActivity().getWindow().getDecorView().getRootWindowInsets();
             if (insets != null) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    return insets.getInsets(WindowInsets.Type.navigationBars()).bottom;
-                }
-                return insets.getSystemWindowInsetBottom();
+                return insets.getStableInsetBottom();
             }
         }
         return systemDimension("navigation_bar_height");
@@ -1605,208 +1686,6 @@ public class NativeNavigationPlugin extends Plugin {
 
     private int dp(int value) {
         return Math.round(value * getContext().getResources().getDisplayMetrics().density);
-    }
-
-    private float dp(double value) {
-        return (float) (value * getContext().getResources().getDisplayMetrics().density);
-    }
-
-    private static final class GlassOptions {
-
-        private static final String EFFECT_NONE = "none";
-        private static final String EFFECT_LIQUID_GLASS = "liquidGlass";
-        private static final double DEFAULT_BLUR_RADIUS_DP = 18d;
-        private static final double DEFAULT_SURFACE_ALPHA = 0.62d;
-
-        final String effect;
-        final double blurRadiusDp;
-        final double surfaceAlpha;
-
-        GlassOptions(String effect, double blurRadiusDp, double surfaceAlpha) {
-            this.effect = effect;
-            this.blurRadiusDp = Math.max(0d, blurRadiusDp);
-            this.surfaceAlpha = Math.max(0d, Math.min(1d, surfaceAlpha));
-        }
-
-        static GlassOptions defaults() {
-            return new GlassOptions(EFFECT_NONE, DEFAULT_BLUR_RADIUS_DP, DEFAULT_SURFACE_ALPHA);
-        }
-
-        static GlassOptions from(JSObject raw, GlassOptions fallback) {
-            GlassOptions base = fallback == null ? defaults() : fallback;
-            if (raw == null) {
-                return base;
-            }
-
-            String effect = raw.optString("effect", base.effect);
-            if (!EFFECT_NONE.equals(effect) && !EFFECT_LIQUID_GLASS.equals(effect)) {
-                effect = base.effect;
-            }
-            double blurRadiusDp = raw.has("blurRadius") ? raw.optDouble("blurRadius", base.blurRadiusDp) : base.blurRadiusDp;
-            double surfaceAlpha = raw.has("surfaceAlpha") ? raw.optDouble("surfaceAlpha", base.surfaceAlpha) : base.surfaceAlpha;
-            return new GlassOptions(effect, blurRadiusDp, surfaceAlpha);
-        }
-
-        boolean isLiquidGlass() {
-            return EFFECT_LIQUID_GLASS.equals(effect);
-        }
-    }
-
-    private static final class GlassBackdropView extends View {
-
-        private static final long SOURCE_CONTENT_REFRESH_INTERVAL_MS = 250L;
-
-        private final Paint fallbackPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final int[] sourceLocation = new int[2];
-        private final int[] viewLocation = new int[2];
-        private final ViewTreeObserver.OnScrollChangedListener sourceScrollListener = this::markDirty;
-        private final ViewTreeObserver.OnPreDrawListener sourcePreDrawListener = () -> {
-            markDirtyFromSourcePreDraw();
-            return true;
-        };
-        private final View.OnLayoutChangeListener sourceLayoutListener = (
-            view,
-            left,
-            top,
-            right,
-            bottom,
-            oldLeft,
-            oldTop,
-            oldRight,
-            oldBottom
-        ) -> markDirty();
-        private View source;
-        private int fallbackColor = Color.TRANSPARENT;
-        private boolean dirty;
-        private boolean redrawPending;
-        private long lastSourcePreDrawRefreshMs;
-
-        GlassBackdropView(android.content.Context context) {
-            super(context);
-            setWillNotDraw(false);
-        }
-
-        void configure(View source, float blurRadiusPx, int fallbackColor) {
-            this.fallbackColor = fallbackColor;
-            attachSource(source);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                Api31RenderEffects.setBlur(this, blurRadiusPx);
-            }
-            markDirty();
-        }
-
-        void clearEffect() {
-            attachSource(null);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                Api31RenderEffects.clear(this);
-            }
-            markDirty();
-        }
-
-        private void attachSource(View nextSource) {
-            if (source == nextSource) {
-                return;
-            }
-            if (source != null) {
-                source.removeOnLayoutChangeListener(sourceLayoutListener);
-                ViewTreeObserver observer = source.getViewTreeObserver();
-                if (observer.isAlive()) {
-                    observer.removeOnScrollChangedListener(sourceScrollListener);
-                    observer.removeOnPreDrawListener(sourcePreDrawListener);
-                }
-            }
-            source = nextSource;
-            if (source != null) {
-                source.addOnLayoutChangeListener(sourceLayoutListener);
-                ViewTreeObserver observer = source.getViewTreeObserver();
-                if (observer.isAlive()) {
-                    observer.addOnScrollChangedListener(sourceScrollListener);
-                    observer.addOnPreDrawListener(sourcePreDrawListener);
-                }
-            }
-            markDirty();
-        }
-
-        private void markDirty() {
-            dirty = true;
-            scheduleRedrawIfVisible();
-        }
-
-        private void markDirtyFromSourcePreDraw() {
-            dirty = true;
-            long now = System.currentTimeMillis();
-            if (now - lastSourcePreDrawRefreshMs < SOURCE_CONTENT_REFRESH_INTERVAL_MS) {
-                return;
-            }
-            lastSourcePreDrawRefreshMs = now;
-            scheduleRedrawIfVisible();
-        }
-
-        private void scheduleRedrawIfVisible() {
-            if (redrawPending || getVisibility() != View.VISIBLE || !isShown()) {
-                return;
-            }
-            redrawPending = true;
-            postInvalidateOnAnimation();
-        }
-
-        @Override
-        protected void onDraw(Canvas canvas) {
-            super.onDraw(canvas);
-            View currentSource = source;
-            if (currentSource == null || currentSource.getWidth() <= 0 || currentSource.getHeight() <= 0) {
-                fallbackPaint.setColor(fallbackColor);
-                canvas.drawRect(0, 0, getWidth(), getHeight(), fallbackPaint);
-            } else {
-                currentSource.getLocationOnScreen(sourceLocation);
-                getLocationOnScreen(viewLocation);
-                canvas.save();
-                canvas.translate(sourceLocation[0] - viewLocation[0], sourceLocation[1] - viewLocation[1]);
-                currentSource.draw(canvas);
-                canvas.restore();
-            }
-
-            dirty = false;
-            redrawPending = false;
-        }
-
-        @Override
-        protected void onSizeChanged(int width, int height, int oldWidth, int oldHeight) {
-            super.onSizeChanged(width, height, oldWidth, oldHeight);
-            if (width != oldWidth || height != oldHeight) {
-                markDirty();
-            }
-        }
-
-        @Override
-        protected void onVisibilityChanged(View changedView, int visibility) {
-            super.onVisibilityChanged(changedView, visibility);
-            if (visibility != View.VISIBLE) {
-                redrawPending = false;
-                return;
-            }
-            if (dirty) {
-                scheduleRedrawIfVisible();
-            }
-        }
-    }
-
-    @RequiresApi(Build.VERSION_CODES.S)
-    private static final class Api31RenderEffects {
-
-        static void setBlur(View view, float blurRadiusPx) {
-            if (blurRadiusPx <= 0f) {
-                view.setRenderEffect(null);
-                return;
-            }
-            view.setRenderEffect(
-                android.graphics.RenderEffect.createBlurEffect(blurRadiusPx, blurRadiusPx, android.graphics.Shader.TileMode.CLAMP)
-            );
-        }
-
-        static void clear(View view) {
-            view.setRenderEffect(null);
-        }
     }
 
     private void runOnUiThread(Runnable runnable) {
