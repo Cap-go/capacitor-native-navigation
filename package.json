@@ -1,6 +1,6 @@
 {
   "name": "@capgo/capacitor-native-navigation",
-  "version": "8.0.24",
+  "version": "8.1.1",
   "description": "Capacitor plugin for native navbar, tabbar, safe-area handling, and WebView snapshot transitions.",
   "main": "dist/plugin.cjs.js",
   "module": "dist/esm/index.js",
@@ -53,11 +53,12 @@
     "prepublishOnly": "bun run build",
     "check:wiring": "node scripts/check-capacitor-plugin-wiring.mjs",
     "demo:readme": "bun scripts/generate-readme-demos.mjs",
-    "example:build": "bun run build && cd example-app && bun install && bun run build",
+    "example:build": "bun run build && cd example-app && bun install --frozen-lockfile && bun run build",
     "example:capgo:deploy": "bun run example:build && bun scripts/deploy-example-capgo.mjs",
     "example:sync": "bun run example:build && cd example-app && bunx cap sync",
     "example:ios": "bun run example:build && cd example-app && ([ -d ios ] || bunx cap add ios) && bunx cap sync ios && bunx cap run ios",
-    "example:android": "bun run example:build && cd example-app && ([ -d android ] || bunx cap add android) && bunx cap sync android && bunx cap run android"
+    "example:android": "bun run example:build && cd example-app && ([ -d android ] || bunx cap add android) && bunx cap sync android && bunx cap run android",
+    "example:install": "cd example-app && bun install --frozen-lockfile"
   },
   "devDependencies": {
     "@capacitor/android": "^8.0.0",

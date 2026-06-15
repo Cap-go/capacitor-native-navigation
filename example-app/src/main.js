@@ -217,7 +217,11 @@ app.addEventListener('click', async (event) => {
   }
   if (target.dataset.action === 'toggle-tabbar') {
     const isDetailHidden = route === 'detail';
-    await NativeNavigation.setTabbar({ hidden: !isDetailHidden && app.dataset.tabbarHidden !== 'true', tabs, selectedId: activeTab });
+    await NativeNavigation.setTabbar({
+      hidden: !isDetailHidden && app.dataset.tabbarHidden !== 'true',
+      tabs,
+      selectedId: activeTab,
+    });
     app.dataset.tabbarHidden = app.dataset.tabbarHidden === 'true' ? 'false' : 'true';
     return;
   }
