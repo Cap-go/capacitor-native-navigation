@@ -1279,12 +1279,11 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         for (index, item) in items.enumerated() {
             guard tabDisplayTitles.indices.contains(index),
                   let title = tabDisplayTitles[index],
-                  !title.isEmpty,
-                  tabBaseImages.indices.contains(index),
-                  let icon = tabBaseImages[index] ?? item.image else {
+                  !title.isEmpty else {
                 continue
             }
 
+            let icon = tabBaseImages.indices.contains(index) ? (tabBaseImages[index] ?? item.image) : item.image
             let selectedIcon = tabSelectedImages.indices.contains(index)
                 ? (tabSelectedImages[index] ?? icon)
                 : icon
@@ -1307,7 +1306,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         return labelVisibilityMode == "labeled"
     }
 
-    private func makeTabBarItemImage(icon: UIImage, title: String, color: UIColor) -> UIImage {
+    private func makeTabBarItemImage(icon: UIImage?, title: String, color: UIColor) -> UIImage {
         let iconSize = CGSize(width: 27, height: 27)
         let font = UIFont.systemFont(ofSize: 10, weight: .regular)
         let paragraphStyle = NSMutableParagraphStyle()
@@ -1326,17 +1325,19 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         format.scale = UIScreen.main.scale
 
         let image = UIGraphicsImageRenderer(size: imageSize, format: format).image { _ in
-            let tintedIcon = icon.withTintColor(color, renderingMode: .alwaysOriginal)
-            let iconFrame = aspectFitRect(
-                size: tintedIcon.size,
-                in: CGRect(
-                    x: (imageSize.width - iconSize.width) / 2,
-                    y: 0,
-                    width: iconSize.width,
-                    height: iconSize.height
+            if let icon {
+                let tintedIcon = icon.withTintColor(color, renderingMode: .alwaysOriginal)
+                let iconFrame = aspectFitRect(
+                    size: tintedIcon.size,
+                    in: CGRect(
+                        x: (imageSize.width - iconSize.width) / 2,
+                        y: 0,
+                        width: iconSize.width,
+                        height: iconSize.height
+                    )
                 )
-            )
-            tintedIcon.draw(in: iconFrame)
+                tintedIcon.draw(in: iconFrame)
+            }
             (title as NSString).draw(
                 in: CGRect(
                     x: 0,
