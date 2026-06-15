@@ -230,10 +230,10 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                     icons: icons,
                     style: self.tabbarStyle
                 )
-                tabBar.onSelect = { [weak self] index, item in
+                tabBar.onSelect = { [weak self] _, item in
                     self?.notifyListeners("tabSelect", data: [
                         "id": item.id,
-                        "index": index,
+                        "index": item.sourceIndex,
                         "title": item.title
                     ])
                 }
@@ -1000,34 +1000,42 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
         return (items, selectedIndex)
     }
-
     private func makeFloatingTabBarItems(
         _ tabs: [[String: Any]],
         selectedId: String?,
         icons: Bool
     ) -> ([NativeNavigationFloatingTabItem], Int?) {
         var selectedIndex: Int?
-        let items = tabs.enumerated().map { index, tab -> NativeNavigationFloatingTabItem in
-            let id = tab["id"] as? String ?? "tab-\(index)"
+        var items: [NativeNavigationFloatingTabItem] = []
+
+        for (sourceIndex, tab) in tabs.enumerated() {
+            let id = tab["id"] as? String ?? "tab-\(sourceIndex)"
+            let isHidden = tab["hidden"] as? Bool ?? false
+            if isHidden && id != selectedId {
+                continue
+            }
+
+            let visibleIndex = items.count
             let title = tab["title"] as? String ?? ""
             let image = icons ? self.image(from: tab["icon"] as? [String: Any]) : nil
             let selectedImage = icons ? self.image(from: tab["selectedIcon"] as? [String: Any]) : nil
             if id == selectedId {
-                selectedIndex = index
+                selectedIndex = visibleIndex
             }
-            return NativeNavigationFloatingTabItem(
+            items.append(NativeNavigationFloatingTabItem(
                 id: id,
                 title: title,
                 accessibilityTitle: title.isEmpty ? id : title,
                 image: image,
                 selectedImage: selectedImage,
                 badge: tab["badge"].map { String(describing: $0) },
-                enabled: tab["enabled"] as? Bool ?? true
-            )
+                enabled: tab["enabled"] as? Bool ?? true,
+                sourceIndex: sourceIndex
+            ))
         }
+
         return (items, selectedIndex)
     }
-
     private func tabTitle(
         _ title: String?,
         id: String,
@@ -1769,7 +1777,6 @@ private struct SVGRenderStyle {
         }
     }
 }
-
 private struct NativeNavigationFloatingTabItem {
     let id: String
     let title: String
@@ -1778,6 +1785,7 @@ private struct NativeNavigationFloatingTabItem {
     let selectedImage: UIImage?
     let badge: String?
     let enabled: Bool
+    let sourceIndex: Int
 }
 
 private enum NativeNavigationTabbarShape {
