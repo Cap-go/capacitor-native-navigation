@@ -1437,17 +1437,19 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         }
 
         for (index, item) in items.enumerated() {
-            guard tabDisplayTitles.indices.contains(index),
-                  let title = tabDisplayTitles[index],
-                  !title.isEmpty else {
-                continue
-            }
-
+            let title = tabDisplayTitles.indices.contains(index) ? (tabDisplayTitles[index] ?? "") : (item.title ?? "")
             let icon = tabBaseImages.indices.contains(index) ? (tabBaseImages[index] ?? item.image) : item.image
             let selectedIcon = tabSelectedImages.indices.contains(index)
                 ? (tabSelectedImages[index] ?? icon)
                 : icon
-            item.accessibilityLabel = tabTitles.indices.contains(item.tag) ? tabTitles[item.tag] : title
+            guard !title.isEmpty || icon != nil || selectedIcon != nil else {
+                continue
+            }
+
+            let accessibilityTitle = tabTitles.indices.contains(item.tag) ? tabTitles[item.tag] : title
+            if !accessibilityTitle.isEmpty {
+                item.accessibilityLabel = accessibilityTitle
+            }
             item.title = ""
             item.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: 100)
             item.image = makeTabBarItemImage(icon: icon, title: title, color: inactiveTint)
@@ -1463,7 +1465,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
         let labels = call.getBool("labels", true)
         let labelVisibilityMode = call.getString("labelVisibilityMode") ?? (labels ? "labeled" : "unlabeled")
-        return labelVisibilityMode == "labeled"
+        return labelVisibilityMode == "labeled" || labelVisibilityMode == "unlabeled"
     }
 
     private func makeTabBarItemImage(icon: UIImage?, title: String, color: UIColor) -> UIImage {
@@ -1476,11 +1478,11 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             .foregroundColor: color,
             .paragraphStyle: paragraphStyle
         ]
-        let titleSize = (title as NSString).size(withAttributes: attributes)
-        let imageSize = CGSize(
-            width: max(iconSize.width, ceil(titleSize.width)) + 8,
-            height: iconSize.height + 3 + ceil(titleSize.height)
-        )
+        let hasTitle = !title.isEmpty
+        let titleSize = hasTitle ? (title as NSString).size(withAttributes: attributes) : .zero
+        let imageSize = hasTitle
+            ? CGSize(width: max(iconSize.width, ceil(titleSize.width)) + 8, height: iconSize.height + 3 + ceil(titleSize.height))
+            : iconSize
         let format = UIGraphicsImageRendererFormat()
         format.scale = UIScreen.main.scale
 
@@ -1498,15 +1500,17 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 )
                 tintedIcon.draw(in: iconFrame)
             }
-            (title as NSString).draw(
-                in: CGRect(
-                    x: 0,
-                    y: iconSize.height + 3,
-                    width: imageSize.width,
-                    height: ceil(titleSize.height)
-                ),
-                withAttributes: attributes
-            )
+            if hasTitle {
+                (title as NSString).draw(
+                    in: CGRect(
+                        x: 0,
+                        y: iconSize.height + 3,
+                        width: imageSize.width,
+                        height: ceil(titleSize.height)
+                    ),
+                    withAttributes: attributes
+                )
+            }
         }
 
         return image.withRenderingMode(.alwaysOriginal)
