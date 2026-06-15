@@ -112,6 +112,8 @@ public class NativeNavigationPlugin extends Plugin {
                 defaultTransitionMs = Math.max(0, duration.intValue());
             }
             if (!enabled) {
+                navbarVisible = false;
+                tabbarVisible = false;
                 if (navbarContainer != null) {
                     navbarContainer.setVisibility(View.GONE);
                 }
