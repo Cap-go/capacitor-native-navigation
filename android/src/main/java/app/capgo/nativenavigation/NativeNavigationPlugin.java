@@ -61,10 +61,12 @@ public class NativeNavigationPlugin extends Plugin {
     private static final int DEFAULT_TABBAR_DP = 64;
     private static final int DEFAULT_TRANSITION_MS = 350;
     private static final int MENU_ITEM_BASE = 10_000;
+    private static final int DEFAULT_TABBAR_BACKGROUND_COLOR = Color.WHITE;
 
     private final NativeNavigation implementation = new NativeNavigation();
     private FrameLayout navbarContainer;
     private FrameLayout tabbarContainer;
+    private View tabbarBackdrop;
     private Toolbar toolbar;
     private NativeTabbarLayout tabbar;
     private ImageView transitionSnapshot;
@@ -76,7 +78,7 @@ public class NativeNavigationPlugin extends Plugin {
     private int activeTransitionMs = DEFAULT_TRANSITION_MS;
     private int tintColor = Color.rgb(0, 122, 255);
     private int inactiveTintColor = Color.rgb(120, 126, 137);
-    private int tabbarBackgroundColor = Color.argb(235, 255, 255, 255);
+    private int tabbarBackgroundColor = DEFAULT_TABBAR_BACKGROUND_COLOR;
     private int badgeBackgroundColor = Color.rgb(255, 59, 48);
     private int badgeTextColor = Color.WHITE;
     private TabbarStyle tabbarStyle = TabbarStyle.defaults(Color.rgb(0, 122, 255));
@@ -118,6 +120,9 @@ public class NativeNavigationPlugin extends Plugin {
                 }
                 if (tabbarContainer != null) {
                     tabbarContainer.setVisibility(View.GONE);
+                }
+                if (tabbarBackdrop != null) {
+                    tabbarBackdrop.setVisibility(View.GONE);
                 }
             }
             updateInsetsAndNotify();
@@ -194,6 +199,9 @@ public class NativeNavigationPlugin extends Plugin {
                 if (tabbarContainer != null) {
                     tabbarContainer.setVisibility(View.GONE);
                 }
+                if (tabbarBackdrop != null) {
+                    tabbarBackdrop.setVisibility(View.GONE);
+                }
                 updateInsetsAndNotify();
                 call.resolve(insetsResult());
                 return;
@@ -239,6 +247,9 @@ public class NativeNavigationPlugin extends Plugin {
             renderTabbarItems(labelVisibilityMode, icons);
             if (tabbarContainer != null) {
                 tabbarContainer.setVisibility(View.VISIBLE);
+            }
+            if (tabbarBackdrop != null) {
+                tabbarBackdrop.setVisibility(View.VISIBLE);
             }
             nativeTabbar.setVisibility(View.VISIBLE);
             layoutChrome();
@@ -604,6 +615,8 @@ public class NativeNavigationPlugin extends Plugin {
             return tabbar;
         }
         FrameLayout root = contentRoot();
+        tabbarBackdrop = new View(getContext());
+        tabbarBackdrop.setBackgroundColor(tabbarBackgroundColor);
         tabbarContainer = new FrameLayout(getContext());
         tabbarContainer.setClipChildren(false);
         tabbarContainer.setClipToPadding(false);
@@ -618,6 +631,7 @@ public class NativeNavigationPlugin extends Plugin {
             new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         );
         if (root != null) {
+            root.addView(tabbarBackdrop);
             root.addView(tabbarContainer);
         } else {
             getActivity().addContentView(
@@ -982,7 +996,7 @@ public class NativeNavigationPlugin extends Plugin {
 
         private final Paint backgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private TabbarStyle style = TabbarStyle.defaults(Color.rgb(0, 122, 255));
-        private int backgroundColor = Color.argb(235, 255, 255, 255);
+        private int backgroundColor = DEFAULT_TABBAR_BACKGROUND_COLOR;
         private int centerIndex = -1;
 
         NativeTabbarLayout(Context context) {
@@ -1383,13 +1397,16 @@ public class NativeNavigationPlugin extends Plugin {
         int tintFallback = dynamic ? dynamicColor("system_accent1_600", tintColor) : tintColor;
         int inactiveFallback = dynamic ? dynamicColor("system_neutral2_600", inactiveTintColor) : inactiveTintColor;
         int backgroundFallback = dynamic
-            ? withAlpha(dynamicColor(isNightMode() ? "system_neutral1_900" : "system_neutral1_50", Color.WHITE), 245)
-            : Color.argb(235, 255, 255, 255);
+            ? dynamicColor(isNightMode() ? "system_neutral1_900" : "system_neutral1_50", DEFAULT_TABBAR_BACKGROUND_COLOR)
+            : DEFAULT_TABBAR_BACKGROUND_COLOR;
         tintColor = parseColor(colors.getString("tint", null), tintFallback);
         inactiveTintColor = parseColor(colors.getString("inactiveTint", null), inactiveFallback);
         tabbarBackgroundColor = parseColor(colors.getString("background", null), backgroundFallback);
         if (tabbar != null) {
             tabbar.setTabbarStyle(tabbarStyle, tabbarBackgroundColor, centerTabIndex());
+        }
+        if (tabbarBackdrop != null) {
+            tabbarBackdrop.setBackgroundColor(tabbarBackgroundColor);
         }
     }
 
@@ -1489,6 +1506,17 @@ public class NativeNavigationPlugin extends Plugin {
             toolbar.setLayoutParams(toolbarParams);
         }
 
+        if (tabbarBackdrop != null) {
+            int backdropHeight = tabbarVisible ? bottom + dp(tabbarStyle.bottomGap) : 0;
+            FrameLayout.LayoutParams backdropParams = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                backdropHeight,
+                Gravity.BOTTOM
+            );
+            tabbarBackdrop.setLayoutParams(backdropParams);
+            tabbarBackdrop.setBackgroundColor(tabbarBackgroundColor);
+            tabbarBackdrop.setVisibility(tabbarVisible && backdropHeight > 0 ? View.VISIBLE : View.GONE);
+        }
         if (tabbarContainer != null) {
             int rootWidth = root.getWidth() > 0 ? root.getWidth() : Resources.getSystem().getDisplayMetrics().widthPixels;
             int availableWidth = Math.max(0, rootWidth - dp(tabbarStyle.horizontalMargin) * 2);
@@ -1518,6 +1546,9 @@ public class NativeNavigationPlugin extends Plugin {
     private void bringChromeToFront() {
         if (navbarContainer != null) {
             navbarContainer.bringToFront();
+        }
+        if (tabbarBackdrop != null) {
+            tabbarBackdrop.bringToFront();
         }
         if (tabbar != null) {
             tabbar.bringToFront();
