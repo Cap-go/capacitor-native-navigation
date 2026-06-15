@@ -152,7 +152,7 @@ const tabbarStyle = () =>
         shape: 'curve',
         centerItemId: 'capture',
         height: 80,
-        horizontalMargin: 16,
+        horizontalMargin: 24,
         maxWidth: 0,
         bottomGap: 0,
         cornerRadius: 30,
