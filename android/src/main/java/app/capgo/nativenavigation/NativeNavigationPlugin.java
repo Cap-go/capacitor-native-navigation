@@ -1067,7 +1067,7 @@ public class NativeNavigationPlugin extends Plugin {
                 int leftWidth = Math.max(0, Math.round(width / 2f - centerGap / 2f));
                 int rightX = Math.min(width, Math.round(width / 2f + centerGap / 2f));
                 View center = getChildAt(centerIndex);
-                int centerTop = Math.max(0, barTop - buttonDiameter / 2);
+                int centerTop = Math.max(0, barTop - dp(style.centerButtonLift));
                 center.layout((width - buttonDiameter) / 2, centerTop, (width + buttonDiameter) / 2, centerTop + buttonDiameter);
                 layoutRange(0, centerIndex, 0, barTop, leftWidth, barHeight);
                 layoutRange(centerIndex + 1, getChildCount(), rightX, barTop, width - rightX, barHeight);
