@@ -5,6 +5,23 @@ import { NativeNavigation } from '@capgo/capacitor-native-navigation';
 
 const app = document.getElementById('app');
 const isWebPreview = Capacitor.getPlatform() === 'web';
+const topButtonStorageKey = 'native-navigation-top-button-visible';
+
+const readTopButtonPreference = () => {
+  try {
+    return window.localStorage.getItem(topButtonStorageKey) !== 'false';
+  } catch {
+    return true;
+  }
+};
+
+const writeTopButtonPreference = (visible) => {
+  try {
+    window.localStorage.setItem(topButtonStorageKey, visible ? 'true' : 'false');
+  } catch {
+    // Ignore storage failures in restricted webviews.
+  }
+};
 
 void CapacitorUpdater.notifyAppReady().catch((error) => {
   console.warn('Capgo updater notifyAppReady failed', error);
@@ -66,6 +83,8 @@ let labelsEnabled = false;
 let iconsEnabled = true;
 let tabbarShape = 'curve';
 let tabbarHidden = false;
+let topButtonVisible = readTopButtonPreference();
+let chromeConfigured = false;
 const pages = {
   home: {
     title: 'Curved Tabbar',
@@ -131,6 +150,7 @@ const pages = {
         <label><input id="labels-toggle" type="checkbox" /> Tab labels</label>
         <label><input id="icons-toggle" type="checkbox" /> Tab icons</label>
         <label><input id="curve-toggle" type="checkbox" /> Curved center tabbar</label>
+        <label><input id="top-button-toggle" type="checkbox" /> Top button</label>
         <button data-action="refresh-version">Read native version</button>
         <pre id="version-output">Ready.</pre>
       </section>
@@ -199,6 +219,20 @@ const tabbarStyle = () =>
         maxWidth: 430,
         bottomGap: 10,
       };
+const topButtonItems = [
+  {
+    id: 'compose',
+    title: 'Compose',
+    icon: { svg: icons.compose },
+  },
+];
+
+const shouldShowTopButton = () => route === 'settings' && topButtonVisible;
+
+const setTopButtonVisible = (visible) => {
+  topButtonVisible = visible;
+  writeTopButtonPreference(visible);
+};
 
 const configureChrome = async () => {
   await NativeNavigation.configure({
@@ -214,6 +248,7 @@ const configureChrome = async () => {
       surfaceAlpha: 0.62,
     },
   });
+  chromeConfigured = true;
   await updateNavbar();
   await updateTabbar();
 };
@@ -230,13 +265,7 @@ const updateNavbar = async () => {
       visible: stack.length > 1,
       title: 'Back',
     },
-    rightItems: [
-      {
-        id: 'compose',
-        title: 'Compose',
-        icon: { svg: icons.compose },
-      },
-    ],
+    rightItems: shouldShowTopButton() ? topButtonItems : [],
   });
 };
 
@@ -252,10 +281,32 @@ const updateTabbar = async () => {
   });
 };
 
+const restoreChrome = async () => {
+  if (!chromeConfigured) {
+    return;
+  }
+  await updateNavbar();
+  await updateTabbar();
+};
+
+const clearNavbarActions = () => {
+  void NativeNavigation.setNavbar({
+    hidden: true,
+    title: '',
+    transparent: true,
+    backButton: { visible: false },
+    leftItems: [],
+    rightItems: [],
+  }).catch((error) => {
+    console.warn('Native navbar cleanup failed', error);
+  });
+};
+
 const syncControls = () => {
   const labelsToggle = document.getElementById('labels-toggle');
   const iconsToggle = document.getElementById('icons-toggle');
   const curveToggle = document.getElementById('curve-toggle');
+  const topButtonToggle = document.getElementById('top-button-toggle');
   if (labelsToggle) {
     labelsToggle.checked = labelsEnabled;
   }
@@ -264,6 +315,9 @@ const syncControls = () => {
   }
   if (curveToggle) {
     curveToggle.checked = tabbarShape === 'curve';
+  }
+  if (topButtonToggle) {
+    topButtonToggle.checked = topButtonVisible;
   }
 };
 
@@ -374,6 +428,10 @@ app.addEventListener('change', async (event) => {
     render();
     await updateTabbar();
   }
+  if (event.target.id === 'top-button-toggle') {
+    setTopButtonVisible(event.target.checked);
+    await updateNavbar();
+  }
 });
 
 NativeNavigation.addListener('navbarBack', async () => {
@@ -397,6 +455,19 @@ NativeNavigation.addListener('tabSelect', async (event) => {
 
 NativeNavigation.addListener('safeAreaChanged', (event) => {
   app.dataset.insets = JSON.stringify(event.insets);
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    clearNavbarActions();
+    return;
+  }
+  void restoreChrome();
+});
+
+window.addEventListener('pagehide', clearNavbarActions);
+window.addEventListener('pageshow', () => {
+  void restoreChrome();
 });
 
 render();
