@@ -665,7 +665,7 @@ public class NativeNavigationPlugin extends Plugin {
         }
         FrameLayout root = contentRoot();
         tabbarBackdrop = new View(getContext());
-        tabbarBackdrop.setBackgroundColor(tabbarBackgroundColor);
+        tabbarBackdrop.setBackgroundColor(resolvedTabbarSurfaceColor());
         tabbarContainer = new FrameLayout(getContext());
         tabbarContainer.setClipChildren(false);
         tabbarContainer.setClipToPadding(false);
@@ -1479,14 +1479,13 @@ public class NativeNavigationPlugin extends Plugin {
         if (tabbar == null) {
             return;
         }
+        int drawColor = resolvedTabbarSurfaceColor();
         if (tabbarBackdrop != null) {
-            tabbarBackdrop.setBackgroundColor(tabbarBackgroundColor);
+            tabbarBackdrop.setBackgroundColor(drawColor);
         }
 
-        int drawColor = tabbarBackgroundColor;
         GlassOptions resolvedGlassOptions = tabbarGlassOptions == null ? GlassOptions.defaults() : tabbarGlassOptions;
         if (resolvedGlassOptions.isLiquidGlass()) {
-            drawColor = glassSurfaceColor(tabbarBackgroundColor, resolvedGlassOptions);
             if (tabbarContainer != null) {
                 tabbarContainer.setBackgroundColor(Color.TRANSPARENT);
             }
@@ -1512,6 +1511,11 @@ public class NativeNavigationPlugin extends Plugin {
         }
 
         tabbar.setTabbarStyle(tabbarStyle, drawColor, centerIndex);
+    }
+
+    private int resolvedTabbarSurfaceColor() {
+        GlassOptions resolvedGlassOptions = tabbarGlassOptions == null ? GlassOptions.defaults() : tabbarGlassOptions;
+        return resolvedGlassOptions.isLiquidGlass() ? glassSurfaceColor(tabbarBackgroundColor, resolvedGlassOptions) : tabbarBackgroundColor;
     }
 
     private void reapplyVisibleChromeBackgrounds() {
@@ -1694,7 +1698,7 @@ public class NativeNavigationPlugin extends Plugin {
                 Gravity.BOTTOM
             );
             tabbarBackdrop.setLayoutParams(backdropParams);
-            tabbarBackdrop.setBackgroundColor(tabbarBackgroundColor);
+            tabbarBackdrop.setBackgroundColor(resolvedTabbarSurfaceColor());
             tabbarBackdrop.setVisibility(tabbarVisible && backdropHeight > 0 ? View.VISIBLE : View.GONE);
         }
         if (tabbarContainer != null) {
