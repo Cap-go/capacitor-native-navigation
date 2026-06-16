@@ -1233,13 +1233,13 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         let requestedShape = (rawStyle["shape"] as? String)?.lowercased()
         let shape: NativeNavigationTabbarShape = requestedShape == "curve" ? .curve : .floating
         let isCurve = shape == .curve
-        let centerDiameter = max(number(from: rawStyle["centerButtonDiameter"]) ?? 76, 44)
+        let centerDiameter = max(number(from: rawStyle["centerButtonDiameter"]) ?? 56, 44)
         let height = max(number(from: rawStyle["height"]) ?? (isCurve ? 76 : 64), 44)
         let centerLift = max(number(from: rawStyle["centerButtonLift"]) ?? (centerDiameter / 2), 0)
         let bottomGap = max(number(from: rawStyle["bottomGap"]) ?? (isCurve ? 0 : 10), 0)
         let horizontalMargin = max(number(from: rawStyle["horizontalMargin"]) ?? (isCurve ? 0 : 24), 0)
         let maxWidth = max(number(from: rawStyle["maxWidth"]) ?? (isCurve ? 0 : 430), 0)
-        let cornerRadius = max(number(from: rawStyle["cornerRadius"]) ?? (isCurve ? 24 : height / 2), 0)
+        let cornerRadius = max(number(from: rawStyle["cornerRadius"]) ?? (isCurve ? 0 : height / 2), 0)
         let centerButtonColor = (rawStyle["centerButtonColor"] as? String).flatMap { UIColor(hexString: $0) }
         let centerButtonIconColor = (rawStyle["centerButtonIconColor"] as? String).flatMap { UIColor(hexString: $0) } ?? .white
 
@@ -1854,8 +1854,8 @@ private struct NativeNavigationTabbarStyleConfig {
     var bottomGap: CGFloat = 10
     var cornerRadius: CGFloat = 32
     var centerItemId: String?
-    var centerButtonDiameter: CGFloat = 76
-    var centerButtonLift: CGFloat = 38
+    var centerButtonDiameter: CGFloat = 56
+    var centerButtonLift: CGFloat = 28
     var centerButtonColor: UIColor?
     var centerButtonIconColor: UIColor = .white
 
@@ -1877,25 +1877,24 @@ private enum NativeNavigationTabbarBackgroundPath {
         let barRect = CGRect(x: 0, y: style.barTop, width: bounds.width, height: max(style.height, 1))
         let cornerRadius = min(style.cornerRadius, barRect.height / 2)
         let centerX = bounds.midX
-        let notchRadius = (style.centerButtonDiameter / 2) + 7
-        let notchDepth = min(barRect.height * 0.78, notchRadius)
-        let leftShoulder = max(barRect.minX + cornerRadius, centerX - notchRadius)
-        let rightShoulder = min(barRect.maxX - cornerRadius, centerX + notchRadius)
-        let control = notchDepth * 0.55228475
+        let centerRadius = style.centerButtonDiameter / 2
+        let centerTop = max(0, barRect.minY - style.centerButtonLift)
+        let centerY = centerTop + centerRadius
+        let dyToBarTop = barRect.minY - centerY
+        let shoulderWidth = sqrt(max(0, centerRadius * centerRadius - dyToBarTop * dyToBarTop))
+        let leftShoulder = max(barRect.minX + cornerRadius, centerX - shoulderWidth)
+        let startAngle = atan2(dyToBarTop, -shoulderWidth)
+        var endAngle = atan2(dyToBarTop, shoulderWidth)
+        if endAngle <= startAngle {
+            endAngle += .pi * 2
+        }
         let path = UIBezierPath()
 
         path.move(to: CGPoint(x: barRect.minX + cornerRadius, y: barRect.minY))
         path.addLine(to: CGPoint(x: leftShoulder, y: barRect.minY))
-        path.addCurve(
-            to: CGPoint(x: centerX, y: barRect.minY + notchDepth),
-            controlPoint1: CGPoint(x: leftShoulder, y: barRect.minY + control),
-            controlPoint2: CGPoint(x: centerX - control, y: barRect.minY + notchDepth)
-        )
-        path.addCurve(
-            to: CGPoint(x: rightShoulder, y: barRect.minY),
-            controlPoint1: CGPoint(x: centerX + control, y: barRect.minY + notchDepth),
-            controlPoint2: CGPoint(x: rightShoulder, y: barRect.minY + control)
-        )
+        if shoulderWidth > 0 {
+            path.addArc(withCenter: CGPoint(x: centerX, y: centerY), radius: centerRadius, startAngle: startAngle, endAngle: endAngle, clockwise: true)
+        }
         path.addLine(to: CGPoint(x: barRect.maxX - cornerRadius, y: barRect.minY))
         path.addQuadCurve(to: CGPoint(x: barRect.maxX, y: barRect.minY + cornerRadius), controlPoint: CGPoint(x: barRect.maxX, y: barRect.minY))
         path.addLine(to: CGPoint(x: barRect.maxX, y: barRect.maxY - cornerRadius))
@@ -1988,13 +1987,13 @@ private final class NativeNavigationFloatingTabBar: UIView {
 
         if let centerIndex = centerButtonIndex(), buttons.indices.contains(centerIndex) {
             let buttonDiameter = tabbarStyle.centerButtonDiameter
-            let centerGap = min(buttonDiameter + 22, bounds.width * 0.46)
+            let centerGap = min(buttonDiameter + 4, bounds.width * 0.34)
             let barFrame = CGRect(x: 0, y: tabbarStyle.barTop, width: bounds.width, height: tabbarStyle.height)
             let leftWidth = max(0, bounds.midX - centerGap / 2)
             let rightX = min(bounds.width, bounds.midX + centerGap / 2)
             let centerFrame = CGRect(
                 x: bounds.midX - buttonDiameter / 2,
-                y: 0,
+                y: max(0, tabbarStyle.barTop - tabbarStyle.centerButtonLift),
                 width: buttonDiameter,
                 height: buttonDiameter
             )
