@@ -637,6 +637,10 @@ public class NativeNavigationPlugin extends Plugin {
             root.addView(tabbarContainer);
         } else {
             getActivity().addContentView(
+                tabbarBackdrop,
+                new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, Gravity.BOTTOM)
+            );
+            getActivity().addContentView(
                 tabbarContainer,
                 new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(DEFAULT_TABBAR_DP))
             );
