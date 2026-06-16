@@ -987,7 +987,7 @@ public class NativeNavigationPlugin extends Plugin {
         }
 
         static TabbarStyle defaults(int tintColor) {
-            return new TabbarStyle("floating", 64, 24, 430, 10, 32, null, 76, 38, tintColor, Color.WHITE);
+            return new TabbarStyle("floating", 64, 24, 430, 10, 32, null, 56, 28, tintColor, Color.WHITE);
         }
 
         boolean isCurve() {
@@ -1359,7 +1359,7 @@ public class NativeNavigationPlugin extends Plugin {
     private TabbarStyle makeTabbarStyle(JSObject rawStyle) {
         String requestedShape = rawStyle.getString("shape", "floating");
         boolean curve = "curve".equalsIgnoreCase(requestedShape);
-        int centerButtonDiameter = Math.max(styleDimension(rawStyle, "centerButtonDiameter", 76), 44);
+        int centerButtonDiameter = Math.max(styleDimension(rawStyle, "centerButtonDiameter", 56), 44);
         int height = Math.max(styleDimension(rawStyle, "height", curve ? 76 : DEFAULT_TABBAR_DP), 44);
         int centerButtonLift = Math.max(styleDimension(rawStyle, "centerButtonLift", centerButtonDiameter / 2), 0);
         int bottomGap = Math.max(styleDimension(rawStyle, "bottomGap", curve ? 0 : 10), 0);

@@ -156,8 +156,8 @@ const tabbarStyle = () =>
         maxWidth: 0,
         bottomGap: 0,
         cornerRadius: 0,
-        centerButtonDiameter: 96,
-        centerButtonLift: 48,
+        centerButtonDiameter: 56,
+        centerButtonLift: 28,
         centerButtonColor: '#ff5b45',
         centerButtonIconColor: '#ffffff',
       }

@@ -442,7 +442,7 @@ export interface NativeNavigationTabbarStyle {
   centerItemId?: string;
 
   /**
-   * Included center button diameter in native points/dp. Defaults to `76`.
+   * Included center button diameter in native points/dp. Defaults to `56`.
    */
   centerButtonDiameter?: number;
 
