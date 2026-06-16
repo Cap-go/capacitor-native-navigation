@@ -1515,7 +1515,9 @@ public class NativeNavigationPlugin extends Plugin {
 
     private int resolvedTabbarSurfaceColor() {
         GlassOptions resolvedGlassOptions = tabbarGlassOptions == null ? GlassOptions.defaults() : tabbarGlassOptions;
-        return resolvedGlassOptions.isLiquidGlass() ? glassSurfaceColor(tabbarBackgroundColor, resolvedGlassOptions) : tabbarBackgroundColor;
+        return resolvedGlassOptions.isLiquidGlass()
+            ? glassSurfaceColor(tabbarBackgroundColor, resolvedGlassOptions)
+            : tabbarBackgroundColor;
     }
 
     private void reapplyVisibleChromeBackgrounds() {
