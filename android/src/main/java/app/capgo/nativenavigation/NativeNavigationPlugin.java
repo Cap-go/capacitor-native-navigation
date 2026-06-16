@@ -698,7 +698,7 @@ public class NativeNavigationPlugin extends Plugin {
         if (center) {
             GradientDrawable surroundBackground = new GradientDrawable();
             surroundBackground.setShape(GradientDrawable.OVAL);
-            surroundBackground.setColor(Color.WHITE);
+            surroundBackground.setColor(tabbarBackgroundColor);
             button.setBackground(surroundBackground);
 
             GradientDrawable centerBackground = new GradientDrawable();
