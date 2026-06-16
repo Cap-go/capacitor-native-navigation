@@ -227,23 +227,36 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                     selectedId: selectedId,
                     icons: icons
                 )
-                self.applyFloatingTabBarAppearance(tabBar: tabBar, options: call)
-                let resolvedSelectedIndex = selectedIndex ?? (items.indices.contains(tabBar.selectedIndex) ? tabBar.selectedIndex : 0)
-                tabBar.configure(
-                    items: items,
-                    selectedIndex: resolvedSelectedIndex,
-                    labelVisibilityMode: labelVisibilityMode,
-                    icons: icons,
-                    style: self.tabbarStyle
-                )
-                tabBar.onSelect = { [weak self] _, item in
-                    self?.notifyListeners("tabSelect", data: [
-                        "id": item.id,
-                        "index": item.sourceIndex,
-                        "title": item.title
-                    ])
+                if items.isEmpty {
+                    self.tabbarVisible = false
+                    tabBar.configure(
+                        items: [],
+                        selectedIndex: 0,
+                        labelVisibilityMode: labelVisibilityMode,
+                        icons: icons,
+                        style: self.tabbarStyle
+                    )
+                    self.tabContainer?.isHidden = true
+                    tabBar.isHidden = true
+                } else {
+                    self.applyFloatingTabBarAppearance(tabBar: tabBar, options: call)
+                    let resolvedSelectedIndex = selectedIndex ?? (items.indices.contains(tabBar.selectedIndex) ? tabBar.selectedIndex : 0)
+                    tabBar.configure(
+                        items: items,
+                        selectedIndex: resolvedSelectedIndex,
+                        labelVisibilityMode: labelVisibilityMode,
+                        icons: icons,
+                        style: self.tabbarStyle
+                    )
+                    tabBar.onSelect = { [weak self] _, item in
+                        self?.notifyListeners("tabSelect", data: [
+                            "id": item.id,
+                            "index": item.sourceIndex,
+                            "title": item.title
+                        ])
+                    }
+                    self.showFloatingTabBarChrome(tabBar)
                 }
-                self.showFloatingTabBarChrome(tabBar)
             }
             self.layoutChrome()
             self.updateInsetsAndNotify()

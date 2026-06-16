@@ -257,7 +257,19 @@ public class NativeNavigationPlugin extends Plugin {
                 }
             }
 
-            if (!tabItems.isEmpty() && (selectedTabIndex < 0 || selectedTabIndex >= tabItems.size())) {
+            if (tabItems.isEmpty()) {
+                tabbarVisible = false;
+                if (tabbarContainer != null) {
+                    tabbarContainer.setVisibility(View.GONE);
+                }
+                nativeTabbar.setVisibility(View.GONE);
+                layoutChrome();
+                updateInsetsAndNotify();
+                call.resolve(insetsResult());
+                return;
+            }
+
+            if (selectedTabIndex < 0 || selectedTabIndex >= tabItems.size()) {
                 selectedTabIndex = 0;
             }
 
