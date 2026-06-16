@@ -401,7 +401,7 @@ export interface NativeNavigationTab {
 export interface NativeNavigationTabbarStyle {
   /**
    * `floating` keeps the existing capsule tabbar. `curve` draws a full-width
-   * bar with a center notch and raised center tab.
+   * bar with an included center action.
    */
   shape?: NativeNavigationTabbarShape;
 
@@ -431,18 +431,18 @@ export interface NativeNavigationTabbarStyle {
 
   /**
    * Background corner radius in native points/dp. Defaults to a capsule radius
-   * for `floating` and `24` for `curve`.
+   * for `floating` and `0` for `curve`.
    */
   cornerRadius?: number;
 
   /**
-   * Tab id promoted into the raised center button for `curve`. Defaults to the
-   * middle tab.
+   * Tab id promoted into the included center button for `curve`. Defaults to
+   * the middle tab.
    */
   centerItemId?: string;
 
   /**
-   * Raised center button diameter in native points/dp. Defaults to `76`.
+   * Included center button diameter in native points/dp. Defaults to `76`.
    */
   centerButtonDiameter?: number;
 
@@ -453,12 +453,12 @@ export interface NativeNavigationTabbarStyle {
   centerButtonLift?: number;
 
   /**
-   * Raised center button color. Defaults to the active tint color.
+   * Included center button color. Defaults to the active tint color.
    */
   centerButtonColor?: string;
 
   /**
-   * Raised center button icon color. Defaults to white.
+   * Included center button icon color. Defaults to white.
    */
   centerButtonIconColor?: string;
 }

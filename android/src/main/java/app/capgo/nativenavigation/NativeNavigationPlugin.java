@@ -708,9 +708,6 @@ public class NativeNavigationPlugin extends Plugin {
             centerFill.setBackground(centerBackground);
             int centerFillDiameter = dp(Math.max(tabbarStyle.centerButtonDiameter - 14, 44));
             button.addView(centerFill, new FrameLayout.LayoutParams(centerFillDiameter, centerFillDiameter, Gravity.CENTER));
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                button.setElevation(dp(10));
-            }
         }
 
         if (!center && selected) {
@@ -1070,7 +1067,8 @@ public class NativeNavigationPlugin extends Plugin {
                 int leftWidth = Math.max(0, Math.round(width / 2f - centerGap / 2f));
                 int rightX = Math.min(width, Math.round(width / 2f + centerGap / 2f));
                 View center = getChildAt(centerIndex);
-                center.layout((width - buttonDiameter) / 2, 0, (width + buttonDiameter) / 2, buttonDiameter);
+                int centerTop = Math.max(0, barTop - buttonDiameter / 2);
+                center.layout((width - buttonDiameter) / 2, centerTop, (width + buttonDiameter) / 2, centerTop + buttonDiameter);
                 layoutRange(0, centerIndex, 0, barTop, leftWidth, barHeight);
                 layoutRange(centerIndex + 1, getChildCount(), rightX, barTop, width - rightX, barHeight);
                 return;
@@ -1125,7 +1123,7 @@ public class NativeNavigationPlugin extends Plugin {
             float cornerRadius = Math.min(dp(style.cornerRadius), barHeight / 2f);
             float centerX = width / 2f;
             float notchRadius = dp(style.centerButtonDiameter) / 2f + dp(1);
-            float notchDepth = Math.min(barHeight * 0.78f, notchRadius);
+            float notchDepth = Math.min(dp(12), barHeight * 0.18f);
             float leftShoulder = Math.max(cornerRadius, centerX - notchRadius);
             float rightShoulder = Math.min(width - cornerRadius, centerX + notchRadius);
             float control = notchDepth * 0.55228475f;
@@ -1367,7 +1365,7 @@ public class NativeNavigationPlugin extends Plugin {
         int bottomGap = Math.max(styleDimension(rawStyle, "bottomGap", curve ? 0 : 10), 0);
         int horizontalMargin = Math.max(styleDimension(rawStyle, "horizontalMargin", curve ? 0 : 24), 0);
         int maxWidth = Math.max(styleDimension(rawStyle, "maxWidth", curve ? 0 : 430), 0);
-        int cornerRadius = Math.max(styleDimension(rawStyle, "cornerRadius", curve ? 24 : height / 2), 0);
+        int cornerRadius = Math.max(styleDimension(rawStyle, "cornerRadius", curve ? 0 : height / 2), 0);
         int centerButtonColor = parseColor(rawStyle.getString("centerButtonColor", null), tintColor);
         int centerButtonIconColor = parseColor(rawStyle.getString("centerButtonIconColor", null), Color.WHITE);
         return new TabbarStyle(
