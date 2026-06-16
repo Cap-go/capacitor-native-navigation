@@ -79,7 +79,7 @@ const tabs = [
 let activeTab = 'home';
 let route = 'home';
 let stack = ['home'];
-let labelsEnabled = false;
+let labelsEnabled = true;
 let iconsEnabled = true;
 let tabbarShape = 'curve';
 let tabbarHidden = false;
@@ -88,7 +88,7 @@ let chromeConfigured = false;
 const pages = {
   home: {
     title: 'Curved Tabbar',
-    subtitle: 'Raised center action',
+    subtitle: 'Included center action',
     body: `
       <section class="venue-strip" aria-label="Curved tabbar demo content">
         <article class="venue-card venue-card-bar">
@@ -134,11 +134,11 @@ const pages = {
   },
   capture: {
     title: 'Capture',
-    subtitle: 'Raised center tab',
+    subtitle: 'Included center tab',
     body: `
       <section class="capture-panel">
         <div class="capture-lens">Camera</div>
-        <p>The center tab is a native raised action button inside a curved native tabbar.</p>
+        <p>The center tab is included in the curved native tabbar.</p>
       </section>
     `,
   },
@@ -194,7 +194,7 @@ const pages = {
 const tabbarColors = () => ({
   tint: tabbarShape === 'curve' ? '#ff5b45' : '#0a84ff',
   inactiveTint: '#8b8f96',
-  background: tabbarShape === 'curve' ? '#f8f8fb' : '#ffffff',
+  background: '#ffffff',
 });
 
 const tabbarStyle = () =>
@@ -203,12 +203,12 @@ const tabbarStyle = () =>
         shape: 'curve',
         centerItemId: 'capture',
         height: 80,
-        horizontalMargin: 24,
+        horizontalMargin: 0,
         maxWidth: 0,
         bottomGap: 0,
-        cornerRadius: 30,
-        centerButtonDiameter: 96,
-        centerButtonLift: 52,
+        cornerRadius: 0,
+        centerButtonDiameter: 56,
+        centerButtonLift: 28,
         centerButtonColor: '#ff5b45',
         centerButtonIconColor: '#ffffff',
       }

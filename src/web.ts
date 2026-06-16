@@ -132,7 +132,7 @@ export class NativeNavigationWeb extends WebPlugin implements NativeNavigationPl
     const height = style.height ?? defaultHeight;
     const bottomGap = style.bottomGap ?? (style.shape === 'curve' ? 0 : 10);
     const centerButtonLift =
-      style.shape === 'curve' ? (style.centerButtonLift ?? (style.centerButtonDiameter ?? 76) / 2) : 0;
+      style.shape === 'curve' ? (style.centerButtonLift ?? (style.centerButtonDiameter ?? 56) / 2) : 0;
     return Math.ceil(height + bottomGap + centerButtonLift);
   }
 

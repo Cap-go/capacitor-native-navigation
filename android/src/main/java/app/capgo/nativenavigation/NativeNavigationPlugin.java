@@ -63,10 +63,12 @@ public class NativeNavigationPlugin extends Plugin {
     private static final int DEFAULT_TABBAR_DP = 64;
     private static final int DEFAULT_TRANSITION_MS = 350;
     private static final int MENU_ITEM_BASE = 10_000;
+    private static final int DEFAULT_TABBAR_BACKGROUND_COLOR = Color.WHITE;
 
     private final NativeNavigation implementation = new NativeNavigation();
     private FrameLayout navbarContainer;
     private FrameLayout tabbarContainer;
+    private View tabbarBackdrop;
     private Toolbar toolbar;
     private NativeTabbarLayout tabbar;
     private GlassBackdropView navbarGlassBackdrop;
@@ -125,6 +127,8 @@ public class NativeNavigationPlugin extends Plugin {
                 defaultTransitionMs = Math.max(0, duration.intValue());
             }
             if (!enabled) {
+                navbarVisible = false;
+                tabbarVisible = false;
                 if (navbarContainer != null) {
                     navbarContainer.setVisibility(View.GONE);
                 }
@@ -133,6 +137,9 @@ public class NativeNavigationPlugin extends Plugin {
                 }
                 if (tabbarContainer != null) {
                     tabbarContainer.setVisibility(View.GONE);
+                }
+                if (tabbarBackdrop != null) {
+                    tabbarBackdrop.setVisibility(View.GONE);
                 }
             }
             if (enabled) {
@@ -214,6 +221,9 @@ public class NativeNavigationPlugin extends Plugin {
                 if (tabbarContainer != null) {
                     tabbarContainer.setVisibility(View.GONE);
                 }
+                if (tabbarBackdrop != null) {
+                    tabbarBackdrop.setVisibility(View.GONE);
+                }
                 updateInsetsAndNotify();
                 call.resolve(insetsResult());
                 return;
@@ -279,6 +289,9 @@ public class NativeNavigationPlugin extends Plugin {
             renderTabbarItems(labelVisibilityMode, icons);
             if (tabbarContainer != null) {
                 tabbarContainer.setVisibility(View.VISIBLE);
+            }
+            if (tabbarBackdrop != null) {
+                tabbarBackdrop.setVisibility(View.VISIBLE);
             }
             nativeTabbar.setVisibility(View.VISIBLE);
             layoutChrome();
@@ -651,6 +664,8 @@ public class NativeNavigationPlugin extends Plugin {
             return tabbar;
         }
         FrameLayout root = contentRoot();
+        tabbarBackdrop = new View(getContext());
+        tabbarBackdrop.setBackgroundColor(resolvedTabbarSurfaceColor());
         tabbarContainer = new FrameLayout(getContext());
         tabbarContainer.setClipChildren(false);
         tabbarContainer.setClipToPadding(false);
@@ -672,8 +687,13 @@ public class NativeNavigationPlugin extends Plugin {
             new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         );
         if (root != null) {
+            root.addView(tabbarBackdrop);
             root.addView(tabbarContainer);
         } else {
+            getActivity().addContentView(
+                tabbarBackdrop,
+                new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, Gravity.BOTTOM)
+            );
             getActivity().addContentView(
                 tabbarContainer,
                 new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(DEFAULT_TABBAR_DP))
@@ -733,10 +753,10 @@ public class NativeNavigationPlugin extends Plugin {
             GradientDrawable centerBackground = new GradientDrawable();
             centerBackground.setShape(GradientDrawable.OVAL);
             centerBackground.setColor(tabbarStyle.centerButtonColor);
-            button.setBackground(centerBackground);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                button.setElevation(dp(10));
-            }
+            View centerFill = new View(getContext());
+            centerFill.setBackground(centerBackground);
+            int centerFillDiameter = dp(Math.max(tabbarStyle.centerButtonDiameter - 14, 44));
+            button.addView(centerFill, new FrameLayout.LayoutParams(centerFillDiameter, centerFillDiameter, Gravity.CENTER));
         }
 
         if (!center && selected) {
@@ -1018,7 +1038,7 @@ public class NativeNavigationPlugin extends Plugin {
         }
 
         static TabbarStyle defaults(int tintColor) {
-            return new TabbarStyle("floating", 64, 24, 430, 10, 32, null, 76, 38, tintColor, Color.WHITE);
+            return new TabbarStyle("floating", 64, 24, 430, 10, 32, null, 56, 28, tintColor, Color.WHITE);
         }
 
         boolean isCurve() {
@@ -1038,7 +1058,7 @@ public class NativeNavigationPlugin extends Plugin {
 
         private final Paint backgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private TabbarStyle style = TabbarStyle.defaults(Color.rgb(0, 122, 255));
-        private int backgroundColor = Color.argb(235, 255, 255, 255);
+        private int backgroundColor = DEFAULT_TABBAR_BACKGROUND_COLOR;
         private int centerIndex = -1;
 
         NativeTabbarLayout(Context context) {
@@ -1068,7 +1088,7 @@ public class NativeNavigationPlugin extends Plugin {
             if (hasCenterButton()) {
                 int barHeight = dp(style.height);
                 int barTop = dp(style.barTop());
-                int centerGap = Math.min(dp(style.centerButtonDiameter + 22), Math.round(width * 0.46f));
+                int centerGap = Math.min(dp(style.centerButtonDiameter + 4), Math.round(width * 0.34f));
                 int leftWidth = Math.max(0, Math.round(width / 2f - centerGap / 2f));
                 int rightX = Math.min(width, Math.round(width / 2f + centerGap / 2f));
                 measureRange(0, centerIndex, leftWidth, barHeight);
@@ -1094,11 +1114,12 @@ public class NativeNavigationPlugin extends Plugin {
                 int barTop = dp(style.barTop());
                 int barHeight = dp(style.height);
                 int buttonDiameter = dp(style.centerButtonDiameter);
-                int centerGap = Math.min(dp(style.centerButtonDiameter + 22), Math.round(width * 0.46f));
+                int centerGap = Math.min(dp(style.centerButtonDiameter + 4), Math.round(width * 0.34f));
                 int leftWidth = Math.max(0, Math.round(width / 2f - centerGap / 2f));
                 int rightX = Math.min(width, Math.round(width / 2f + centerGap / 2f));
                 View center = getChildAt(centerIndex);
-                center.layout((width - buttonDiameter) / 2, 0, (width + buttonDiameter) / 2, buttonDiameter);
+                int centerTop = Math.max(0, barTop - dp(style.centerButtonLift));
+                center.layout((width - buttonDiameter) / 2, centerTop, (width + buttonDiameter) / 2, centerTop + buttonDiameter);
                 layoutRange(0, centerIndex, 0, barTop, leftWidth, barHeight);
                 layoutRange(centerIndex + 1, getChildCount(), rightX, barTop, width - rightX, barHeight);
                 return;
@@ -1152,24 +1173,27 @@ public class NativeNavigationPlugin extends Plugin {
             float barHeight = dp(style.height);
             float cornerRadius = Math.min(dp(style.cornerRadius), barHeight / 2f);
             float centerX = width / 2f;
-            float notchRadius = dp(style.centerButtonDiameter) / 2f + dp(7);
-            float notchDepth = Math.min(barHeight * 0.78f, notchRadius);
-            float leftShoulder = Math.max(cornerRadius, centerX - notchRadius);
-            float rightShoulder = Math.min(width - cornerRadius, centerX + notchRadius);
-            float control = notchDepth * 0.55228475f;
+            float centerRadius = dp(style.centerButtonDiameter) / 2f;
+            float centerTop = Math.max(0f, barTop - dp(style.centerButtonLift));
+            float centerY = centerTop + centerRadius;
+            float dyToBarTop = barTop - centerY;
+            float shoulderWidth = (float) Math.sqrt(Math.max(0f, centerRadius * centerRadius - dyToBarTop * dyToBarTop));
+            float leftShoulder = Math.max(cornerRadius, centerX - shoulderWidth);
+            float rightShoulder = Math.min(width - cornerRadius, centerX + shoulderWidth);
             RectF barRect = new RectF(0, barTop, width, barTop + barHeight);
+            RectF centerRect = new RectF(centerX - centerRadius, centerY - centerRadius, centerX + centerRadius, centerY + centerRadius);
+            float startAngle = (float) Math.toDegrees(Math.atan2(dyToBarTop, -shoulderWidth));
+            float endAngle = (float) Math.toDegrees(Math.atan2(dyToBarTop, shoulderWidth));
+            float sweepAngle = endAngle - startAngle;
+            if (sweepAngle <= 0f) {
+                sweepAngle += 360f;
+            }
 
             path.moveTo(barRect.left + cornerRadius, barRect.top);
             path.lineTo(leftShoulder, barRect.top);
-            path.cubicTo(
-                leftShoulder,
-                barRect.top + control,
-                centerX - control,
-                barRect.top + notchDepth,
-                centerX,
-                barRect.top + notchDepth
-            );
-            path.cubicTo(centerX + control, barRect.top + notchDepth, rightShoulder, barRect.top + control, rightShoulder, barRect.top);
+            if (shoulderWidth > 0f) {
+                path.arcTo(centerRect, startAngle, sweepAngle, false);
+            }
             path.lineTo(barRect.right - cornerRadius, barRect.top);
             path.quadTo(barRect.right, barRect.top, barRect.right, barRect.top + cornerRadius);
             path.lineTo(barRect.right, barRect.bottom - cornerRadius);
@@ -1389,13 +1413,13 @@ public class NativeNavigationPlugin extends Plugin {
     private TabbarStyle makeTabbarStyle(JSObject rawStyle) {
         String requestedShape = rawStyle.getString("shape", "floating");
         boolean curve = "curve".equalsIgnoreCase(requestedShape);
-        int centerButtonDiameter = Math.max(styleDimension(rawStyle, "centerButtonDiameter", 76), 44);
+        int centerButtonDiameter = Math.max(styleDimension(rawStyle, "centerButtonDiameter", 56), 44);
         int height = Math.max(styleDimension(rawStyle, "height", curve ? 76 : DEFAULT_TABBAR_DP), 44);
         int centerButtonLift = Math.max(styleDimension(rawStyle, "centerButtonLift", centerButtonDiameter / 2), 0);
         int bottomGap = Math.max(styleDimension(rawStyle, "bottomGap", curve ? 0 : 10), 0);
         int horizontalMargin = Math.max(styleDimension(rawStyle, "horizontalMargin", curve ? 0 : 24), 0);
         int maxWidth = Math.max(styleDimension(rawStyle, "maxWidth", curve ? 0 : 430), 0);
-        int cornerRadius = Math.max(styleDimension(rawStyle, "cornerRadius", curve ? 24 : height / 2), 0);
+        int cornerRadius = Math.max(styleDimension(rawStyle, "cornerRadius", curve ? 0 : height / 2), 0);
         int centerButtonColor = parseColor(rawStyle.getString("centerButtonColor", null), tintColor);
         int centerButtonIconColor = parseColor(rawStyle.getString("centerButtonIconColor", null), Color.WHITE);
         return new TabbarStyle(
@@ -1439,8 +1463,8 @@ public class NativeNavigationPlugin extends Plugin {
         int tintFallback = dynamic ? dynamicColor("system_accent1_600", tintColor) : tintColor;
         int inactiveFallback = dynamic ? dynamicColor("system_neutral2_600", inactiveTintColor) : inactiveTintColor;
         int backgroundFallback = dynamic
-            ? withAlpha(dynamicColor(isNightMode() ? "system_neutral1_900" : "system_neutral1_50", Color.WHITE), 245)
-            : Color.argb(235, 255, 255, 255);
+            ? dynamicColor(isNightMode() ? "system_neutral1_900" : "system_neutral1_50", DEFAULT_TABBAR_BACKGROUND_COLOR)
+            : DEFAULT_TABBAR_BACKGROUND_COLOR;
         tintColor = parseColor(colors.getString("tint", null), tintFallback);
         inactiveTintColor = parseColor(colors.getString("inactiveTint", null), inactiveFallback);
         tabbarBackgroundColor = parseColor(colors.getString("background", null), backgroundFallback);
@@ -1455,11 +1479,13 @@ public class NativeNavigationPlugin extends Plugin {
         if (tabbar == null) {
             return;
         }
+        int drawColor = resolvedTabbarSurfaceColor();
+        if (tabbarBackdrop != null) {
+            tabbarBackdrop.setBackgroundColor(drawColor);
+        }
 
-        int drawColor = tabbarBackgroundColor;
         GlassOptions resolvedGlassOptions = tabbarGlassOptions == null ? GlassOptions.defaults() : tabbarGlassOptions;
         if (resolvedGlassOptions.isLiquidGlass()) {
-            drawColor = glassSurfaceColor(tabbarBackgroundColor, resolvedGlassOptions);
             if (tabbarContainer != null) {
                 tabbarContainer.setBackgroundColor(Color.TRANSPARENT);
             }
@@ -1485,6 +1511,13 @@ public class NativeNavigationPlugin extends Plugin {
         }
 
         tabbar.setTabbarStyle(tabbarStyle, drawColor, centerIndex);
+    }
+
+    private int resolvedTabbarSurfaceColor() {
+        GlassOptions resolvedGlassOptions = tabbarGlassOptions == null ? GlassOptions.defaults() : tabbarGlassOptions;
+        return resolvedGlassOptions.isLiquidGlass()
+            ? glassSurfaceColor(tabbarBackgroundColor, resolvedGlassOptions)
+            : tabbarBackgroundColor;
     }
 
     private void reapplyVisibleChromeBackgrounds() {
@@ -1659,6 +1692,17 @@ public class NativeNavigationPlugin extends Plugin {
             fillContainer(navbarGlassSurface);
         }
 
+        if (tabbarBackdrop != null) {
+            int backdropHeight = tabbarVisible ? bottom + dp(tabbarStyle.bottomGap) : 0;
+            FrameLayout.LayoutParams backdropParams = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                backdropHeight,
+                Gravity.BOTTOM
+            );
+            tabbarBackdrop.setLayoutParams(backdropParams);
+            tabbarBackdrop.setBackgroundColor(resolvedTabbarSurfaceColor());
+            tabbarBackdrop.setVisibility(tabbarVisible && backdropHeight > 0 ? View.VISIBLE : View.GONE);
+        }
         if (tabbarContainer != null) {
             int rootWidth = root.getWidth() > 0 ? root.getWidth() : Resources.getSystem().getDisplayMetrics().widthPixels;
             int availableWidth = Math.max(0, rootWidth - dp(tabbarStyle.horizontalMargin) * 2);
@@ -1691,6 +1735,9 @@ public class NativeNavigationPlugin extends Plugin {
     private void bringChromeToFront() {
         if (navbarContainer != null) {
             navbarContainer.bringToFront();
+        }
+        if (tabbarBackdrop != null) {
+            tabbarBackdrop.bringToFront();
         }
         if (tabbar != null) {
             tabbar.bringToFront();
