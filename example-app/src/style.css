@@ -239,7 +239,7 @@ body {
   bottom: max(14px, env(safe-area-inset-bottom));
   width: min(calc(100vw - 36px), 430px);
   height: 66px;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--web-tab-count, 5), minmax(0, 1fr));
   padding: 7px;
   border-radius: 33px;
   background: rgba(255, 255, 255, 0.94);
@@ -255,7 +255,7 @@ body {
   right: 0;
   bottom: 0;
   height: 124px;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--web-tab-count, 5), minmax(0, 1fr));
   align-items: end;
   padding: 44px 12px max(10px, env(safe-area-inset-bottom));
   filter: drop-shadow(0 -14px 28px rgba(15, 23, 42, 0.12));

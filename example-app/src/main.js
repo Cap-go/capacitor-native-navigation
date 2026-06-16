@@ -51,6 +51,12 @@ const tabs = [
     title: 'Profile',
     icon: { svg: icons.profile },
   },
+  {
+    id: 'draft',
+    title: 'Draft',
+    icon: { svg: icons.compose },
+    hidden: true,
+  },
 ];
 
 let activeTab = 'home';
@@ -74,6 +80,20 @@ const pages = {
           <span>RESTAURANT</span>
           <strong>Pizza room</strong>
         </article>
+      </section>
+      <section class="demo-actions" aria-label="Navigation demo actions">
+        <button class="tile" data-push="detail">
+          <span>Open detail</span>
+          <small>Push transition and native back button</small>
+        </button>
+        <button class="tile" data-action="toggle-tabbar">
+          <span>Toggle tabbar</span>
+          <small>Dynamic visibility from JavaScript</small>
+        </button>
+        <button class="tile" data-action="open-hidden-tab">
+          <span>Open hidden tab</span>
+          <small>Hidden tabs stay out of the native bar until selected</small>
+        </button>
       </section>
     `,
   },
@@ -124,6 +144,17 @@ const pages = {
         <article><strong>Martin</strong><span>Five native tabs with a promoted center action.</span></article>
         <article><strong>Theme</strong><span>Colors and shape are updated from JavaScript.</span></article>
         <article><strong>Safe area</strong><span>CSS variables still reflect the native tabbar height.</span></article>
+      </section>
+    `,
+  },
+  draft: {
+    title: 'Draft',
+    subtitle: 'Hidden tab selected',
+    body: `
+      <section class="detail">
+        <p class="eyebrow">Hidden native tab</p>
+        <h1>Visible only while active.</h1>
+        <p>The Draft tab is configured with hidden: true. The native tabbar shows it when selected, then removes it after another tab is chosen.</p>
       </section>
     `,
   },
@@ -236,13 +267,15 @@ const syncControls = () => {
   }
 };
 
+const visiblePreviewTabs = () => tabs.filter((tab) => !tab.hidden);
 
 const renderWebTabbarPreview = () => {
   if (!isWebPreview || route === 'detail' || tabbarHidden) {
     return '';
   }
 
-  const items = tabs
+  const visibleTabs = visiblePreviewTabs();
+  const items = visibleTabs
     .map((tab) => {
       const selected = tab.id === activeTab;
       const center = tabbarShape === 'curve' && tab.id === 'capture';
@@ -257,7 +290,7 @@ const renderWebTabbarPreview = () => {
     })
     .join('');
 
-  return `<nav class="web-tabbar-preview ${tabbarShape}" aria-label="Tabbar preview">${items}</nav>`;
+  return `<nav class="web-tabbar-preview ${tabbarShape}" style="--web-tab-count: ${visibleTabs.length}" aria-label="Tabbar preview">${items}</nav>`;
 };
 const render = () => {
   const page = pages[route] ?? pages.home;
@@ -311,6 +344,11 @@ app.addEventListener('click', async (event) => {
     tabbarShape = tabbarShape === 'curve' ? 'floating' : 'curve';
     render();
     await updateTabbar();
+    return;
+  }
+  if (target.dataset.action === 'open-hidden-tab') {
+    activeTab = 'draft';
+    await navigate('draft', 'tab');
     return;
   }
   if (target.dataset.action === 'refresh-version') {
