@@ -1436,24 +1436,27 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             return
         }
 
+        let labelVisibilityMode = tabLabelVisibilityMode(options: call)
         for (index, item) in items.enumerated() {
-            let title = tabDisplayTitles.indices.contains(index) ? (tabDisplayTitles[index] ?? "") : (item.title ?? "")
+            let visibleTitle = tabDisplayTitles.indices.contains(index) ? (tabDisplayTitles[index] ?? "") : (item.title ?? "")
+            let rawTitle = tabTitles.indices.contains(item.tag) ? tabTitles[item.tag] : visibleTitle
+            let titles = bakedTintTitles(rawTitle: rawTitle, visibleTitle: visibleTitle, labelVisibilityMode: labelVisibilityMode)
             let icon = tabBaseImages.indices.contains(index) ? (tabBaseImages[index] ?? item.image) : item.image
             let selectedIcon = tabSelectedImages.indices.contains(index)
                 ? (tabSelectedImages[index] ?? icon)
                 : icon
-            guard !title.isEmpty || icon != nil || selectedIcon != nil else {
+            guard !titles.normal.isEmpty || !titles.selected.isEmpty || icon != nil || selectedIcon != nil else {
                 continue
             }
 
-            let accessibilityTitle = tabTitles.indices.contains(item.tag) ? tabTitles[item.tag] : title
+            let accessibilityTitle = rawTitle.isEmpty ? visibleTitle : rawTitle
             if !accessibilityTitle.isEmpty {
                 item.accessibilityLabel = accessibilityTitle
             }
             item.title = ""
             item.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: 100)
-            item.image = makeTabBarItemImage(icon: icon, title: title, color: inactiveTint)
-            item.selectedImage = makeTabBarItemImage(icon: selectedIcon, title: title, color: activeTint)
+            item.image = makeTabBarItemImage(icon: icon, title: titles.normal, color: inactiveTint)
+            item.selectedImage = makeTabBarItemImage(icon: selectedIcon, title: titles.selected, color: activeTint)
         }
     }
 
@@ -1463,9 +1466,28 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             return false
         }
 
+        return ["auto", "selected", "labeled", "unlabeled"].contains(tabLabelVisibilityMode(options: call))
+    }
+
+    private func tabLabelVisibilityMode(options call: CAPPluginCall) -> String {
         let labels = call.getBool("labels", true)
-        let labelVisibilityMode = call.getString("labelVisibilityMode") ?? (labels ? "labeled" : "unlabeled")
-        return ["auto", "selected", "labeled", "unlabeled"].contains(labelVisibilityMode)
+        return call.getString("labelVisibilityMode") ?? (labels ? "labeled" : "unlabeled")
+    }
+
+    private func bakedTintTitles(rawTitle: String, visibleTitle: String, labelVisibilityMode: String) -> (normal: String, selected: String) {
+        switch labelVisibilityMode {
+        case "unlabeled":
+            return (normal: "", selected: "")
+        case "selected":
+            return (normal: "", selected: rawTitle)
+        case "auto":
+            let compact = bridge?.viewController?.traitCollection.horizontalSizeClass == .compact || UIDevice.current.userInterfaceIdiom == .phone
+            return compact ? (normal: "", selected: rawTitle) : (normal: rawTitle, selected: rawTitle)
+        case "labeled":
+            return (normal: rawTitle, selected: rawTitle)
+        default:
+            return (normal: visibleTitle, selected: visibleTitle)
+        }
     }
 
     private func makeTabBarItemImage(icon: UIImage?, title: String, color: UIColor) -> UIImage {
