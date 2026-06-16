@@ -63,6 +63,9 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var navbarItemTitle: [String: String] = [:]
     private var tabIds: [String] = []
     private var tabTitles: [String] = []
+    private var tabDisplayTitles: [String?] = []
+    private var tabBaseImages: [UIImage?] = []
+    private var tabSelectedImages: [UIImage?] = []
     private var suppressTabSelectEvent = false
     private var transitionSnapshot: UIView?
     private var activeTransitionId: String?
@@ -207,7 +210,13 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 self.tabContainer?.isHidden = true
                 self.applySystemTabBarItems(items, selectedIndex: selectedIndex, animated: call.getBool("animated", false))
                 self.applyTabBarAppearance(tabBar: tabBar, options: call)
-                self.showTabBarChrome(tabBar)
+                if items.isEmpty {
+                    self.tabbarVisible = false
+                    self.setSystemTabBarHidden(true)
+                    self.tabBarController?.view.isHidden = true
+                } else {
+                    self.showTabBarChrome(tabBar)
+                }
             } else {
                 self.restoreWebViewFromSystemTabController()
                 self.setSystemTabBarHidden(true)
@@ -218,23 +227,36 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                     selectedId: selectedId,
                     icons: icons
                 )
-                self.applyFloatingTabBarAppearance(tabBar: tabBar, options: call)
-                let resolvedSelectedIndex = selectedIndex ?? (items.indices.contains(tabBar.selectedIndex) ? tabBar.selectedIndex : 0)
-                tabBar.configure(
-                    items: items,
-                    selectedIndex: resolvedSelectedIndex,
-                    labelVisibilityMode: labelVisibilityMode,
-                    icons: icons,
-                    style: self.tabbarStyle
-                )
-                tabBar.onSelect = { [weak self] index, item in
-                    self?.notifyListeners("tabSelect", data: [
-                        "id": item.id,
-                        "index": index,
-                        "title": item.title
-                    ])
+                if items.isEmpty {
+                    self.tabbarVisible = false
+                    tabBar.configure(
+                        items: [],
+                        selectedIndex: 0,
+                        labelVisibilityMode: labelVisibilityMode,
+                        icons: icons,
+                        style: self.tabbarStyle
+                    )
+                    self.tabContainer?.isHidden = true
+                    tabBar.isHidden = true
+                } else {
+                    self.applyFloatingTabBarAppearance(tabBar: tabBar, options: call)
+                    let resolvedSelectedIndex = selectedIndex ?? (items.indices.contains(tabBar.selectedIndex) ? tabBar.selectedIndex : 0)
+                    tabBar.configure(
+                        items: items,
+                        selectedIndex: resolvedSelectedIndex,
+                        labelVisibilityMode: labelVisibilityMode,
+                        icons: icons,
+                        style: self.tabbarStyle
+                    )
+                    tabBar.onSelect = { [weak self] _, item in
+                        self?.notifyListeners("tabSelect", data: [
+                            "id": item.id,
+                            "index": item.sourceIndex,
+                            "title": item.title
+                        ])
+                    }
+                    self.showFloatingTabBarChrome(tabBar)
                 }
-                self.showFloatingTabBarChrome(tabBar)
             }
             self.layoutChrome()
             self.updateInsetsAndNotify()
@@ -507,13 +529,15 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             hostWebViewInSelectedSystemTab()
             return
         }
-        let index = tabBarController.viewControllers?.firstIndex(of: viewController) ?? viewController.tabBarItem.tag
+        let index = viewController.tabBarItem.tag
         hostWebViewInSelectedSystemTab()
         notifyTabSelect(index: index)
     }
 
     private func notifyTabSelect(index: Int) {
-        guard index >= 0 && index < tabIds.count else {
+        guard index >= 0,
+              index < tabIds.count,
+              !tabIds[index].isEmpty else {
             return
         }
         notifyListeners("tabSelect", data: [
@@ -723,17 +747,25 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         let shouldAnimate = animated && tabBarController.viewControllers?.count == controllers.count
 
         suppressTabSelectEvent = true
+        defer { suppressTabSelectEvent = false }
+
+        guard !controllers.isEmpty else {
+            restoreWebViewFromSystemTabController()
+            if shouldUpdateControllers {
+                tabBarController.setViewControllers([], animated: false)
+            }
+            tabViewControllers = []
+            return
+        }
+
         if shouldUpdateControllers {
             tabBarController.setViewControllers(controllers, animated: shouldAnimate)
         }
-        if !controllers.isEmpty {
-            let fallbackIndex = selectedIndex ?? previousSelectedIndex
-            let index = min(max(fallbackIndex, 0), controllers.count - 1)
-            hostWebView(in: controllers[index])
-            tabBarController.selectedIndex = index
-        }
-        suppressTabSelectEvent = false
 
+        let fallbackIndex = selectedIndex ?? previousSelectedIndex
+        let index = min(max(fallbackIndex, 0), controllers.count - 1)
+        hostWebView(in: controllers[index])
+        tabBarController.selectedIndex = index
         tabViewControllers = controllers
     }
 
@@ -948,63 +980,89 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     ) -> ([UITabBarItem], Int?) {
         tabIds = []
         tabTitles = []
+        tabDisplayTitles = []
+        tabBaseImages = []
+        tabSelectedImages = []
         var selectedIndex: Int?
+        var items: [UITabBarItem] = []
 
-        let items = tabs.enumerated().map { index, tab -> UITabBarItem in
-            let id = tab["id"] as? String ?? "tab-\(index)"
+        for (sourceIndex, tab) in tabs.enumerated() {
+            let id = tab["id"] as? String ?? "tab-\(sourceIndex)"
+            let isHidden = tab["hidden"] as? Bool ?? false
+            if isHidden && id != selectedId {
+                continue
+            }
+
+            let visibleIndex = items.count
+            let rawTitle = tab["title"] as? String ?? ""
             let title = tabTitle(
-                tab["title"] as? String,
+                rawTitle,
                 id: id,
-                index: index,
+                index: visibleIndex,
                 selectedId: selectedId,
                 labelVisibilityMode: labelVisibilityMode
             )
             let image = icons ? self.image(from: tab["icon"] as? [String: Any]) : nil
             let selectedImage = icons ? self.image(from: tab["selectedIcon"] as? [String: Any]) : nil
             let item = UITabBarItem(title: title, image: image, selectedImage: selectedImage)
-            item.tag = index
+            item.tag = sourceIndex
             item.isEnabled = tab["enabled"] as? Bool ?? true
             if let badge = tab["badge"] {
                 item.badgeValue = String(describing: badge)
             }
-            tabIds.append(id)
-            tabTitles.append(tab["title"] as? String ?? "")
-            if id == selectedId {
-                selectedIndex = index
+            while tabIds.count <= sourceIndex {
+                tabIds.append("")
+                tabTitles.append("")
             }
-            return item
+            tabIds[sourceIndex] = id
+            tabTitles[sourceIndex] = rawTitle
+            tabDisplayTitles.append(title)
+            tabBaseImages.append(image)
+            tabSelectedImages.append(selectedImage ?? image)
+            if id == selectedId {
+                selectedIndex = visibleIndex
+            }
+            items.append(item)
         }
 
         return (items, selectedIndex)
     }
-
     private func makeFloatingTabBarItems(
         _ tabs: [[String: Any]],
         selectedId: String?,
         icons: Bool
     ) -> ([NativeNavigationFloatingTabItem], Int?) {
         var selectedIndex: Int?
-        let items = tabs.enumerated().map { index, tab -> NativeNavigationFloatingTabItem in
-            let id = tab["id"] as? String ?? "tab-\(index)"
+        var items: [NativeNavigationFloatingTabItem] = []
+
+        for (sourceIndex, tab) in tabs.enumerated() {
+            let id = tab["id"] as? String ?? "tab-\(sourceIndex)"
+            let isHidden = tab["hidden"] as? Bool ?? false
+            if isHidden && id != selectedId {
+                continue
+            }
+
+            let visibleIndex = items.count
             let title = tab["title"] as? String ?? ""
             let image = icons ? self.image(from: tab["icon"] as? [String: Any]) : nil
             let selectedImage = icons ? self.image(from: tab["selectedIcon"] as? [String: Any]) : nil
             if id == selectedId {
-                selectedIndex = index
+                selectedIndex = visibleIndex
             }
-            return NativeNavigationFloatingTabItem(
+            items.append(NativeNavigationFloatingTabItem(
                 id: id,
                 title: title,
                 accessibilityTitle: title.isEmpty ? id : title,
                 image: image,
                 selectedImage: selectedImage,
                 badge: tab["badge"].map { String(describing: $0) },
-                enabled: tab["enabled"] as? Bool ?? true
-            )
+                enabled: tab["enabled"] as? Bool ?? true,
+                sourceIndex: sourceIndex
+            ))
         }
+
         return (items, selectedIndex)
     }
-
     private func tabTitle(
         _ title: String?,
         id: String,
@@ -1266,6 +1324,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                     item.scrollEdgeAppearance = scrollEdgeAppearance
                 }
             }
+            applyExperimentalBakedTintColors(tabBar: tabBar, options: call)
             return
         }
 
@@ -1318,7 +1377,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                     itemAppearance.selected.titleTextAttributes = [.foregroundColor: color]
                 }
             }
-            if let color = colorValue(colors["inactiveTint"]) {
+            if let color = colorValue(colors["inactiveTint"]), !usesSystemLiquidGlass {
                 tabBar.unselectedItemTintColor = color
                 applyTabItemAppearances(appearance) { itemAppearance in
                     itemAppearance.normal.iconColor = color
@@ -1389,6 +1448,136 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 itemAppearance.selected.badgeTextAttributes = [.foregroundColor: color]
             }
         }
+    }
+
+    private func applyExperimentalBakedTintColors(tabBar: UITabBar, options call: CAPPluginCall) {
+        guard shouldUseExperimentalBakedTintColors(options: call),
+              let items = tabBar.items,
+              let colors = call.getObject("colors") else {
+            return
+        }
+
+        let activeTint = colorValue(colors["tint"]) ?? tabBar.tintColor ?? .tintColor
+        let inactiveTint = colorValue(colors["inactiveTint"]) ?? tabBar.unselectedItemTintColor ?? .secondaryLabel
+        guard colorValue(colors["tint"]) != nil || colorValue(colors["inactiveTint"]) != nil else {
+            return
+        }
+
+        let labelVisibilityMode = tabLabelVisibilityMode(options: call)
+        for (index, item) in items.enumerated() {
+            let visibleTitle = tabDisplayTitles.indices.contains(index) ? (tabDisplayTitles[index] ?? "") : (item.title ?? "")
+            let rawTitle = tabTitles.indices.contains(item.tag) ? tabTitles[item.tag] : visibleTitle
+            let titles = bakedTintTitles(rawTitle: rawTitle, visibleTitle: visibleTitle, labelVisibilityMode: labelVisibilityMode)
+            let icon = tabBaseImages.indices.contains(index) ? (tabBaseImages[index] ?? item.image) : item.image
+            let selectedIcon = tabSelectedImages.indices.contains(index)
+                ? (tabSelectedImages[index] ?? icon)
+                : icon
+            guard !titles.normal.isEmpty || !titles.selected.isEmpty || icon != nil || selectedIcon != nil else {
+                continue
+            }
+
+            let accessibilityTitle = rawTitle.isEmpty ? visibleTitle : rawTitle
+            if !accessibilityTitle.isEmpty {
+                item.accessibilityLabel = accessibilityTitle
+            }
+            item.title = ""
+            item.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: 100)
+            item.image = makeTabBarItemImage(icon: icon, title: titles.normal, color: inactiveTint)
+            item.selectedImage = makeTabBarItemImage(icon: selectedIcon, title: titles.selected, color: activeTint)
+        }
+    }
+
+    private func shouldUseExperimentalBakedTintColors(options call: CAPPluginCall) -> Bool {
+        guard usesSystemLiquidGlass,
+              call.getBool("experimentalBakedTintColors", false) else {
+            return false
+        }
+
+        return ["auto", "selected", "labeled", "unlabeled"].contains(tabLabelVisibilityMode(options: call))
+    }
+
+    private func tabLabelVisibilityMode(options call: CAPPluginCall) -> String {
+        let labels = call.getBool("labels", true)
+        return call.getString("labelVisibilityMode") ?? (labels ? "labeled" : "unlabeled")
+    }
+
+    private func bakedTintTitles(rawTitle: String, visibleTitle: String, labelVisibilityMode: String) -> (normal: String, selected: String) {
+        switch labelVisibilityMode {
+        case "unlabeled":
+            return (normal: "", selected: "")
+        case "selected":
+            return (normal: "", selected: rawTitle)
+        case "auto":
+            let compact = bridge?.viewController?.traitCollection.horizontalSizeClass == .compact || UIDevice.current.userInterfaceIdiom == .phone
+            return compact ? (normal: "", selected: rawTitle) : (normal: rawTitle, selected: rawTitle)
+        case "labeled":
+            return (normal: rawTitle, selected: rawTitle)
+        default:
+            return (normal: visibleTitle, selected: visibleTitle)
+        }
+    }
+
+    private func makeTabBarItemImage(icon: UIImage?, title: String, color: UIColor) -> UIImage {
+        let iconSize = CGSize(width: 27, height: 27)
+        let font = UIFont.systemFont(ofSize: 10, weight: .regular)
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.alignment = .center
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: color,
+            .paragraphStyle: paragraphStyle
+        ]
+        let hasTitle = !title.isEmpty
+        let titleSize = hasTitle ? (title as NSString).size(withAttributes: attributes) : .zero
+        let imageSize = hasTitle
+            ? CGSize(width: max(iconSize.width, ceil(titleSize.width)) + 8, height: iconSize.height + 3 + ceil(titleSize.height))
+            : iconSize
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = UIScreen.main.scale
+
+        let image = UIGraphicsImageRenderer(size: imageSize, format: format).image { _ in
+            if let icon {
+                let tintedIcon = icon.withTintColor(color, renderingMode: .alwaysOriginal)
+                let iconFrame = aspectFitRect(
+                    size: tintedIcon.size,
+                    in: CGRect(
+                        x: (imageSize.width - iconSize.width) / 2,
+                        y: 0,
+                        width: iconSize.width,
+                        height: iconSize.height
+                    )
+                )
+                tintedIcon.draw(in: iconFrame)
+            }
+            if hasTitle {
+                (title as NSString).draw(
+                    in: CGRect(
+                        x: 0,
+                        y: iconSize.height + 3,
+                        width: imageSize.width,
+                        height: ceil(titleSize.height)
+                    ),
+                    withAttributes: attributes
+                )
+            }
+        }
+
+        return image.withRenderingMode(.alwaysOriginal)
+    }
+
+    private func aspectFitRect(size: CGSize, in rect: CGRect) -> CGRect {
+        guard size.width > 0, size.height > 0 else {
+            return rect
+        }
+
+        let scale = min(rect.width / size.width, rect.height / size.height)
+        let fittedSize = CGSize(width: size.width * scale, height: size.height * scale)
+        return CGRect(
+            x: rect.minX + (rect.width - fittedSize.width) / 2,
+            y: rect.minY + (rect.height - fittedSize.height) / 2,
+            width: fittedSize.width,
+            height: fittedSize.height
+        )
     }
 
     private func applyTabItemAppearances(
@@ -1641,7 +1830,6 @@ private struct SVGRenderStyle {
         }
     }
 }
-
 private struct NativeNavigationFloatingTabItem {
     let id: String
     let title: String
@@ -1650,6 +1838,7 @@ private struct NativeNavigationFloatingTabItem {
     let selectedImage: UIImage?
     let badge: String?
     let enabled: Bool
+    let sourceIndex: Int
 }
 
 private enum NativeNavigationTabbarShape {

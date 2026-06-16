@@ -54,6 +54,14 @@ Native navbar, tabbar, safe-area handling, and WebView snapshot transitions for 
 | --- | --- |
 | <img src="./docs/native-liquid-glass-ios.webp" alt="iOS native Liquid Glass navbar and tabbar screenshot" width="260" /> | <img src="./docs/native-liquid-glass-android.webp" alt="Android Liquid Glass-style native navbar and tabbar screenshot" width="260" /> |
 
+### Curved native tabbar screenshot
+
+<img
+  src="./docs/native-screenshots/android-curved-tabbar.png"
+  alt="Android native curved tabbar with raised center camera action and side margin"
+  width="300"
+/>
+
 ## Features
 
 - Drive native top navigation and bottom tabs from JavaScript state.
@@ -76,6 +84,20 @@ Native navbar, tabbar, safe-area handling, and WebView snapshot transitions for 
 `@capgo/capacitor-native-navigation` targets Capacitor 8 and Node.js 22+.
 
 ## Install
+
+You can use our AI-Assisted Setup to install the plugin. Add the Capgo skills to your AI tool using the following command:
+
+```bash
+npx skills add https://github.com/cap-go/capacitor-skills --skill capacitor-plugins
+```
+
+Then use the following prompt:
+
+```text
+Use the `capacitor-plugins` skill from `cap-go/capacitor-skills` to install the `@capgo/capacitor-native-navigation` plugin in my project.
+```
+
+If you prefer Manual Setup, install the plugin by running the following commands and follow the platform-specific instructions below:
 
 ```bash
 npm install @capgo/capacitor-native-navigation
@@ -661,7 +683,7 @@ Native bar colors. Use CSS-style hex strings (`#RRGGBB` or `#AARRGGBB`).
 | --------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | **`dynamic`**         | <code>boolean</code> | When `true`, Android 12+ derives unspecified bar colors from Material You system palettes. Explicit color fields still win. |
 | **`tint`**            | <code>string</code>  | Tint color for active buttons/items.                                                                                        |
-| **`inactiveTint`**    | <code>string</code>  | Color for inactive tab items.                                                                                               |
+| **`inactiveTint`**    | <code>string</code>  | Color for inactive tab items. Ignored on iOS 26+ unless `experimentalBakedTintColors` is enabled.                           |
 | **`background`**      | <code>string</code>  | Optional background tint. Ignored on iOS 26+ so UIKit can preserve the system Liquid Glass navigation appearance.           |
 | **`foreground`**      | <code>string</code>  | Title and label text color where the native platform supports it.                                                           |
 | **`badgeBackground`** | <code>string</code>  | Badge background color for native tab badges.                                                                               |
@@ -743,39 +765,41 @@ because icons are rendered by native UI.
 
 Native tabbar state.
 
-| Prop                                 | Type                                                                                                      | Description                                                                                                                                                          |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`hidden`**                         | <code>boolean</code>                                                                                      | Hide the native tabbar.                                                                                                                                              |
-| **`tabs`**                           | <code>NativeNavigationTab[]</code>                                                                        | Tab definitions.                                                                                                                                                     |
-| **`selectedId`**                     | <code>string</code>                                                                                       | Currently selected tab id.                                                                                                                                           |
-| **`labels`**                         | <code>boolean</code>                                                                                      | Show text labels. Defaults to `true`.                                                                                                                                |
-| **`labelVisibilityMode`**            | <code><a href="#nativenavigationtablabelvisibilitymode">NativeNavigationTabLabelVisibilityMode</a></code> | Native label visibility mode. Overrides `labels` when provided.                                                                                                      |
-| **`icons`**                          | <code>boolean</code>                                                                                      | Show icons. Defaults to `true`.                                                                                                                                      |
-| **`colors`**                         | <code><a href="#nativenavigationcolors">NativeNavigationColors</a></code>                                 | Tabbar color hints.                                                                                                                                                  |
-| **`blurEffect`**                     | <code><a href="#nativenavigationblureffect">NativeNavigationBlurEffect</a></code>                         | iOS blur/material effect for the tabbar background when glass is not available.                                                                                      |
-| **`glass`**                          | <code><a href="#nativenavigationglassoptions">NativeNavigationGlassOptions</a></code>                     | Optional glass background behavior. Overrides `configure({ glass })` for this tabbar update.                                                                         |
-| **`disableTransparentOnScrollEdge`** | <code>boolean</code>                                                                                      | Keep the iOS scroll-edge tabbar appearance from becoming transparent. Mirrors Expo Router native tabs' `disableTransparentOnScrollEdge` option. Defaults to `false`. |
-| **`disableIndicator`**               | <code>boolean</code>                                                                                      | Disable the Android active tab indicator.                                                                                                                            |
-| **`indicatorColor`**                 | <code>string</code>                                                                                       | Active tab indicator color on Android. `colors.indicator` is also supported.                                                                                         |
-| **`rippleColor`**                    | <code>string</code>                                                                                       | Tab press ripple color on Android. `colors.ripple` is also supported.                                                                                                |
-| **`badgeBackgroundColor`**           | <code>string</code>                                                                                       | Badge background color. `colors.badgeBackground` is also supported.                                                                                                  |
-| **`badgeTextColor`**                 | <code>string</code>                                                                                       | Badge text color. `colors.badgeText` is also supported.                                                                                                              |
-| **`style`**                          | <code><a href="#nativenavigationtabbarstyle">NativeNavigationTabbarStyle</a></code>                       | Optional native tabbar layout and shape customization.                                                                                                               |
-| **`animated`**                       | <code>boolean</code>                                                                                      | Animate native tabbar changes.                                                                                                                                       |
+| Prop                                 | Type                                                                                                      | Description                                                                                                                                                                                     |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`hidden`**                         | <code>boolean</code>                                                                                      | Hide the native tabbar.                                                                                                                                                                         |
+| **`tabs`**                           | <code>NativeNavigationTab[]</code>                                                                        | Tab definitions.                                                                                                                                                                                |
+| **`selectedId`**                     | <code>string</code>                                                                                       | Currently selected tab id.                                                                                                                                                                      |
+| **`labels`**                         | <code>boolean</code>                                                                                      | Show text labels. Defaults to `true`.                                                                                                                                                           |
+| **`labelVisibilityMode`**            | <code><a href="#nativenavigationtablabelvisibilitymode">NativeNavigationTabLabelVisibilityMode</a></code> | Native label visibility mode. Overrides `labels` when provided.                                                                                                                                 |
+| **`icons`**                          | <code>boolean</code>                                                                                      | Show icons. Defaults to `true`.                                                                                                                                                                 |
+| **`colors`**                         | <code><a href="#nativenavigationcolors">NativeNavigationColors</a></code>                                 | Tabbar color hints.                                                                                                                                                                             |
+| **`blurEffect`**                     | <code><a href="#nativenavigationblureffect">NativeNavigationBlurEffect</a></code>                         | iOS blur/material effect for the tabbar background when glass is not available.                                                                                                                 |
+| **`glass`**                          | <code><a href="#nativenavigationglassoptions">NativeNavigationGlassOptions</a></code>                     | Optional glass background behavior. Overrides `configure({ glass })` for this tabbar update.                                                                                                    |
+| **`experimentalBakedTintColors`**    | <code>boolean</code>                                                                                      | Opt into the iOS 26 Liquid Glass tint workaround that renders active and inactive tab items into baked images. This can affect badge positioning and icon sizing, so it is disabled by default. |
+| **`disableTransparentOnScrollEdge`** | <code>boolean</code>                                                                                      | Keep the iOS scroll-edge tabbar appearance from becoming transparent. Mirrors Expo Router native tabs' `disableTransparentOnScrollEdge` option. Defaults to `false`.                            |
+| **`disableIndicator`**               | <code>boolean</code>                                                                                      | Disable the Android active tab indicator.                                                                                                                                                       |
+| **`indicatorColor`**                 | <code>string</code>                                                                                       | Active tab indicator color on Android. `colors.indicator` is also supported.                                                                                                                    |
+| **`rippleColor`**                    | <code>string</code>                                                                                       | Tab press ripple color on Android. `colors.ripple` is also supported.                                                                                                                           |
+| **`badgeBackgroundColor`**           | <code>string</code>                                                                                       | Badge background color. `colors.badgeBackground` is also supported.                                                                                                                             |
+| **`badgeTextColor`**                 | <code>string</code>                                                                                       | Badge text color. `colors.badgeText` is also supported.                                                                                                                                         |
+| **`style`**                          | <code><a href="#nativenavigationtabbarstyle">NativeNavigationTabbarStyle</a></code>                       | Optional native tabbar layout and shape customization.                                                                                                                                          |
+| **`animated`**                       | <code>boolean</code>                                                                                      | Animate native tabbar changes.                                                                                                                                                                  |
 
 
 #### NativeNavigationTab
 
 A native tab item.
 
-| Prop               | Type                                                                  | Description                                                                                                          |
-| ------------------ | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| **`id`**           | <code>string</code>                                                   | Stable tab id returned in `tabSelect`.                                                                               |
-| **`title`**        | <code>string</code>                                                   | Visible tab label.                                                                                                   |
-| **`icon`**         | <code><a href="#nativenavigationicon">NativeNavigationIcon</a></code> | Native icon descriptor.                                                                                              |
-| **`selectedIcon`** | <code><a href="#nativenavigationicon">NativeNavigationIcon</a></code> | Optional selected-state icon.                                                                                        |
-| **`badge`**        | <code>string \| number</code>                                         | Optional badge. Numeric badges are supported on both platforms; text badge support depends on platform capabilities. |
-| **`enabled`**      | <code>boolean</code>                                                  | Whether the tab is enabled. Defaults to `true`.                                                                      |
+| Prop               | Type                                                                  | Description                                                                                                                                               |
+| ------------------ | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`id`**           | <code>string</code>                                                   | Stable tab id returned in `tabSelect`.                                                                                                                    |
+| **`title`**        | <code>string</code>                                                   | Visible tab label.                                                                                                                                        |
+| **`icon`**         | <code><a href="#nativenavigationicon">NativeNavigationIcon</a></code> | Native icon descriptor.                                                                                                                                   |
+| **`selectedIcon`** | <code><a href="#nativenavigationicon">NativeNavigationIcon</a></code> | Optional selected-state icon.                                                                                                                             |
+| **`badge`**        | <code>string \| number</code>                                         | Optional badge. Numeric badges are supported on both platforms; text badge support depends on platform capabilities.                                      |
+| **`enabled`**      | <code>boolean</code>                                                  | Whether the tab is enabled. Defaults to `true`.                                                                                                           |
+| **`hidden`**       | <code>boolean</code>                                                  | Hide the tab item from the native tabbar. When the hidden tab is selected, native platform constraints may keep it visible until another tab is selected. |
 
 
 #### NativeNavigationTabbarStyle

@@ -146,6 +146,7 @@ export function defineNativeNavigationElements(): void {
         'ripple-color',
         'badge-background-color',
         'badge-text-color',
+        'experimental-baked-tint-colors',
         'animated',
       ];
     }
@@ -178,6 +179,7 @@ export function defineNativeNavigationElements(): void {
         indicatorColor: normalizeAttribute(this.getAttribute('indicator-color')),
         rippleColor: normalizeAttribute(this.getAttribute('ripple-color')),
         badgeBackgroundColor: normalizeAttribute(this.getAttribute('badge-background-color')),
+        experimentalBakedTintColors: parseBoolean(this.getAttribute('experimental-baked-tint-colors')),
         badgeTextColor: normalizeAttribute(this.getAttribute('badge-text-color')),
         animated: parseBoolean(this.getAttribute('animated')),
       };

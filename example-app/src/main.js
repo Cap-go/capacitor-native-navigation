@@ -5,6 +5,23 @@ import { NativeNavigation } from '@capgo/capacitor-native-navigation';
 
 const app = document.getElementById('app');
 const isWebPreview = Capacitor.getPlatform() === 'web';
+const topButtonStorageKey = 'native-navigation-top-button-visible';
+
+const readTopButtonPreference = () => {
+  try {
+    return window.localStorage.getItem(topButtonStorageKey) !== 'false';
+  } catch {
+    return true;
+  }
+};
+
+const writeTopButtonPreference = (visible) => {
+  try {
+    window.localStorage.setItem(topButtonStorageKey, visible ? 'true' : 'false');
+  } catch {
+    // Ignore storage failures in restricted webviews.
+  }
+};
 
 void CapacitorUpdater.notifyAppReady().catch((error) => {
   console.warn('Capgo updater notifyAppReady failed', error);
@@ -51,6 +68,12 @@ const tabs = [
     title: 'Profile',
     icon: { svg: icons.profile },
   },
+  {
+    id: 'draft',
+    title: 'Draft',
+    icon: { svg: icons.compose },
+    hidden: true,
+  },
 ];
 
 let activeTab = 'home';
@@ -60,6 +83,8 @@ let labelsEnabled = true;
 let iconsEnabled = true;
 let tabbarShape = 'curve';
 let tabbarHidden = false;
+let topButtonVisible = readTopButtonPreference();
+let chromeConfigured = false;
 const pages = {
   home: {
     title: 'Curved Tabbar',
@@ -74,6 +99,20 @@ const pages = {
           <span>RESTAURANT</span>
           <strong>Pizza room</strong>
         </article>
+      </section>
+      <section class="demo-actions" aria-label="Navigation demo actions">
+        <button class="tile" data-push="detail">
+          <span>Open detail</span>
+          <small>Push transition and native back button</small>
+        </button>
+        <button class="tile" data-action="toggle-tabbar">
+          <span>Toggle tabbar</span>
+          <small>Dynamic visibility from JavaScript</small>
+        </button>
+        <button class="tile" data-action="open-hidden-tab">
+          <span>Open hidden tab</span>
+          <small>Hidden tabs stay out of the native bar until selected</small>
+        </button>
       </section>
     `,
   },
@@ -111,6 +150,7 @@ const pages = {
         <label><input id="labels-toggle" type="checkbox" /> Tab labels</label>
         <label><input id="icons-toggle" type="checkbox" /> Tab icons</label>
         <label><input id="curve-toggle" type="checkbox" /> Curved center tabbar</label>
+        <label><input id="top-button-toggle" type="checkbox" /> Top button</label>
         <button data-action="refresh-version">Read native version</button>
         <pre id="version-output">Ready.</pre>
       </section>
@@ -124,6 +164,17 @@ const pages = {
         <article><strong>Martin</strong><span>Five native tabs with a promoted center action.</span></article>
         <article><strong>Theme</strong><span>Colors and shape are updated from JavaScript.</span></article>
         <article><strong>Safe area</strong><span>CSS variables still reflect the native tabbar height.</span></article>
+      </section>
+    `,
+  },
+  draft: {
+    title: 'Draft',
+    subtitle: 'Hidden tab selected',
+    body: `
+      <section class="detail">
+        <p class="eyebrow">Hidden native tab</p>
+        <h1>Visible only while active.</h1>
+        <p>The Draft tab is configured with hidden: true. The native tabbar shows it when selected, then removes it after another tab is chosen.</p>
       </section>
     `,
   },
@@ -168,6 +219,20 @@ const tabbarStyle = () =>
         maxWidth: 430,
         bottomGap: 10,
       };
+const topButtonItems = [
+  {
+    id: 'compose',
+    title: 'Compose',
+    icon: { svg: icons.compose },
+  },
+];
+
+const shouldShowTopButton = () => route === 'settings' && topButtonVisible;
+
+const setTopButtonVisible = (visible) => {
+  topButtonVisible = visible;
+  writeTopButtonPreference(visible);
+};
 
 const configureChrome = async () => {
   await NativeNavigation.configure({
@@ -183,6 +248,7 @@ const configureChrome = async () => {
       surfaceAlpha: 0.62,
     },
   });
+  chromeConfigured = true;
   await updateNavbar();
   await updateTabbar();
 };
@@ -199,13 +265,7 @@ const updateNavbar = async () => {
       visible: stack.length > 1,
       title: 'Back',
     },
-    rightItems: [
-      {
-        id: 'compose',
-        title: 'Compose',
-        icon: { svg: icons.compose },
-      },
-    ],
+    rightItems: shouldShowTopButton() ? topButtonItems : [],
   });
 };
 
@@ -221,10 +281,32 @@ const updateTabbar = async () => {
   });
 };
 
+const restoreChrome = async () => {
+  if (!chromeConfigured) {
+    return;
+  }
+  await updateNavbar();
+  await updateTabbar();
+};
+
+const clearNavbarActions = () => {
+  void NativeNavigation.setNavbar({
+    hidden: true,
+    title: '',
+    transparent: true,
+    backButton: { visible: false },
+    leftItems: [],
+    rightItems: [],
+  }).catch((error) => {
+    console.warn('Native navbar cleanup failed', error);
+  });
+};
+
 const syncControls = () => {
   const labelsToggle = document.getElementById('labels-toggle');
   const iconsToggle = document.getElementById('icons-toggle');
   const curveToggle = document.getElementById('curve-toggle');
+  const topButtonToggle = document.getElementById('top-button-toggle');
   if (labelsToggle) {
     labelsToggle.checked = labelsEnabled;
   }
@@ -234,15 +316,20 @@ const syncControls = () => {
   if (curveToggle) {
     curveToggle.checked = tabbarShape === 'curve';
   }
+  if (topButtonToggle) {
+    topButtonToggle.checked = topButtonVisible;
+  }
 };
 
+const visiblePreviewTabs = () => tabs.filter((tab) => !tab.hidden);
 
 const renderWebTabbarPreview = () => {
   if (!isWebPreview || route === 'detail' || tabbarHidden) {
     return '';
   }
 
-  const items = tabs
+  const visibleTabs = visiblePreviewTabs();
+  const items = visibleTabs
     .map((tab) => {
       const selected = tab.id === activeTab;
       const center = tabbarShape === 'curve' && tab.id === 'capture';
@@ -257,7 +344,7 @@ const renderWebTabbarPreview = () => {
     })
     .join('');
 
-  return `<nav class="web-tabbar-preview ${tabbarShape}" aria-label="Tabbar preview">${items}</nav>`;
+  return `<nav class="web-tabbar-preview ${tabbarShape}" style="--web-tab-count: ${visibleTabs.length}" aria-label="Tabbar preview">${items}</nav>`;
 };
 const render = () => {
   const page = pages[route] ?? pages.home;
@@ -313,6 +400,11 @@ app.addEventListener('click', async (event) => {
     await updateTabbar();
     return;
   }
+  if (target.dataset.action === 'open-hidden-tab') {
+    activeTab = 'draft';
+    await navigate('draft', 'tab');
+    return;
+  }
   if (target.dataset.action === 'refresh-version') {
     const output = document.getElementById('version-output');
     const version = await NativeNavigation.getPluginVersion();
@@ -335,6 +427,10 @@ app.addEventListener('change', async (event) => {
     tabbarShape = event.target.checked ? 'curve' : 'floating';
     render();
     await updateTabbar();
+  }
+  if (event.target.id === 'top-button-toggle') {
+    setTopButtonVisible(event.target.checked);
+    await updateNavbar();
   }
 });
 
@@ -359,6 +455,19 @@ NativeNavigation.addListener('tabSelect', async (event) => {
 
 NativeNavigation.addListener('safeAreaChanged', (event) => {
   app.dataset.insets = JSON.stringify(event.insets);
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    clearNavbarActions();
+    return;
+  }
+  void restoreChrome();
+});
+
+window.addEventListener('pagehide', clearNavbarActions);
+window.addEventListener('pageshow', () => {
+  void restoreChrome();
 });
 
 render();
