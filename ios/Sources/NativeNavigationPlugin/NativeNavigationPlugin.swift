@@ -1465,7 +1465,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
         let labels = call.getBool("labels", true)
         let labelVisibilityMode = call.getString("labelVisibilityMode") ?? (labels ? "labeled" : "unlabeled")
-        return labelVisibilityMode == "labeled" || labelVisibilityMode == "unlabeled"
+        return ["auto", "selected", "labeled", "unlabeled"].contains(labelVisibilityMode)
     }
 
     private func makeTabBarItemImage(icon: UIImage?, title: String, color: UIColor) -> UIImage {

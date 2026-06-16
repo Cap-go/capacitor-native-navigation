@@ -524,7 +524,7 @@ export interface NativeNavigationTabbarOptions {
 
   /**
    * Opt into the iOS 26 Liquid Glass tint workaround that renders active and
-   * inactive tab labels into icon images. This can affect badge positioning
+   * inactive tab items into baked images. This can affect badge positioning
    * and icon sizing, so it is disabled by default.
    */
   experimentalBakedTintColors?: boolean;
