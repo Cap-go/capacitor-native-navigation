@@ -692,10 +692,18 @@ public class NativeNavigationPlugin extends Plugin {
         button.setClipToPadding(false);
         button.setForeground(selectableItemBackground());
         if (center) {
+            GradientDrawable surroundBackground = new GradientDrawable();
+            surroundBackground.setShape(GradientDrawable.OVAL);
+            surroundBackground.setColor(Color.WHITE);
+            button.setBackground(surroundBackground);
+
             GradientDrawable centerBackground = new GradientDrawable();
             centerBackground.setShape(GradientDrawable.OVAL);
             centerBackground.setColor(tabbarStyle.centerButtonColor);
-            button.setBackground(centerBackground);
+            View centerFill = new View(getContext());
+            centerFill.setBackground(centerBackground);
+            int centerFillDiameter = dp(Math.max(tabbarStyle.centerButtonDiameter - 14, 44));
+            button.addView(centerFill, new FrameLayout.LayoutParams(centerFillDiameter, centerFillDiameter, Gravity.CENTER));
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 button.setElevation(dp(10));
             }
@@ -1028,7 +1036,7 @@ public class NativeNavigationPlugin extends Plugin {
             if (hasCenterButton()) {
                 int barHeight = dp(style.height);
                 int barTop = dp(style.barTop());
-                int centerGap = Math.min(dp(style.centerButtonDiameter + 22), Math.round(width * 0.46f));
+                int centerGap = Math.min(dp(style.centerButtonDiameter + 4), Math.round(width * 0.34f));
                 int leftWidth = Math.max(0, Math.round(width / 2f - centerGap / 2f));
                 int rightX = Math.min(width, Math.round(width / 2f + centerGap / 2f));
                 measureRange(0, centerIndex, leftWidth, barHeight);
@@ -1054,7 +1062,7 @@ public class NativeNavigationPlugin extends Plugin {
                 int barTop = dp(style.barTop());
                 int barHeight = dp(style.height);
                 int buttonDiameter = dp(style.centerButtonDiameter);
-                int centerGap = Math.min(dp(style.centerButtonDiameter + 22), Math.round(width * 0.46f));
+                int centerGap = Math.min(dp(style.centerButtonDiameter + 4), Math.round(width * 0.34f));
                 int leftWidth = Math.max(0, Math.round(width / 2f - centerGap / 2f));
                 int rightX = Math.min(width, Math.round(width / 2f + centerGap / 2f));
                 View center = getChildAt(centerIndex);
@@ -1112,7 +1120,7 @@ public class NativeNavigationPlugin extends Plugin {
             float barHeight = dp(style.height);
             float cornerRadius = Math.min(dp(style.cornerRadius), barHeight / 2f);
             float centerX = width / 2f;
-            float notchRadius = dp(style.centerButtonDiameter) / 2f + dp(7);
+            float notchRadius = dp(style.centerButtonDiameter) / 2f + dp(1);
             float notchDepth = Math.min(barHeight * 0.78f, notchRadius);
             float leftShoulder = Math.max(cornerRadius, centerX - notchRadius);
             float rightShoulder = Math.min(width - cornerRadius, centerX + notchRadius);
