@@ -189,3 +189,7 @@ API docs in the README are auto-generated from JSDoc in `src/definitions.ts`. **
 - We target JVM 21 for Android builds.
 - `dist/` is regenerated on every build and should never be edited directly.
 - Use Bun for everything. If a command needs a package binary, use `bunx`.
+
+## Timeout Policy
+
+- Keep CI, script, and runtime timeouts at 10 minutes or less. Use `timeout-minutes: 10` or lower in GitHub Actions and cap timeout values at `600000` ms, `600` seconds, or `10m` unless explicitly requested.
