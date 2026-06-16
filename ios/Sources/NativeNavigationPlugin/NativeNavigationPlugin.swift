@@ -210,7 +210,13 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 self.tabContainer?.isHidden = true
                 self.applySystemTabBarItems(items, selectedIndex: selectedIndex, animated: call.getBool("animated", false))
                 self.applyTabBarAppearance(tabBar: tabBar, options: call)
-                self.showTabBarChrome(tabBar)
+                if items.isEmpty {
+                    self.tabbarVisible = false
+                    self.setSystemTabBarHidden(true)
+                    self.tabBarController?.view.isHidden = true
+                } else {
+                    self.showTabBarChrome(tabBar)
+                }
             } else {
                 self.restoreWebViewFromSystemTabController()
                 self.setSystemTabBarHidden(true)
@@ -728,17 +734,25 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         let shouldAnimate = animated && tabBarController.viewControllers?.count == controllers.count
 
         suppressTabSelectEvent = true
+        defer { suppressTabSelectEvent = false }
+
+        guard !controllers.isEmpty else {
+            restoreWebViewFromSystemTabController()
+            if shouldUpdateControllers {
+                tabBarController.setViewControllers([], animated: false)
+            }
+            tabViewControllers = []
+            return
+        }
+
         if shouldUpdateControllers {
             tabBarController.setViewControllers(controllers, animated: shouldAnimate)
         }
-        if !controllers.isEmpty {
-            let fallbackIndex = selectedIndex ?? previousSelectedIndex
-            let index = min(max(fallbackIndex, 0), controllers.count - 1)
-            hostWebView(in: controllers[index])
-            tabBarController.selectedIndex = index
-        }
-        suppressTabSelectEvent = false
 
+        let fallbackIndex = selectedIndex ?? previousSelectedIndex
+        let index = min(max(fallbackIndex, 0), controllers.count - 1)
+        hostWebView(in: controllers[index])
+        tabBarController.selectedIndex = index
         tabViewControllers = controllers
     }
 
