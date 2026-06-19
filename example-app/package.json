@@ -13,8 +13,7 @@
     "capacitor:sync:after": "bun run assets:native",
     "cap:sync": "cd .. && bun run example:sync",
     "cap:ios": "cd .. && bun run example:ios",
-    "cap:android": "cd .. && bun run example:android",
-    "capgo:deploy": "cd .. && bun run example:capgo:deploy"
+    "cap:android": "cd .. && bun run example:android"
   },
   "dependencies": {
     "@capacitor/core": "^8.0.0",

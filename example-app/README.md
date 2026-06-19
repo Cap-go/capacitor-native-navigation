@@ -25,19 +25,6 @@ The iOS and Android commands add the native platform folder the first time they 
 
 ## Capgo Cloud testing
 
-This app is configured for Capgo Cloud with app id `app.capgo.capacitor.navigation` and the `production` channel.
+This app is configured for Capgo Cloud with app id `app.capgo.native.navigation.example` and the `production` channel.
 
-First-time setup in Capgo:
-
-```bash
-bunx @capgo/cli@latest app add app.capgo.capacitor.navigation --name "Native Navigation Example"
-bunx @capgo/cli@latest channel add production app.capgo.capacitor.navigation --default --self-assign
-```
-
-Deploy a new OTA bundle:
-
-```bash
-bun run capgo:deploy
-```
-
-The Capgo bundle version is read from the root plugin `package.json` and must match `plugins.CapacitorUpdater.version` in `capacitor.config.json`. Use `CAPGO_CHANNEL` or `CAPGO_APP_ID` when you need to override the deployment target.
+The `Deploy example app to Capgo` GitHub Actions workflow builds the example app and uploads the bundle to Capgo when a GitHub release is published. You can also run that workflow manually from GitHub Actions.
