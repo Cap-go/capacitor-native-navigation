@@ -85,10 +85,29 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
 
     override public func load() {
-        NotificationCenter.default.addObserver(
+        let center = NotificationCenter.default
+        center.addObserver(
             self,
             selector: #selector(handleLayoutChange),
             name: UIDevice.orientationDidChangeNotification,
+            object: nil
+        )
+        center.addObserver(
+            self,
+            selector: #selector(handleKeyboardFrameChange),
+            name: UIResponder.keyboardWillChangeFrameNotification,
+            object: nil
+        )
+        center.addObserver(
+            self,
+            selector: #selector(handleKeyboardDidHide),
+            name: UIResponder.keyboardDidHideNotification,
+            object: nil
+        )
+        center.addObserver(
+            self,
+            selector: #selector(handleReduceTransparencyChange),
+            name: UIAccessibility.reduceTransparencyStatusDidChangeNotification,
             object: nil
         )
     }
@@ -552,6 +571,68 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             self.layoutChrome()
             self.updateInsetsAndNotify()
         }
+    }
+
+    @objc private func handleKeyboardFrameChange() {
+        DispatchQueue.main.async {
+            self.layoutChrome()
+        }
+    }
+
+    @objc private func handleKeyboardDidHide() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            self.refreshChromeAfterKeyboardDismiss()
+        }
+    }
+
+    @objc private func handleReduceTransparencyChange() {
+        DispatchQueue.main.async {
+            self.refreshTabBarBackgroundIfNeeded()
+            self.layoutChrome()
+            self.updateInsetsAndNotify()
+        }
+    }
+
+    private func refreshChromeAfterKeyboardDismiss() {
+        layoutChrome()
+        refreshTabBarBackgroundIfNeeded()
+        updateInsetsAndNotify()
+    }
+
+    private func refreshTabBarBackgroundIfNeeded() {
+        guard tabbarVisible else {
+            return
+        }
+
+        tabBarController?.view.setNeedsLayout()
+        tabBarController?.view.layoutIfNeeded()
+
+        if let tabBar = tabBar {
+            tabBar.isTranslucent = !prefersOpaqueTabBarBackground()
+            let standardAppearance = tabBar.standardAppearance
+            tabBar.standardAppearance = standardAppearance
+            if #available(iOS 15.0, *) {
+                let scrollEdgeAppearance = tabBar.scrollEdgeAppearance ?? standardAppearance
+                tabBar.scrollEdgeAppearance = scrollEdgeAppearance
+            }
+            tabBar.items?.forEach { item in
+                item.standardAppearance = standardAppearance
+                if #available(iOS 15.0, *) {
+                    item.scrollEdgeAppearance = tabBar.scrollEdgeAppearance
+                }
+            }
+            tabBar.setNeedsLayout()
+            tabBar.layoutIfNeeded()
+        }
+
+        tabContainer?.setNeedsLayout()
+        tabContainer?.layoutIfNeeded()
+        floatingTabBar?.setNeedsLayout()
+        floatingTabBar?.layoutIfNeeded()
+    }
+
+    private func prefersOpaqueTabBarBackground() -> Bool {
+        UIAccessibility.isReduceTransparencyEnabled
     }
 
     private func ensureNavBar() -> UINavigationBar {
@@ -1314,6 +1395,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             applyTabBarColorOptions(scrollEdgeAppearance, tabBar: tabBar, options: call)
             applyTabBarBadgeOptions(scrollEdgeAppearance, options: call)
 
+            tabBar.isTranslucent = !prefersOpaqueTabBarBackground()
             tabBar.standardAppearance = standardAppearance
             if #available(iOS 15.0, *) {
                 tabBar.scrollEdgeAppearance = scrollEdgeAppearance
@@ -1341,6 +1423,10 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
     private func configureTabBarBackground(_ appearance: UITabBarAppearance, options call: CAPPluginCall) {
         appearance.configureWithDefaultBackground()
+        if prefersOpaqueTabBarBackground() {
+            tabEffectView?.isHidden = true
+            return
+        }
         if let effect = blurEffect(from: call.getString("blurEffect"), fallback: nil) {
             appearance.configureWithTransparentBackground()
             appearance.backgroundColor = .clear
@@ -1356,7 +1442,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
 
     private func configureSystemTabBarScrollEdgeBackground(_ appearance: UITabBarAppearance, options call: CAPPluginCall) {
-        if call.getBool("disableTransparentOnScrollEdge", false) {
+        if call.getBool("disableTransparentOnScrollEdge", false) || prefersOpaqueTabBarBackground() {
             configureSystemTabBarStandardBackground(appearance)
         } else {
             appearance.configureWithTransparentBackground()
@@ -1409,7 +1495,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         let backgroundTint = colorValue(colors?["background"])
         let backgroundColor = (backgroundTint ?? .systemBackground).withAlphaComponent(tabbarStyle.shape == .curve ? 0.96 : 0.46)
 
-        if tabbarStyle.shape == .curve {
+        if tabbarStyle.shape == .curve || prefersOpaqueTabBarBackground() {
             tabEffectView?.isHidden = true
         } else if let effect = blurEffect(from: call.getString("blurEffect"), fallback: .systemChromeMaterial) {
             tabEffectView?.effect = effect
@@ -1419,7 +1505,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             tabEffectView?.isHidden = true
         }
 
-        tabBar.backgroundFillColor = backgroundColor
+        let opaqueBackground = backgroundTint ?? .systemBackground
+        tabBar.backgroundFillColor = prefersOpaqueTabBarBackground() ? opaqueBackground : backgroundColor
         if let color = colorValue(colors?["tint"]) {
             tabBar.selectedTintColor = color
         }
@@ -1597,6 +1684,11 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         let safeInsets = rootView.safeAreaInsets
         let width = rootView.bounds.width
         let height = rootView.bounds.height
+
+        if let container = systemTabRootContainer {
+            container.frame = rootView.bounds
+            webView?.frame = container.bounds
+        }
 
         if let container = navContainer {
             container.frame = CGRect(x: 0, y: 0, width: width, height: safeInsets.top + navbarHeight)
@@ -2344,7 +2436,7 @@ final class NativeNavigationTabController: UITabBarController {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
         view.isOpaque = true
-        tabBar.isTranslucent = true
+        tabBar.isTranslucent = !UIAccessibility.isReduceTransparencyEnabled
     }
 }
 
