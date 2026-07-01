@@ -231,8 +231,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 self.applyTabBarAppearance(tabBar: tabBar, options: call)
                 if items.isEmpty {
                     self.tabbarVisible = false
-                    self.setSystemTabBarHidden(true)
-                    self.tabBarController?.view.isHidden = true
+                    self.hideSystemTabBarChromeCompletely()
                 } else {
                     self.showTabBarChrome(tabBar)
                 }
@@ -871,21 +870,46 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             return
         }
 
+        let tabBar = tabBarController.tabBar
         if #available(iOS 18.0, *) {
             tabBarController.setTabBarHidden(hidden, animated: false)
         } else {
-            tabBarController.tabBar.isHidden = hidden
+            tabBar.isHidden = hidden
         }
+
+        if hidden {
+            setTabBarBackgroundSubviewsHidden(true, on: tabBar)
+        } else {
+            setTabBarBackgroundSubviewsHidden(false, on: tabBar)
+            tabBar.setNeedsLayout()
+            tabBar.layoutIfNeeded()
+        }
+    }
+
+    private func setTabBarBackgroundSubviewsHidden(_ hidden: Bool, on tabBar: UITabBar) {
+        tabBar.isHidden = hidden
+        tabBar.alpha = hidden ? 0 : 1
+        tabBar.isUserInteractionEnabled = !hidden
+        tabBar.subviews.forEach { subview in
+            subview.isHidden = hidden
+            subview.alpha = hidden ? 0 : 1
+        }
+    }
+
+    private func hideSystemTabBarChromeCompletely() {
+        applySystemTabBarItems([], selectedIndex: nil, animated: false)
+        setSystemTabBarHidden(true)
+        tabBarController?.view.isHidden = true
+        tabContainer?.isHidden = true
+        floatingTabBar?.isHidden = true
     }
 
     private func hideTabBarChrome() {
         if usesSystemLiquidGlass && tabbarStyle.shape != .curve {
-            setSystemTabBarHidden(true)
-            tabBarController?.view.isHidden = false
-            hostWebViewInSelectedSystemTab()
+            hideSystemTabBarChromeCompletely()
         } else {
-            tabContainer?.isHidden = true
-            floatingTabBar?.isHidden = true
+            restoreWebViewFromSystemTabController()
+            hideSystemTabBarChromeCompletely()
             tabBar?.isHidden = true
         }
     }
