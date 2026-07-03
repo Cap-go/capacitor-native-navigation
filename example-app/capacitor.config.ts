@@ -4,7 +4,7 @@ import pkg from './package.json';
 
 const config: CapacitorConfig = {
   appId: 'app.capgo.native.navigation.example',
-  appName: 'Native Navigation Example',
+  appName: '@capgo/capacitor-native-navigation',
   webDir: 'dist',
   plugins: {
     CapacitorUpdater: {
