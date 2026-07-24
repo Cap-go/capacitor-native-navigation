@@ -95,7 +95,8 @@ export type NativeNavigationTabbarShape = 'floating' | 'curve';
  *
  * `search` (and `prominent` when the OS supports it) renders as a detached
  * trailing circular action beside the floating tab capsule — the Apple News /
- * Photos pattern.
+ * Photos pattern. Curve-shaped bars ignore `role` and keep using the included
+ * center action instead.
  */
 export type NativeNavigationTabRole = 'normal' | 'search' | 'prominent';
 
@@ -412,11 +413,11 @@ export interface NativeNavigationTab {
   hidden?: boolean;
 
   /**
-   * Optional tab role. On iOS 26+ with the system floating Liquid Glass tab
-   * bar, `search` (or `prominent` when available) becomes a detached trailing
-   * circular action beside the capsule. On Android and the custom floating
-   * capsule path, the same role is rendered as a detached trailing action
-   * button. Defaults to `normal`.
+   * Optional tab role. On floating tabbars, `search` (or `prominent` when
+   * available) becomes a detached trailing circular action beside the capsule
+   * — including the iOS 26+ system Liquid Glass tab bar, Android floating
+   * layout, and the custom floating capsule path. Curve-shaped bars ignore
+   * `role` and keep using the included center action. Defaults to `normal`.
    */
   role?: NativeNavigationTabRole;
 }
