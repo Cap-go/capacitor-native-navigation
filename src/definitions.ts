@@ -91,6 +91,17 @@ export interface NativeNavigationRect {
 export type NativeNavigationTabbarShape = 'floating' | 'curve';
 
 /**
+ * Native tab role for Liquid Glass tab bars.
+ *
+ * `search` (and `prominent` when the OS supports it) renders as a detached
+ * trailing circular action beside the floating tab capsule — the Apple News /
+ * Photos pattern. Only one detached trailing role is used; if multiple tabs
+ * set `search` or `prominent`, the last one wins. Curve-shaped bars ignore
+ * `role` and keep using the included center action instead.
+ */
+export type NativeNavigationTabRole = 'normal' | 'search' | 'prominent';
+
+/**
  * A serializable icon descriptor. Framework nodes are intentionally not accepted
  * because icons are rendered by native UI.
  */
@@ -401,6 +412,17 @@ export interface NativeNavigationTab {
    * selected.
    */
   hidden?: boolean;
+
+  /**
+   * Optional tab role. On floating tabbars, `search` (or `prominent` when
+   * available) becomes a detached trailing circular action beside the capsule
+   * — including the iOS 26+ system Liquid Glass tab bar, Android floating
+   * layout, and the custom floating capsule path. Only one detached trailing
+   * role is used; if multiple tabs set `search` or `prominent`, the last one
+   * wins. Curve-shaped bars ignore `role` and keep using the included center
+   * action. Defaults to `normal`.
+   */
+  role?: NativeNavigationTabRole;
 }
 
 /**
@@ -408,8 +430,11 @@ export interface NativeNavigationTab {
  */
 export interface NativeNavigationTabbarStyle {
   /**
-   * `floating` keeps the existing capsule tabbar. `curve` draws a full-width
-   * bar with an included center action.
+   * `floating` keeps the capsule tabbar. On iOS 26+ this uses the
+   * system-owned Liquid Glass `UITabBarController` unless a custom capsule
+   * path is required; earlier iOS and the custom capsule path use
+   * `UIGlassEffect` on iOS 26+ (blur material fallback otherwise). `curve`
+   * draws a full-width bar with an included center action.
    */
   shape?: NativeNavigationTabbarShape;
 

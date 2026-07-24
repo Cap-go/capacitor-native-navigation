@@ -256,14 +256,39 @@ public class NativeNavigationPlugin extends Plugin {
                     continue;
                 }
 
-                int visibleIndex = tabItems.size();
                 String title = tab.optString("title", "");
                 Drawable icon = icons ? iconFrom(tab.optJSONObject("icon")) : new ColorDrawable(Color.TRANSPARENT);
                 Drawable selectedIcon = icons ? iconFrom(tab.optJSONObject("selectedIcon")) : null;
                 String badge = tab.has("badge") ? String.valueOf(tab.opt("badge")) : null;
-                tabItems.add(new NativeTabItem(id, title, icon, selectedIcon, badge, tab.optBoolean("enabled", true), sourceIndex));
-                if (id.equals(selectedId)) {
-                    selectedTabIndex = visibleIndex;
+                String role = tab.optString("role", "normal");
+                boolean detachedTrailing = "search".equalsIgnoreCase(role) || "prominent".equalsIgnoreCase(role);
+                tabItems.add(
+                    new NativeTabItem(id, title, icon, selectedIcon, badge, tab.optBoolean("enabled", true), detachedTrailing, sourceIndex)
+                );
+            }
+
+            applyTabbarColors(call, colors);
+            tabbarStyle = makeTabbarStyle(call.getObject("style", new JSObject()));
+
+            // Keep at most one detached trailing action for floating bars.
+            // Curve bars ignore role so tab order / center selection stay stable.
+            if (!tabbarStyle.isCurve()) {
+                NativeTabItem trailingItem = null;
+                for (int index = tabItems.size() - 1; index >= 0; index--) {
+                    if (tabItems.get(index).detachedTrailing) {
+                        trailingItem = tabItems.remove(index);
+                        break;
+                    }
+                }
+                if (trailingItem != null) {
+                    tabItems.removeIf((item) -> item.detachedTrailing);
+                    tabItems.add(trailingItem);
+                }
+            }
+            for (int index = 0; index < tabItems.size(); index++) {
+                if (tabItems.get(index).id.equals(selectedId)) {
+                    selectedTabIndex = index;
+                    break;
                 }
             }
 
@@ -283,8 +308,6 @@ public class NativeNavigationPlugin extends Plugin {
                 selectedTabIndex = 0;
             }
 
-            applyTabbarColors(call, colors);
-            tabbarStyle = makeTabbarStyle(call.getObject("style", new JSObject()));
             applyTabbarBackground(centerTabIndex());
             renderTabbarItems(labelVisibilityMode, icons);
             if (tabbarContainer != null) {
@@ -713,8 +736,14 @@ public class NativeNavigationPlugin extends Plugin {
             final int itemIndex = index;
             NativeTabItem item = tabItems.get(index);
             boolean selected = itemIndex == selectedTabIndex;
-            boolean showLabel = shouldShowTabLabel(labelVisibilityMode, selected);
+            boolean detachedTrailing = item.detachedTrailing && !tabbarStyle.isCurve();
+            boolean showLabel = detachedTrailing
+                ? !icons && shouldShowTabLabel(labelVisibilityMode, selected)
+                : shouldShowTabLabel(labelVisibilityMode, selected);
             FrameLayout button = makeTabButton(item, selected, showLabel, icons, itemIndex == centerIndex);
+            if (detachedTrailing) {
+                button.setTag("detachedTrailing");
+            }
             button.setSelected(selected);
             button.setEnabled(item.enabled);
             button.setAlpha(item.enabled ? 1f : 0.38f);
@@ -984,15 +1013,26 @@ public class NativeNavigationPlugin extends Plugin {
         final Drawable selectedIcon;
         final String badge;
         final boolean enabled;
+        final boolean detachedTrailing;
         final int sourceIndex;
 
-        NativeTabItem(String id, String title, Drawable icon, Drawable selectedIcon, String badge, boolean enabled, int sourceIndex) {
+        NativeTabItem(
+            String id,
+            String title,
+            Drawable icon,
+            Drawable selectedIcon,
+            String badge,
+            boolean enabled,
+            boolean detachedTrailing,
+            int sourceIndex
+        ) {
             this.id = id;
             this.title = title;
             this.icon = icon;
             this.selectedIcon = selectedIcon;
             this.badge = badge;
             this.enabled = enabled;
+            this.detachedTrailing = detachedTrailing;
             this.sourceIndex = sourceIndex;
         }
     }
@@ -1098,6 +1138,17 @@ public class NativeNavigationPlugin extends Plugin {
                 return;
             }
 
+            int trailingIndex = detachedTrailingIndex();
+            if (trailingIndex >= 0) {
+                int trailingDiameter = dp(style.height);
+                int capsuleWidth = Math.max(0, width - trailingDiameter - dp(10));
+                measureRange(0, trailingIndex, capsuleWidth, height);
+                measureChildExact(getChildAt(trailingIndex), trailingDiameter, trailingDiameter);
+                measureRange(trailingIndex + 1, getChildCount(), 0, height);
+                setMeasuredDimension(width, height);
+                return;
+            }
+
             int count = Math.max(getChildCount(), 1);
             int childWidth = width / count;
             for (int index = 0; index < getChildCount(); index++) {
@@ -1125,11 +1176,43 @@ public class NativeNavigationPlugin extends Plugin {
                 return;
             }
 
+            int trailingIndex = detachedTrailingIndex();
+            if (trailingIndex >= 0) {
+                int trailingDiameter = dp(style.height);
+                int capsuleWidth = Math.max(0, width - trailingDiameter - dp(10));
+                View trailing = getChildAt(trailingIndex);
+                int trailingTop = Math.max(0, (height - trailingDiameter) / 2);
+                trailing.layout(width - trailingDiameter, trailingTop, width, trailingTop + trailingDiameter);
+                layoutRange(0, trailingIndex, 0, 0, capsuleWidth, height);
+                return;
+            }
+
             layoutRange(0, getChildCount(), 0, 0, width, height);
         }
 
         private boolean hasCenterButton() {
             return style.isCurve() && centerIndex >= 0 && centerIndex < getChildCount();
+        }
+
+        private int detachedTrailingIndex() {
+            if (style.isCurve()) {
+                return -1;
+            }
+            for (int index = 0; index < getChildCount(); index++) {
+                Object tag = getChildAt(index).getTag();
+                if ("detachedTrailing".equals(tag)) {
+                    return index;
+                }
+            }
+            return -1;
+        }
+
+        private int capsuleWidth(int width) {
+            int trailingIndex = detachedTrailingIndex();
+            if (trailingIndex < 0) {
+                return width;
+            }
+            return Math.max(0, width - dp(style.height) - dp(10));
         }
 
         private void measureRange(int start, int end, int width, int height) {
@@ -1166,7 +1249,20 @@ public class NativeNavigationPlugin extends Plugin {
             Path path = new Path();
             if (!style.isCurve()) {
                 float radius = dp(style.cornerRadius);
-                path.addRoundRect(new RectF(0, 0, width, height), radius, radius, Path.Direction.CW);
+                int capsuleWidth = capsuleWidth(width);
+                path.addRoundRect(new RectF(0, 0, capsuleWidth, height), radius, radius, Path.Direction.CW);
+                int trailingIndex = detachedTrailingIndex();
+                if (trailingIndex >= 0) {
+                    float diameter = dp(style.height);
+                    float left = width - diameter;
+                    float top = (height - diameter) / 2f;
+                    path.addRoundRect(
+                        new RectF(left, top, left + diameter, top + diameter),
+                        diameter / 2f,
+                        diameter / 2f,
+                        Path.Direction.CW
+                    );
+                }
                 return path;
             }
             float barTop = dp(style.barTop());
@@ -1707,7 +1803,9 @@ public class NativeNavigationPlugin extends Plugin {
             int rootWidth = root.getWidth() > 0 ? root.getWidth() : Resources.getSystem().getDisplayMetrics().widthPixels;
             int availableWidth = Math.max(0, rootWidth - dp(tabbarStyle.horizontalMargin) * 2);
             int maxWidth = tabbarStyle.maxWidth > 0 ? dp(tabbarStyle.maxWidth) : availableWidth;
-            int tabbarWidth = Math.min(availableWidth, maxWidth);
+            boolean hasDetachedTrailing = !tabbarStyle.isCurve() && tabItems.stream().anyMatch((item) -> item.detachedTrailing);
+            int trailingExtra = hasDetachedTrailing ? dp(tabbarStyle.height) + dp(10) : 0;
+            int tabbarWidth = Math.min(availableWidth, maxWidth + trailingExtra);
             FrameLayout.LayoutParams tabbarContainerParams = new FrameLayout.LayoutParams(
                 tabbarWidth,
                 tabbarHeight,
