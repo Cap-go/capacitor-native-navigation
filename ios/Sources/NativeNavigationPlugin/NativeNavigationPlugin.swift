@@ -1212,7 +1212,9 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
         // Keep at most one detached trailing action and place it last so the
         // capsule + circular button layout matches the system Liquid Glass pattern.
-        if let trailingIndex = items.lastIndex(where: { $0.isDetachedTrailing }) {
+        // Skip reordering for curve bars so center-item selection stays stable.
+        if tabbarStyle.shape == .floating,
+           let trailingIndex = items.lastIndex(where: { $0.isDetachedTrailing }) {
             let trailing = items.remove(at: trailingIndex)
             items.removeAll(where: { $0.isDetachedTrailing })
             items.append(trailing)
@@ -2341,9 +2343,12 @@ private final class NativeNavigationFloatingTabBar: UIView {
     private func style(for index: Int) -> NativeNavigationFloatingTabStyle {
         let isCenter = centerButtonIndex() == index
         let isDetachedTrailing = detachedTrailingIndex() == index
+        // Detached actions stay icon-only when icons are available; fall back to
+        // a label when icons are disabled so the control remains discoverable.
+        let detachedShowsLabel = isDetachedTrailing && !iconsVisible
         return NativeNavigationFloatingTabStyle(
             selected: index == selectedIndex,
-            labels: isDetachedTrailing ? false : showsLabel(for: index),
+            labels: isDetachedTrailing ? detachedShowsLabel : showsLabel(for: index),
             icons: iconsVisible,
             isCenter: isCenter,
             isDetachedTrailing: isDetachedTrailing,
@@ -2457,7 +2462,7 @@ private final class NativeNavigationFloatingTabButton: UIControl {
         let isDetachedTrailing = style.isDetachedTrailing
         hasIcon = style.icons && (item.image != nil || item.selectedImage != nil)
         hasLabel = isDetachedTrailing
-            ? false
+            ? (!hasIcon && style.labels && !item.title.isEmpty)
             : (style.isCenter ? (!hasIcon && !item.title.isEmpty) : (style.labels && !item.title.isEmpty))
         badgeText = item.badge
 

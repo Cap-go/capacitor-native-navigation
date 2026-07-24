@@ -267,16 +267,23 @@ public class NativeNavigationPlugin extends Plugin {
                 );
             }
 
-            NativeTabItem trailingItem = null;
-            for (int index = 0; index < tabItems.size(); index++) {
-                if (tabItems.get(index).detachedTrailing) {
-                    trailingItem = tabItems.remove(index);
-                    break;
+            applyTabbarColors(call, colors);
+            tabbarStyle = makeTabbarStyle(call.getObject("style", new JSObject()));
+
+            // Keep at most one detached trailing action for floating bars.
+            // Curve bars ignore role so tab order / center selection stay stable.
+            if (!tabbarStyle.isCurve()) {
+                NativeTabItem trailingItem = null;
+                for (int index = tabItems.size() - 1; index >= 0; index--) {
+                    if (tabItems.get(index).detachedTrailing) {
+                        trailingItem = tabItems.remove(index);
+                        break;
+                    }
                 }
-            }
-            if (trailingItem != null) {
-                tabItems.removeIf((item) -> item.detachedTrailing);
-                tabItems.add(trailingItem);
+                if (trailingItem != null) {
+                    tabItems.removeIf((item) -> item.detachedTrailing);
+                    tabItems.add(trailingItem);
+                }
             }
             for (int index = 0; index < tabItems.size(); index++) {
                 if (tabItems.get(index).id.equals(selectedId)) {
@@ -301,8 +308,6 @@ public class NativeNavigationPlugin extends Plugin {
                 selectedTabIndex = 0;
             }
 
-            applyTabbarColors(call, colors);
-            tabbarStyle = makeTabbarStyle(call.getObject("style", new JSObject()));
             applyTabbarBackground(centerTabIndex());
             renderTabbarItems(labelVisibilityMode, icons);
             if (tabbarContainer != null) {
@@ -732,7 +737,9 @@ public class NativeNavigationPlugin extends Plugin {
             NativeTabItem item = tabItems.get(index);
             boolean selected = itemIndex == selectedTabIndex;
             boolean detachedTrailing = item.detachedTrailing && !tabbarStyle.isCurve();
-            boolean showLabel = detachedTrailing ? false : shouldShowTabLabel(labelVisibilityMode, selected);
+            boolean showLabel = detachedTrailing
+                ? !icons && shouldShowTabLabel(labelVisibilityMode, selected)
+                : shouldShowTabLabel(labelVisibilityMode, selected);
             FrameLayout button = makeTabButton(item, selected, showLabel, icons, itemIndex == centerIndex);
             if (detachedTrailing) {
                 button.setTag("detachedTrailing");

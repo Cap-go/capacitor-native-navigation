@@ -332,13 +332,15 @@ const renderWebTabbarPreview = () => {
   }
 
   const visibleTabs = visiblePreviewTabs();
-  const trailingTab =
-    tabbarShape === 'floating' ? visibleTabs.find((tab) => tab.role === 'search' || tab.role === 'prominent') : null;
+  const trailingCandidates = visibleTabs.filter((tab) => tab.role === 'search' || tab.role === 'prominent');
+  const trailingTab = tabbarShape === 'floating' ? trailingCandidates[trailingCandidates.length - 1] ?? null : null;
   const capsuleTabs = trailingTab ? visibleTabs.filter((tab) => tab.id !== trailingTab.id) : visibleTabs;
   const renderTab = (tab, { center = false, detached = false } = {}) => {
     const selected = tab.id === activeTab;
     const iconMarkup = iconsEnabled ? `<span class="web-tabbar-icon">${tab.icon.svg}</span>` : '';
-    const labelMarkup = !detached && labelsEnabled ? `<span class="web-tabbar-label">${tab.title}</span>` : '';
+    const showDetachedLabel = detached && !iconsEnabled && labelsEnabled;
+    const labelMarkup =
+      (!detached && labelsEnabled) || showDetachedLabel ? `<span class="web-tabbar-label">${tab.title}</span>` : '';
     return `
       <button class="web-tabbar-item${selected ? ' is-selected' : ''}${center ? ' is-center' : ''}${detached ? ' is-detached' : ''}" data-web-tab="${tab.id}" aria-label="${tab.title}">
         ${iconMarkup}
