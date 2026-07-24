@@ -2,6 +2,7 @@
 
 import Foundation
 import Capacitor
+import ObjectiveC
 import UIKit
 
 private struct NativeNavigationTransitionContext {
@@ -41,6 +42,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var navBar: UINavigationBar?
     private var tabContainer: UIView?
     private var tabEffectView: UIVisualEffectView?
+    private var trailingTabEffectView: UIVisualEffectView?
     private var tabBar: UITabBar?
     private var floatingTabBar: NativeNavigationFloatingTabBar?
     private var tabbarStyle = NativeNavigationTabbarStyleConfig()
@@ -726,12 +728,20 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         container.layer.shadowRadius = 18
         container.layer.shadowOffset = CGSize(width: 0, height: 10)
 
-        let effectView = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterial))
+        let effectView = UIVisualEffectView(effect: liquidGlassEffect() ?? UIBlurEffect(style: .systemChromeMaterial))
         effectView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         effectView.isUserInteractionEnabled = false
         effectView.clipsToBounds = true
         container.addSubview(effectView)
         self.tabEffectView = effectView
+
+        let trailingEffectView = UIVisualEffectView(effect: liquidGlassEffect() ?? UIBlurEffect(style: .systemChromeMaterial))
+        trailingEffectView.autoresizingMask = []
+        trailingEffectView.isUserInteractionEnabled = false
+        trailingEffectView.clipsToBounds = true
+        trailingEffectView.isHidden = true
+        container.addSubview(trailingEffectView)
+        self.trailingTabEffectView = trailingEffectView
 
         let bar = NativeNavigationFloatingTabBar()
         bar.autoresizingMask = [.flexibleWidth, .flexibleTopMargin]
@@ -1090,6 +1100,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         tabSelectedImages = []
         var selectedIndex: Int?
         var items: [UITabBarItem] = []
+        var trailingEntry: (item: UITabBarItem, title: String?, image: UIImage?, selectedImage: UIImage?)?
 
         for (sourceIndex, tab) in tabs.enumerated() {
             let id = tab["id"] as? String ?? "tab-\(sourceIndex)"
@@ -1098,19 +1109,35 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 continue
             }
 
-            let visibleIndex = items.count
             let rawTitle = tab["title"] as? String ?? ""
             let title = tabTitle(
                 rawTitle,
                 id: id,
-                index: visibleIndex,
+                index: items.count,
                 selectedId: selectedId,
                 labelVisibilityMode: labelVisibilityMode
             )
             let image = icons ? self.image(from: tab["icon"] as? [String: Any]) : nil
             let selectedImage = icons ? self.image(from: tab["selectedIcon"] as? [String: Any]) : nil
-            let item = UITabBarItem(title: title, image: image, selectedImage: selectedImage)
-            item.tag = sourceIndex
+            let role = (tab["role"] as? String)?.lowercased()
+            let item: UITabBarItem
+            if role == "search" || role == "prominent" {
+                // iOS 26+ Liquid Glass renders `.search` as a detached trailing
+                // circular action beside the floating tab capsule. Keep the
+                // system-item title empty so UIKit treats it as icon-only.
+                item = UITabBarItem(tabBarSystemItem: .search, tag: sourceIndex)
+                item.title = nil
+                if let image = image {
+                    item.image = image
+                }
+                if let selectedImage = selectedImage {
+                    item.selectedImage = selectedImage
+                }
+                item.accessibilityLabel = rawTitle.isEmpty ? id : rawTitle
+            } else {
+                item = UITabBarItem(title: title, image: image, selectedImage: selectedImage)
+                item.tag = sourceIndex
+            }
             item.isEnabled = tab["enabled"] as? Bool ?? true
             if let badge = tab["badge"] {
                 item.badgeValue = String(describing: badge)
@@ -1121,17 +1148,31 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             }
             tabIds[sourceIndex] = id
             tabTitles[sourceIndex] = rawTitle
-            tabDisplayTitles.append(title)
-            tabBaseImages.append(image)
-            tabSelectedImages.append(selectedImage ?? image)
-            if id == selectedId {
-                selectedIndex = visibleIndex
+            if role == "search" || role == "prominent" {
+                trailingEntry = (item, title, image, selectedImage ?? image)
+            } else {
+                items.append(item)
+                tabDisplayTitles.append(title)
+                tabBaseImages.append(image)
+                tabSelectedImages.append(selectedImage ?? image)
             }
-            items.append(item)
+        }
+
+        if let trailingEntry = trailingEntry {
+            items.append(trailingEntry.item)
+            tabDisplayTitles.append(trailingEntry.title)
+            tabBaseImages.append(trailingEntry.image)
+            tabSelectedImages.append(trailingEntry.selectedImage)
+        }
+        if let selectedId = selectedId {
+            selectedIndex = items.firstIndex(where: { item in
+                tabIds.indices.contains(item.tag) && tabIds[item.tag] == selectedId
+            })
         }
 
         return (items, selectedIndex)
     }
+
     private func makeFloatingTabBarItems(
         _ tabs: [[String: Any]],
         selectedId: String?,
@@ -1151,6 +1192,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             let title = tab["title"] as? String ?? ""
             let image = icons ? self.image(from: tab["icon"] as? [String: Any]) : nil
             let selectedImage = icons ? self.image(from: tab["selectedIcon"] as? [String: Any]) : nil
+            let role = (tab["role"] as? String)?.lowercased()
+            let isDetachedTrailing = role == "search" || role == "prominent"
             if id == selectedId {
                 selectedIndex = visibleIndex
             }
@@ -1162,8 +1205,20 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 selectedImage: selectedImage,
                 badge: tab["badge"].map { String(describing: $0) },
                 enabled: tab["enabled"] as? Bool ?? true,
+                isDetachedTrailing: isDetachedTrailing,
                 sourceIndex: sourceIndex
             ))
+        }
+
+        // Keep at most one detached trailing action and place it last so the
+        // capsule + circular button layout matches the system Liquid Glass pattern.
+        if let trailingIndex = items.lastIndex(where: { $0.isDetachedTrailing }) {
+            let trailing = items.remove(at: trailingIndex)
+            items.removeAll(where: { $0.isDetachedTrailing })
+            items.append(trailing)
+            if let selectedId = selectedId {
+                selectedIndex = items.firstIndex(where: { $0.id == selectedId })
+            }
         }
 
         return (items, selectedIndex)
@@ -1518,19 +1573,37 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         let colors = call.getObject("colors")
         let backgroundTint = colorValue(colors?["background"])
         let backgroundColor = (backgroundTint ?? .systemBackground).withAlphaComponent(tabbarStyle.shape == .curve ? 0.96 : 0.46)
+        let usesLiquidGlass = liquidGlassEffect() != nil
 
         if tabbarStyle.shape == .curve || prefersOpaqueTabBarBackground() {
             tabEffectView?.isHidden = true
+            trailingTabEffectView?.isHidden = true
+        } else if let glass = liquidGlassEffect() {
+            tabEffectView?.effect = glass
+            tabEffectView?.isHidden = false
+            tabEffectView?.contentView.backgroundColor = backgroundTint?.withAlphaComponent(0.08) ?? .clear
+            trailingTabEffectView?.effect = liquidGlassEffect() ?? glass
+            trailingTabEffectView?.contentView.backgroundColor = backgroundTint?.withAlphaComponent(0.08) ?? .clear
         } else if let effect = blurEffect(from: call.getString("blurEffect"), fallback: .systemChromeMaterial) {
             tabEffectView?.effect = effect
             tabEffectView?.isHidden = false
             tabEffectView?.contentView.backgroundColor = backgroundTint?.withAlphaComponent(0.12) ?? backgroundColor
+            trailingTabEffectView?.effect = effect
+            trailingTabEffectView?.contentView.backgroundColor = backgroundTint?.withAlphaComponent(0.12) ?? backgroundColor
         } else {
             tabEffectView?.isHidden = true
+            trailingTabEffectView?.isHidden = true
         }
 
         let opaqueBackground = backgroundTint ?? .systemBackground
-        tabBar.backgroundFillColor = prefersOpaqueTabBarBackground() ? opaqueBackground : backgroundColor
+        if prefersOpaqueTabBarBackground() {
+            tabBar.backgroundFillColor = opaqueBackground
+        } else if usesLiquidGlass {
+            // Keep the hand-drawn fill clear so UIGlassEffect can show through.
+            tabBar.backgroundFillColor = .clear
+        } else {
+            tabBar.backgroundFillColor = backgroundColor
+        }
         if let color = colorValue(colors?["tint"]) {
             tabBar.selectedTintColor = color
         }
@@ -1723,16 +1796,34 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         if let container = tabContainer {
             let availableWidth = max(0, width - (tabbarStyle.horizontalMargin * 2))
             let maxWidth = tabbarStyle.maxWidth > 0 ? tabbarStyle.maxWidth : availableWidth
-            let tabbarWidth = min(availableWidth, maxWidth)
+            let hasDetachedTrailing = floatingTabBar?.hasDetachedTrailing == true && tabbarStyle.shape == .floating
+            let trailingDiameter = tabbarStyle.height
+            let trailingGap: CGFloat = 10
+            let trailingExtra = hasDetachedTrailing ? trailingDiameter + trailingGap : 0
+            let tabbarWidth = min(availableWidth, maxWidth + trailingExtra)
             let originX = (width - tabbarWidth) / 2
             let originY = height - safeInsets.bottom - tabbarStyle.bottomGap - tabbarStyle.totalHeight
             container.frame = CGRect(x: originX, y: originY, width: tabbarWidth, height: tabbarStyle.totalHeight)
-            container.layer.cornerRadius = tabbarStyle.shape == .floating ? tabbarStyle.cornerRadius : 0
-            container.layer.shadowPath = NativeNavigationTabbarBackgroundPath.path(in: container.bounds, style: tabbarStyle).cgPath
-            tabEffectView?.frame = container.bounds
-            tabEffectView?.layer.cornerRadius = tabbarStyle.cornerRadius
             floatingTabBar?.frame = container.bounds
             floatingTabBar?.layer.cornerRadius = 0
+            floatingTabBar?.layoutIfNeeded()
+
+            let capsuleBounds = floatingTabBar?.capsuleBounds(in: container.bounds) ?? container.bounds
+            container.layer.cornerRadius = tabbarStyle.shape == .floating ? tabbarStyle.cornerRadius : 0
+            container.layer.shadowPath = NativeNavigationTabbarBackgroundPath.path(in: capsuleBounds, style: tabbarStyle).cgPath
+            tabEffectView?.frame = capsuleBounds
+            tabEffectView?.layer.cornerRadius = tabbarStyle.shape == .floating ? tabbarStyle.cornerRadius : 0
+            tabEffectView?.isHidden = tabbarStyle.shape == .curve || prefersOpaqueTabBarBackground() || tabEffectView?.effect == nil
+
+            if let trailingBounds = floatingTabBar?.trailingActionBounds(in: container.bounds),
+               hasDetachedTrailing,
+               !prefersOpaqueTabBarBackground() {
+                trailingTabEffectView?.frame = trailingBounds
+                trailingTabEffectView?.layer.cornerRadius = trailingBounds.height / 2
+                trailingTabEffectView?.isHidden = trailingTabEffectView?.effect == nil
+            } else {
+                trailingTabEffectView?.isHidden = true
+            }
         }
 
         if let tabBarController = tabBarController {
@@ -1820,6 +1911,28 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             "systemChromeMaterialLight": .systemChromeMaterialLight,
             "systemChromeMaterialDark": .systemChromeMaterialDark
         ][value]
+    }
+
+    private func liquidGlassEffect() -> UIVisualEffect? {
+        guard usesSystemLiquidGlass,
+              let effectClass = NSClassFromString("UIGlassEffect") else {
+            return nil
+        }
+
+        let styleSelector = NSSelectorFromString("effectWithStyle:")
+        if let method = class_getClassMethod(effectClass, styleSelector) {
+            typealias EffectWithStyle = @convention(c) (AnyClass, Selector, Int) -> AnyObject?
+            let factory = unsafeBitCast(method_getImplementation(method), to: EffectWithStyle.self)
+            if let effect = factory(effectClass, styleSelector, 0) as? UIVisualEffect {
+                return effect
+            }
+        }
+
+        if let objectType = effectClass as? NSObject.Type {
+            return objectType.init() as? UIVisualEffect
+        }
+
+        return nil
     }
 
     private func configureGlassBarButtonItem(_ item: UIBarButtonItem, id: String) {
@@ -1954,6 +2067,7 @@ private struct NativeNavigationFloatingTabItem {
     let selectedImage: UIImage?
     let badge: String?
     let enabled: Bool
+    let isDetachedTrailing: Bool
     let sourceIndex: Int
 }
 
@@ -2029,6 +2143,7 @@ private struct NativeNavigationFloatingTabStyle {
     let labels: Bool
     let icons: Bool
     let isCenter: Bool
+    let isDetachedTrailing: Bool
     let selectedTint: UIColor
     let inactiveTint: UIColor
     let centerButtonColor: UIColor
@@ -2065,6 +2180,10 @@ private final class NativeNavigationFloatingTabBar: UIView {
     }
     var onSelect: ((Int, NativeNavigationFloatingTabItem) -> Void)?
 
+    var hasDetachedTrailing: Bool {
+        tabbarStyle.shape == .floating && items.contains(where: \.isDetachedTrailing)
+    }
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         isOpaque = false
@@ -2094,9 +2213,33 @@ private final class NativeNavigationFloatingTabBar: UIView {
         setNeedsLayout()
     }
 
+    func capsuleBounds(in bounds: CGRect) -> CGRect {
+        guard hasDetachedTrailing else {
+            return bounds
+        }
+        let trailingGap: CGFloat = 10
+        let trailingDiameter = tabbarStyle.height
+        let capsuleWidth = max(0, bounds.width - trailingDiameter - trailingGap)
+        return CGRect(x: bounds.minX, y: bounds.minY, width: capsuleWidth, height: bounds.height)
+    }
+
+    func trailingActionBounds(in bounds: CGRect) -> CGRect? {
+        guard hasDetachedTrailing else {
+            return nil
+        }
+        let trailingDiameter = tabbarStyle.height
+        return CGRect(
+            x: bounds.maxX - trailingDiameter,
+            y: bounds.minY + (bounds.height - trailingDiameter) / 2,
+            width: trailingDiameter,
+            height: trailingDiameter
+        )
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
-        backgroundShapeView.frame = bounds
+        let capsule = capsuleBounds(in: bounds)
+        backgroundShapeView.frame = capsule
         guard !buttons.isEmpty else {
             return
         }
@@ -2120,6 +2263,15 @@ private final class NativeNavigationFloatingTabBar: UIView {
                 Array((centerIndex + 1)..<buttons.count),
                 in: CGRect(x: rightX, y: barFrame.minY, width: bounds.width - rightX, height: barFrame.height)
             )
+            return
+        }
+
+        if let trailingIndex = detachedTrailingIndex(),
+           buttons.indices.contains(trailingIndex),
+           let trailingBounds = trailingActionBounds(in: bounds) {
+            buttons[trailingIndex].frame = trailingBounds
+            let mainIndices = buttons.indices.filter { $0 != trailingIndex }
+            layoutButtons(mainIndices, in: capsule)
             return
         }
 
@@ -2152,6 +2304,13 @@ private final class NativeNavigationFloatingTabBar: UIView {
         return items.count / 2
     }
 
+    private func detachedTrailingIndex() -> Int? {
+        guard tabbarStyle.shape == .floating else {
+            return nil
+        }
+        return items.lastIndex(where: \.isDetachedTrailing)
+    }
+
     private func rebuildButtons() {
         buttons.forEach { $0.removeFromSuperview() }
         buttons = items.enumerated().map { index, item in
@@ -2181,11 +2340,13 @@ private final class NativeNavigationFloatingTabBar: UIView {
 
     private func style(for index: Int) -> NativeNavigationFloatingTabStyle {
         let isCenter = centerButtonIndex() == index
+        let isDetachedTrailing = detachedTrailingIndex() == index
         return NativeNavigationFloatingTabStyle(
             selected: index == selectedIndex,
-            labels: showsLabel(for: index),
+            labels: isDetachedTrailing ? false : showsLabel(for: index),
             icons: iconsVisible,
             isCenter: isCenter,
+            isDetachedTrailing: isDetachedTrailing,
             selectedTint: selectedTintColor,
             inactiveTint: inactiveTintColor,
             centerButtonColor: tabbarStyle.centerButtonColor ?? selectedTintColor,
@@ -2293,13 +2454,20 @@ private final class NativeNavigationFloatingTabButton: UIControl {
         isEnabled = item.enabled
         alpha = item.enabled ? 1 : 0.38
         isCenterButton = style.isCenter
+        let isDetachedTrailing = style.isDetachedTrailing
         hasIcon = style.icons && (item.image != nil || item.selectedImage != nil)
-        hasLabel = style.isCenter ? (!hasIcon && !item.title.isEmpty) : (style.labels && !item.title.isEmpty)
+        hasLabel = isDetachedTrailing
+            ? false
+            : (style.isCenter ? (!hasIcon && !item.title.isEmpty) : (style.labels && !item.title.isEmpty))
         badgeText = item.badge
 
-        let color = style.isCenter ? style.centerButtonIconColor : (style.selected ? style.selectedTint : style.inactiveTint)
-        selectedView.backgroundColor = style.isCenter ? style.centerButtonColor : style.selectedTint.withAlphaComponent(style.selected ? 0.16 : 0)
-        selectedView.alpha = style.isCenter || style.selected ? 1 : 0
+        let color = style.isCenter
+            ? style.centerButtonIconColor
+            : (style.selected ? style.selectedTint : style.inactiveTint)
+        selectedView.backgroundColor = style.isCenter
+            ? style.centerButtonColor
+            : style.selectedTint.withAlphaComponent(style.selected && !isDetachedTrailing ? 0.16 : 0)
+        selectedView.alpha = style.isCenter || (style.selected && !isDetachedTrailing) ? 1 : 0
 
         layer.shadowColor = UIColor.black.cgColor
         layer.shadowOpacity = style.isCenter ? 0.2 : 0
@@ -2336,7 +2504,7 @@ private final class NativeNavigationFloatingTabButton: UIControl {
         selectedView.layer.cornerRadius = selectedView.bounds.height / 2
 
         let iconSize: CGFloat = isCenterButton ? 32 : 23
-        if isCenterButton {
+        if isCenterButton || (!hasLabel && hasIcon && bounds.width <= bounds.height + 1) {
             if hasIcon {
                 imageView.frame = CGRect(x: (bounds.width - iconSize) / 2, y: (bounds.height - iconSize) / 2, width: iconSize, height: iconSize)
                 titleLabel.frame = .zero

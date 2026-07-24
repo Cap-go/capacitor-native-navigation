@@ -67,6 +67,9 @@ const tabs = [
     id: 'profile',
     title: 'Profile',
     icon: { svg: icons.profile },
+    // Detached trailing circular action beside the floating capsule
+    // (Apple News / Photos pattern). Ignored for the curved center-button shape.
+    role: 'search',
   },
   {
     id: 'draft',
@@ -329,22 +332,26 @@ const renderWebTabbarPreview = () => {
   }
 
   const visibleTabs = visiblePreviewTabs();
-  const items = visibleTabs
-    .map((tab) => {
-      const selected = tab.id === activeTab;
-      const center = tabbarShape === 'curve' && tab.id === 'capture';
-      const iconMarkup = iconsEnabled ? `<span class="web-tabbar-icon">${tab.icon.svg}</span>` : '';
-      const labelMarkup = labelsEnabled ? `<span class="web-tabbar-label">${tab.title}</span>` : '';
-      return `
-        <button class="web-tabbar-item${selected ? ' is-selected' : ''}${center ? ' is-center' : ''}" data-web-tab="${tab.id}" aria-label="${tab.title}">
-          ${iconMarkup}
-          ${labelMarkup}
-        </button>
-      `;
-    })
+  const trailingTab =
+    tabbarShape === 'floating' ? visibleTabs.find((tab) => tab.role === 'search' || tab.role === 'prominent') : null;
+  const capsuleTabs = trailingTab ? visibleTabs.filter((tab) => tab.id !== trailingTab.id) : visibleTabs;
+  const renderTab = (tab, { center = false, detached = false } = {}) => {
+    const selected = tab.id === activeTab;
+    const iconMarkup = iconsEnabled ? `<span class="web-tabbar-icon">${tab.icon.svg}</span>` : '';
+    const labelMarkup = !detached && labelsEnabled ? `<span class="web-tabbar-label">${tab.title}</span>` : '';
+    return `
+      <button class="web-tabbar-item${selected ? ' is-selected' : ''}${center ? ' is-center' : ''}${detached ? ' is-detached' : ''}" data-web-tab="${tab.id}" aria-label="${tab.title}">
+        ${iconMarkup}
+        ${labelMarkup}
+      </button>
+    `;
+  };
+  const capsuleItems = capsuleTabs
+    .map((tab) => renderTab(tab, { center: tabbarShape === 'curve' && tab.id === 'capture' }))
     .join('');
+  const trailingMarkup = trailingTab ? renderTab(trailingTab, { detached: true }) : '';
 
-  return `<nav class="web-tabbar-preview ${tabbarShape}" style="--web-tab-count: ${visibleTabs.length}" aria-label="Tabbar preview">${items}</nav>`;
+  return `<nav class="web-tabbar-preview ${tabbarShape}${trailingTab ? ' has-trailing' : ''}" style="--web-tab-count: ${capsuleTabs.length}" aria-label="Tabbar preview"><div class="web-tabbar-capsule">${capsuleItems}</div>${trailingMarkup}</nav>`;
 };
 const render = () => {
   const page = pages[route] ?? pages.home;
