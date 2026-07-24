@@ -2345,7 +2345,7 @@ private final class NativeNavigationFloatingTabBar: UIView {
         let isDetachedTrailing = detachedTrailingIndex() == index
         // Detached actions stay icon-only when icons are available; fall back to
         // a label when icons are disabled so the control remains discoverable.
-        let detachedShowsLabel = isDetachedTrailing && !iconsVisible
+        let detachedShowsLabel = isDetachedTrailing && !iconsVisible && showsLabel(for: index)
         return NativeNavigationFloatingTabStyle(
             selected: index == selectedIndex,
             labels: isDetachedTrailing ? detachedShowsLabel : showsLabel(for: index),

@@ -333,8 +333,10 @@ const renderWebTabbarPreview = () => {
 
   const visibleTabs = visiblePreviewTabs();
   const trailingCandidates = visibleTabs.filter((tab) => tab.role === 'search' || tab.role === 'prominent');
-  const trailingTab = tabbarShape === 'floating' ? trailingCandidates[trailingCandidates.length - 1] ?? null : null;
-  const capsuleTabs = trailingTab ? visibleTabs.filter((tab) => tab.id !== trailingTab.id) : visibleTabs;
+  const trailingTab = tabbarShape === 'floating' ? (trailingCandidates[trailingCandidates.length - 1] ?? null) : null;
+  const capsuleTabs = trailingTab
+    ? visibleTabs.filter((tab) => !(tab.role === 'search' || tab.role === 'prominent'))
+    : visibleTabs;
   const renderTab = (tab, { center = false, detached = false } = {}) => {
     const selected = tab.id === activeTab;
     const iconMarkup = iconsEnabled ? `<span class="web-tabbar-icon">${tab.icon.svg}</span>` : '';
