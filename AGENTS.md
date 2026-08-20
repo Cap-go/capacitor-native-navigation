@@ -189,7 +189,7 @@ API docs in the README are auto-generated from JSDoc in `src/definitions.ts`. **
 - We target JVM 21 for Android builds.
 - `dist/` is regenerated on every build and should never be edited directly.
 - Use Bun for everything. If a command needs a package binary, use `bunx`.
-- Production and PR beta publishes use `npm stage publish`. Cap-go/automations approves the stage (2FA). Plugin CI only has the org `NPM_TOKEN`.
+- Production and PR beta publishes use `npm stage publish`. Plugin CI only has the org `NPM_TOKEN`.
 
 ## Timeout Policy
 
