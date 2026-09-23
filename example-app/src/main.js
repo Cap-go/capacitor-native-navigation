@@ -304,7 +304,8 @@ const tabsForNative = () =>
 
 const tabbarStyle = () => {
   const curve = tabbarShape() === 'curve';
-  const height = standardBarHeight ? (curve ? 49 : 64) : 80;
+  const android = Capacitor.getPlatform() === 'android';
+  const height = standardBarHeight ? (curve ? (android ? 80 : 49) : 64) : curve && android ? 96 : 80;
   return curve
     ? {
         shape: 'curve',
@@ -460,8 +461,12 @@ const syncControls = () => {
   const heightState = document.getElementById('height-state');
   if (heightState) {
     heightState.textContent = standardBarHeight
-      ? 'Standard 49pt, 83pt with the home indicator'
-      : 'Tall 80pt body, plus the home indicator';
+      ? Capacitor.getPlatform() === 'android'
+        ? 'Standard 80dp Material bar, plus the navigation bar'
+        : 'Standard 49pt, 83pt with the home indicator'
+      : Capacitor.getPlatform() === 'android'
+        ? 'Tall 96dp body, plus the navigation bar'
+        : 'Tall 80pt body, plus the home indicator';
   }
   const labelItemState = document.getElementById('label-item-state');
   const iconItemState = document.getElementById('icon-item-state');

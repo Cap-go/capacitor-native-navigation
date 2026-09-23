@@ -439,10 +439,10 @@ export interface NativeNavigationTabbarStyle {
   shape?: NativeNavigationTabbarShape;
 
   /**
-   * Bar height in native points/dp, not including the bottom safe area.
-   * Defaults to `64` for `floating` and `49` for `curve`. `49` is the standard
-   * iOS tab bar. On iPhone X and newer the home indicator is added, so a
-   * 49pt curve bar is 83pt tall. Pass a larger `height` for a taller bar.
+   * Bar height in native points/dp, not including the system bottom inset.
+   * Curve defaults to `49` on iOS (83pt once the home indicator is added) and
+   * `80` on Android (Material navigation bar). Floating defaults to `64`.
+   * Pass `height` to override either platform.
    */
   height?: number;
 
