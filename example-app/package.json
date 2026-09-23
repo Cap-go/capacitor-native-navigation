@@ -16,16 +16,16 @@
     "cap:android": "cd .. && bun run example:android"
   },
   "dependencies": {
-    "@capacitor/core": "^8.0.0",
-    "@capacitor/android": "^8.0.0",
-    "@capacitor/ios": "^8.0.0",
-    "@capgo/capacitor-updater": "^8.45.11",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/ios": "^8.5.2",
+    "@capgo/capacitor-updater": "^8.51.21",
     "@capgo/capacitor-native-navigation": "file:.."
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",
-    "@capacitor/cli": "^8.0.0",
-    "vite": "^7.3.1",
-    "typescript": "^5.9.3"
+    "@capacitor/cli": "^8.5.2",
+    "vite": "^8.3.0",
+    "typescript": "^7.0.2"
   }
 }

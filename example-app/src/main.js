@@ -67,9 +67,6 @@ const tabs = [
     id: 'profile',
     title: 'Profile',
     icon: { svg: icons.profile },
-    // Detached trailing circular action beside the floating capsule
-    // (Apple News / Photos pattern). Ignored for the curved center-button shape.
-    role: 'search',
   },
   {
     id: 'draft',
@@ -84,15 +81,36 @@ let route = 'home';
 let stack = ['home'];
 let labelsEnabled = true;
 let iconsEnabled = true;
-let tabbarShape = 'curve';
+let tabbarPreset = 'system';
 let tabbarHidden = false;
+
+const tabbarPresets = {
+  system: {
+    label: 'System',
+    detail: 'Apple tab bar. No center button.',
+    shape: 'floating',
+  },
+  trailing: {
+    label: 'Trailing',
+    detail: 'Floating bar plus a detached search button.',
+    shape: 'floating',
+  },
+  center: {
+    label: 'Center',
+    detail: 'Full-width bar with an included center button.',
+    shape: 'curve',
+  },
+};
+
+const tabbarShape = () => tabbarPresets[tabbarPreset].shape;
 let topButtonVisible = readTopButtonPreference();
 let chromeConfigured = false;
 const pages = {
   home: {
-    title: 'Curved Tabbar',
-    subtitle: 'Included center action',
+    title: 'Layouts',
+    subtitle: 'Switch the native tab bar',
     body: `
+      <section class="layout-presets" aria-label="Tab bar layouts"></section>
       <section class="venue-strip" aria-label="Curved tabbar demo content">
         <article class="venue-card venue-card-bar">
           <span>BAR</span>
@@ -152,7 +170,7 @@ const pages = {
       <section class="settings">
         <label><input id="labels-toggle" type="checkbox" /> Tab labels</label>
         <label><input id="icons-toggle" type="checkbox" /> Tab icons</label>
-        <label><input id="curve-toggle" type="checkbox" /> Curved center tabbar</label>
+        <div class="layout-presets" aria-label="Tab bar layouts"></div>
         <label><input id="top-button-toggle" type="checkbox" /> Top button</label>
         <button data-action="refresh-version">Read native version</button>
         <pre id="version-output">Ready.</pre>
@@ -195,13 +213,21 @@ const pages = {
 };
 
 const tabbarColors = () => ({
-  tint: tabbarShape === 'curve' ? '#ff5b45' : '#0a84ff',
+  tint: tabbarShape() === 'curve' ? '#ff5b45' : '#0a84ff',
   inactiveTint: '#8b8f96',
   background: '#ffffff',
 });
 
+const tabsForNative = () =>
+  tabs.map((tab) => {
+    if (tabbarPreset === 'trailing' && tab.id === 'profile') {
+      return { ...tab, role: 'search' };
+    }
+    return tab;
+  });
+
 const tabbarStyle = () =>
-  tabbarShape === 'curve'
+  tabbarShape() === 'curve'
     ? {
         shape: 'curve',
         centerItemId: 'capture',
@@ -259,10 +285,10 @@ const configureChrome = async () => {
 const updateNavbar = async () => {
   const page = pages[route];
   await NativeNavigation.setNavbar({
-    hidden: route === 'home' && tabbarShape === 'curve',
+    hidden: route === 'home' && tabbarShape() === 'curve',
     title: page.title,
-    subtitle: page.subtitle,
-    large: route === 'home' && tabbarShape !== 'curve',
+    subtitle: route === 'home' ? tabbarPresets[tabbarPreset].detail : page.subtitle,
+    large: route === 'home' && tabbarShape() !== 'curve',
     transparent: true,
     backButton: {
       visible: stack.length > 1,
@@ -276,7 +302,7 @@ const updateTabbar = async () => {
   await NativeNavigation.setTabbar({
     hidden: route === 'detail' || tabbarHidden,
     selectedId: activeTab,
-    tabs,
+    tabs: tabsForNative(),
     labels: labelsEnabled,
     icons: iconsEnabled,
     colors: tabbarColors(),
@@ -308,7 +334,6 @@ const clearNavbarActions = () => {
 const syncControls = () => {
   const labelsToggle = document.getElementById('labels-toggle');
   const iconsToggle = document.getElementById('icons-toggle');
-  const curveToggle = document.getElementById('curve-toggle');
   const topButtonToggle = document.getElementById('top-button-toggle');
   if (labelsToggle) {
     labelsToggle.checked = labelsEnabled;
@@ -316,15 +341,24 @@ const syncControls = () => {
   if (iconsToggle) {
     iconsToggle.checked = iconsEnabled;
   }
-  if (curveToggle) {
-    curveToggle.checked = tabbarShape === 'curve';
-  }
   if (topButtonToggle) {
     topButtonToggle.checked = topButtonVisible;
   }
+  document.querySelectorAll('.layout-presets').forEach((container) => {
+    container.innerHTML = Object.entries(tabbarPresets)
+      .map(
+        ([id, preset]) => `
+          <button class="tile${tabbarPreset === id ? ' is-selected' : ''}" data-preset="${id}">
+            <span>${preset.label}</span>
+            <small>${preset.detail}</small>
+          </button>
+        `,
+      )
+      .join('');
+  });
 };
 
-const visiblePreviewTabs = () => tabs.filter((tab) => !tab.hidden);
+const visiblePreviewTabs = () => tabsForNative().filter((tab) => !tab.hidden);
 
 const renderWebTabbarPreview = () => {
   if (!isWebPreview || route === 'detail' || tabbarHidden) {
@@ -333,7 +367,7 @@ const renderWebTabbarPreview = () => {
 
   const visibleTabs = visiblePreviewTabs();
   const trailingCandidates = visibleTabs.filter((tab) => tab.role === 'search' || tab.role === 'prominent');
-  const trailingTab = tabbarShape === 'floating' ? (trailingCandidates[trailingCandidates.length - 1] ?? null) : null;
+  const trailingTab = tabbarShape() === 'floating' ? (trailingCandidates[trailingCandidates.length - 1] ?? null) : null;
   const capsuleTabs = trailingTab
     ? visibleTabs.filter((tab) => !(tab.role === 'search' || tab.role === 'prominent'))
     : visibleTabs;
@@ -351,11 +385,11 @@ const renderWebTabbarPreview = () => {
     `;
   };
   const capsuleItems = capsuleTabs
-    .map((tab) => renderTab(tab, { center: tabbarShape === 'curve' && tab.id === 'capture' }))
+    .map((tab) => renderTab(tab, { center: tabbarShape() === 'curve' && tab.id === 'capture' }))
     .join('');
   const trailingMarkup = trailingTab ? renderTab(trailingTab, { detached: true }) : '';
 
-  return `<nav class="web-tabbar-preview ${tabbarShape}${trailingTab ? ' has-trailing' : ''}" style="--web-tab-count: ${capsuleTabs.length}" aria-label="Tabbar preview"><div class="web-tabbar-capsule">${capsuleItems}</div>${trailingMarkup}</nav>`;
+  return `<nav class="web-tabbar-preview ${tabbarShape()}${trailingTab ? ' has-trailing' : ''}" style="--web-tab-count: ${capsuleTabs.length}" aria-label="Tabbar preview"><div class="web-tabbar-capsule">${capsuleItems}</div>${trailingMarkup}</nav>`;
 };
 const render = () => {
   const page = pages[route] ?? pages.home;
@@ -405,9 +439,10 @@ app.addEventListener('click', async (event) => {
     await updateTabbar();
     return;
   }
-  if (target.dataset.action === 'toggle-tabbar-shape') {
-    tabbarShape = tabbarShape === 'curve' ? 'floating' : 'curve';
+  if (target.dataset.preset && tabbarPresets[target.dataset.preset]) {
+    tabbarPreset = target.dataset.preset;
     render();
+    await updateNavbar();
     await updateTabbar();
     return;
   }
@@ -431,11 +466,6 @@ app.addEventListener('change', async (event) => {
   }
   if (event.target.id === 'icons-toggle') {
     iconsEnabled = event.target.checked;
-    render();
-    await updateTabbar();
-  }
-  if (event.target.id === 'curve-toggle') {
-    tabbarShape = event.target.checked ? 'curve' : 'floating';
     render();
     await updateTabbar();
   }

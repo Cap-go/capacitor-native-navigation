@@ -1,6 +1,6 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
-import pkg from './package.json';
+import pkg from './package.json' with { type: 'json' };
 
 const config: CapacitorConfig = {
   appId: 'app.capgo.native.navigation.example',

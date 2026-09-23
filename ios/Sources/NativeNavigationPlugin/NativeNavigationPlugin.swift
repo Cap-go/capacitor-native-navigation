@@ -220,6 +220,11 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             let icons = call.getBool("icons", true)
 
             if self.usesSystemLiquidGlass && self.tabbarStyle.shape != .curve {
+                self.floatingTabBar?.isHidden = true
+                self.tabContainer?.isHidden = true
+                // Unhide before rehosting. setTabBarHidden does not recover on iOS 26
+                // after the controller view itself was hidden.
+                self.tabBarController?.view.isHidden = false
                 let tabBar = self.ensureTabBar()
                 let (items, selectedIndex) = self.makeTabBarItems(
                     tabs,
@@ -227,8 +232,6 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                     labelVisibilityMode: labelVisibilityMode,
                     icons: icons
                 )
-                self.floatingTabBar?.isHidden = true
-                self.tabContainer?.isHidden = true
                 self.applySystemTabBarItems(items, selectedIndex: selectedIndex, animated: call.getBool("animated", false))
                 self.applyTabBarAppearance(tabBar: tabBar, options: call)
                 if items.isEmpty {
@@ -239,7 +242,6 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 }
             } else {
                 self.restoreWebViewFromSystemTabController()
-                self.setSystemTabBarHidden(true)
                 self.tabBarController?.view.isHidden = true
                 let tabBar = self.ensureFloatingTabBar()
                 let (items, selectedIndex) = self.makeFloatingTabBarItems(
@@ -1598,7 +1600,10 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         }
 
         let opaqueBackground = backgroundTint ?? .systemBackground
-        if prefersOpaqueTabBarBackground() {
+        if tabbarStyle.shape == .curve {
+            // Curve hides the glass effect view, so the drawn fill has to stay visible.
+            tabBar.backgroundFillColor = backgroundColor
+        } else if prefersOpaqueTabBarBackground() {
             tabBar.backgroundFillColor = opaqueBackground
         } else if usesLiquidGlass {
             // Keep the hand-drawn fill clear so UIGlassEffect can show through.
@@ -1803,9 +1808,11 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             let trailingGap: CGFloat = 10
             let trailingExtra = hasDetachedTrailing ? trailingDiameter + trailingGap : 0
             let tabbarWidth = min(availableWidth, maxWidth + trailingExtra)
+            let curveExtendsToBottom = tabbarStyle.shape == .curve && tabbarStyle.horizontalMargin == 0 && tabbarStyle.bottomGap == 0
+            let bottomExtension = curveExtendsToBottom ? safeInsets.bottom : 0
             let originX = (width - tabbarWidth) / 2
-            let originY = height - safeInsets.bottom - tabbarStyle.bottomGap - tabbarStyle.totalHeight
-            container.frame = CGRect(x: originX, y: originY, width: tabbarWidth, height: tabbarStyle.totalHeight)
+            let originY = height - (curveExtendsToBottom ? 0 : safeInsets.bottom) - tabbarStyle.bottomGap - tabbarStyle.totalHeight
+            container.frame = CGRect(x: originX, y: originY, width: tabbarWidth, height: tabbarStyle.totalHeight + bottomExtension)
             floatingTabBar?.frame = container.bounds
             floatingTabBar?.layer.cornerRadius = 0
             floatingTabBar?.layoutIfNeeded()
@@ -2106,7 +2113,7 @@ private enum NativeNavigationTabbarBackgroundPath {
             return UIBezierPath(roundedRect: bounds, cornerRadius: style.cornerRadius)
         }
 
-        let barRect = CGRect(x: 0, y: style.barTop, width: bounds.width, height: max(style.height, 1))
+        let barRect = CGRect(x: 0, y: style.barTop, width: bounds.width, height: max(bounds.maxY - style.barTop, style.height))
         let cornerRadius = min(style.cornerRadius, barRect.height / 2)
         let centerX = bounds.midX
         let centerRadius = style.centerButtonDiameter / 2
@@ -2152,6 +2159,7 @@ private struct NativeNavigationFloatingTabStyle {
     let centerButtonIconColor: UIColor
     let badgeBackgroundColor: UIColor
     let badgeTextColor: UIColor
+    let showsSelectionBackground: Bool
 }
 
 private final class NativeNavigationFloatingTabBar: UIView {
@@ -2357,7 +2365,8 @@ private final class NativeNavigationFloatingTabBar: UIView {
             centerButtonColor: tabbarStyle.centerButtonColor ?? selectedTintColor,
             centerButtonIconColor: tabbarStyle.centerButtonIconColor,
             badgeBackgroundColor: badgeBackgroundColor,
-            badgeTextColor: badgeTextColor
+            badgeTextColor: badgeTextColor,
+            showsSelectionBackground: isCenter || tabbarStyle.shape != .curve
         )
     }
 
@@ -2472,7 +2481,7 @@ private final class NativeNavigationFloatingTabButton: UIControl {
         selectedView.backgroundColor = style.isCenter
             ? style.centerButtonColor
             : style.selectedTint.withAlphaComponent(style.selected && !isDetachedTrailing ? 0.16 : 0)
-        selectedView.alpha = style.isCenter || (style.selected && !isDetachedTrailing) ? 1 : 0
+        selectedView.alpha = style.isCenter || (style.selected && style.showsSelectionBackground && !isDetachedTrailing) ? 1 : 0
 
         layer.shadowColor = UIColor.black.cgColor
         layer.shadowOpacity = style.isCenter ? 0.2 : 0

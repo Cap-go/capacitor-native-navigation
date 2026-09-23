@@ -152,6 +152,22 @@ body {
   cursor: pointer;
 }
 
+.layout-presets {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.tile.is-selected {
+  color: #ffffff;
+  background: #0a84ff;
+  box-shadow: none;
+}
+
+.tile.is-selected small {
+  color: rgba(255, 255, 255, 0.82);
+}
+
 .tile span {
   display: block;
   font-size: 1.02rem;
