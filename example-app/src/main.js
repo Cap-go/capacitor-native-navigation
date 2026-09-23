@@ -39,6 +39,7 @@ const icons = {
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>',
   compose:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+  star: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1L12 16.8 6.6 19.8l1-6.1L3.2 9.4l6.1-.9Z"/></svg>',
 };
 
 const tabs = [
@@ -83,6 +84,13 @@ let labelsEnabled = true;
 let iconsEnabled = true;
 let tabbarPreset = 'system';
 let tabbarHidden = false;
+let shapeOverride = null;
+let removedTabIds = [];
+let addedTabIds = [];
+let activityBadge = 3;
+const itemPatches = {};
+const activityTitles = ['Activity', 'Inbox', 'Updates'];
+const activityIcons = [icons.activity, icons.star];
 
 const tabbarPresets = {
   system: {
@@ -102,7 +110,42 @@ const tabbarPresets = {
   },
 };
 
-const tabbarShape = () => tabbarPresets[tabbarPreset].shape;
+const addableTabs = [
+  {
+    id: 'draft',
+    title: 'Draft',
+    icon: { svg: icons.compose },
+  },
+  {
+    id: 'alerts',
+    title: 'Alerts',
+    icon: { svg: icons.activity },
+  },
+  {
+    id: 'search',
+    title: 'Search',
+    icon: { svg: icons.profile },
+  },
+];
+
+const tabbarShape = () => shapeOverride ?? tabbarPresets[tabbarPreset].shape;
+
+const withItemPatch = (tab) => {
+  const patch = itemPatches[tab.id];
+  const patched = patch ? { ...tab, ...patch } : tab;
+  if (patched.id !== 'activity') {
+    return patched;
+  }
+  return { ...patched, badge: activityBadge > 0 ? activityBadge : '' };
+};
+
+const currentTabs = () => {
+  const base = tabs
+    .filter((tab) => tab.id !== 'draft' && !removedTabIds.includes(tab.id))
+    .map(withItemPatch);
+  const extras = addableTabs.filter((tab) => addedTabIds.includes(tab.id)).map(withItemPatch);
+  return [...base, ...extras];
+};
 let topButtonVisible = readTopButtonPreference();
 let chromeConfigured = false;
 const pages = {
@@ -130,9 +173,37 @@ const pages = {
           <span>Toggle tabbar</span>
           <small>Dynamic visibility from JavaScript</small>
         </button>
-        <button class="tile" data-action="open-hidden-tab">
-          <span>Open hidden tab</span>
-          <small>Hidden tabs stay out of the native bar until selected</small>
+        <button class="tile" data-action="add-tab">
+          <span>Add tab</span>
+          <small>Insert another item in the bar</small>
+        </button>
+        <button class="tile" data-action="remove-tab">
+          <span>Remove tab</span>
+          <small>Drop the last item</small>
+        </button>
+        <button class="tile" data-action="toggle-labels">
+          <span>Labels</span>
+          <small id="labels-state">Shown</small>
+        </button>
+        <button class="tile" data-action="toggle-icons">
+          <span>Icons</span>
+          <small id="icons-state">Shown</small>
+        </button>
+        <button class="tile" data-action="toggle-floating">
+          <span>Floating</span>
+          <small id="floating-state">Follows the layout</small>
+        </button>
+        <button class="tile" data-action="toggle-badge">
+          <span>Badge</span>
+          <small id="badge-state">Activity count on</small>
+        </button>
+        <button class="tile" data-action="update-label">
+          <span>Update one label</span>
+          <small id="label-item-state">Activity</small>
+        </button>
+        <button class="tile" data-action="update-icon">
+          <span>Update one icon</span>
+          <small id="icon-item-state">Activity bars</small>
         </button>
       </section>
     `,
@@ -219,8 +290,8 @@ const tabbarColors = () => ({
 });
 
 const tabsForNative = () =>
-  tabs.map((tab) => {
-    if (tabbarPreset === 'trailing' && tab.id === 'profile') {
+  currentTabs().map((tab) => {
+    if (tabbarShape() === 'floating' && tabbarPreset === 'trailing' && tab.id === 'profile' && !shapeOverride) {
       return { ...tab, role: 'search' };
     }
     return tab;
@@ -231,7 +302,7 @@ const tabbarStyle = () =>
     ? {
         shape: 'curve',
         centerItemId: 'capture',
-        height: 80,
+        height: 49,
         horizontalMargin: 0,
         maxWidth: 0,
         bottomGap: 0,
@@ -282,8 +353,20 @@ const configureChrome = async () => {
   await updateTabbar();
 };
 
+const pageFor = (id) =>
+  pages[id] ?? {
+    title: id.charAt(0).toUpperCase() + id.slice(1),
+    subtitle: 'Added from the demo controls',
+    body: `
+      <section class="detail">
+        <h1>${id}</h1>
+        <p>This tab was inserted into the native bar from the home controls.</p>
+      </section>
+    `,
+  };
+
 const updateNavbar = async () => {
-  const page = pages[route];
+  const page = pageFor(route);
   await NativeNavigation.setNavbar({
     hidden: route === 'home' && tabbarShape() === 'curve',
     title: page.title,
@@ -344,6 +427,37 @@ const syncControls = () => {
   if (topButtonToggle) {
     topButtonToggle.checked = topButtonVisible;
   }
+  const labelsState = document.getElementById('labels-state');
+  const iconsState = document.getElementById('icons-state');
+  const floatingState = document.getElementById('floating-state');
+  const badgeState = document.getElementById('badge-state');
+  if (labelsState) {
+    labelsState.textContent = labelsEnabled ? 'Shown under the icons' : 'Hidden';
+  }
+  if (iconsState) {
+    iconsState.textContent = iconsEnabled ? 'Shown' : 'Hidden';
+  }
+  if (floatingState) {
+    floatingState.textContent = shapeOverride
+      ? shapeOverride === 'floating'
+        ? 'Capsule, forced on'
+        : 'Full-width bar, forced on'
+      : tabbarShape() === 'floating'
+        ? 'Capsule, from the layout'
+        : 'Full-width bar, from the layout';
+  }
+  if (badgeState) {
+    badgeState.textContent = activityBadge ? `Activity count ${activityBadge}` : 'Activity count off';
+  }
+  const labelItemState = document.getElementById('label-item-state');
+  const iconItemState = document.getElementById('icon-item-state');
+  const activityTab = currentTabs().find((tab) => tab.id === 'activity');
+  if (labelItemState) {
+    labelItemState.textContent = activityTab ? `Activity item: ${activityTab.title}` : 'Activity item is hidden';
+  }
+  if (iconItemState) {
+    iconItemState.textContent = itemPatches.activity?.icon?.svg === icons.star ? 'Activity item: star' : 'Activity item: bars';
+  }
   document.querySelectorAll('.layout-presets').forEach((container) => {
     container.innerHTML = Object.entries(tabbarPresets)
       .map(
@@ -392,7 +506,7 @@ const renderWebTabbarPreview = () => {
   return `<nav class="web-tabbar-preview ${tabbarShape()}${trailingTab ? ' has-trailing' : ''}" style="--web-tab-count: ${capsuleTabs.length}" aria-label="Tabbar preview"><div class="web-tabbar-capsule">${capsuleItems}</div>${trailingMarkup}</nav>`;
 };
 const render = () => {
-  const page = pages[route] ?? pages.home;
+  const page = pageFor(route);
   app.innerHTML = `<div class="page" data-route="${route}">${page.body}</div>${renderWebTabbarPreview()}`;
   syncControls();
 };
@@ -441,14 +555,84 @@ app.addEventListener('click', async (event) => {
   }
   if (target.dataset.preset && tabbarPresets[target.dataset.preset]) {
     tabbarPreset = target.dataset.preset;
+    shapeOverride = null;
     render();
     await updateNavbar();
     await updateTabbar();
     return;
   }
-  if (target.dataset.action === 'open-hidden-tab') {
-    activeTab = 'draft';
-    await navigate('draft', 'tab');
+  if (target.dataset.action === 'add-tab') {
+    if (removedTabIds.length > 0) {
+      removedTabIds.pop();
+    } else {
+      const next = addableTabs.find((tab) => !addedTabIds.includes(tab.id));
+      if (next) {
+        addedTabIds.push(next.id);
+      }
+    }
+    render();
+    await updateTabbar();
+    return;
+  }
+  if (target.dataset.action === 'remove-tab') {
+    const visible = currentTabs();
+    if (visible.length <= 1) {
+      return;
+    }
+    const last = visible[visible.length - 1];
+    if (addedTabIds.includes(last.id)) {
+      addedTabIds = addedTabIds.filter((id) => id !== last.id);
+    } else {
+      removedTabIds.push(last.id);
+    }
+    if (activeTab === last.id) {
+      activeTab = visible[0].id;
+      await navigate(activeTab, 'tab');
+      return;
+    }
+    render();
+    await updateTabbar();
+    return;
+  }
+  if (target.dataset.action === 'toggle-labels') {
+    labelsEnabled = !labelsEnabled;
+    render();
+    await updateTabbar();
+    return;
+  }
+  if (target.dataset.action === 'toggle-icons') {
+    iconsEnabled = !iconsEnabled;
+    render();
+    await updateTabbar();
+    return;
+  }
+  if (target.dataset.action === 'toggle-floating') {
+    shapeOverride = tabbarShape() === 'floating' ? 'curve' : 'floating';
+    render();
+    await updateNavbar();
+    await updateTabbar();
+    return;
+  }
+  if (target.dataset.action === 'toggle-badge') {
+    activityBadge = activityBadge ? 0 : 3;
+    render();
+    await updateTabbar();
+    return;
+  }
+  if (target.dataset.action === 'update-label') {
+    const currentTitle = itemPatches.activity?.title ?? 'Activity';
+    const nextTitle = activityTitles[(activityTitles.indexOf(currentTitle) + 1) % activityTitles.length];
+    itemPatches.activity = { ...itemPatches.activity, title: nextTitle };
+    render();
+    await updateTabbar();
+    return;
+  }
+  if (target.dataset.action === 'update-icon') {
+    const currentIcon = itemPatches.activity?.icon?.svg ?? icons.activity;
+    const nextIcon = activityIcons[(activityIcons.indexOf(currentIcon) + 1) % activityIcons.length];
+    itemPatches.activity = { ...itemPatches.activity, icon: { svg: nextIcon } };
+    render();
+    await updateTabbar();
     return;
   }
   if (target.dataset.action === 'refresh-version') {

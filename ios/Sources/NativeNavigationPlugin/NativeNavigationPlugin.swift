@@ -1398,7 +1398,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         let shape: NativeNavigationTabbarShape = requestedShape == "curve" ? .curve : .floating
         let isCurve = shape == .curve
         let centerDiameter = max(number(from: rawStyle["centerButtonDiameter"]) ?? 56, 44)
-        let height = max(number(from: rawStyle["height"]) ?? (isCurve ? 76 : 64), 44)
+        let height = max(number(from: rawStyle["height"]) ?? (isCurve ? 49 : 64), 44)
         let centerLift = max(number(from: rawStyle["centerButtonLift"]) ?? (centerDiameter / 2), 0)
         let bottomGap = max(number(from: rawStyle["bottomGap"]) ?? (isCurve ? 0 : 10), 0)
         let horizontalMargin = max(number(from: rawStyle["horizontalMargin"]) ?? (isCurve ? 0 : 24), 0)
@@ -1810,9 +1810,15 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             let tabbarWidth = min(availableWidth, maxWidth + trailingExtra)
             let curveExtendsToBottom = tabbarStyle.shape == .curve && tabbarStyle.horizontalMargin == 0 && tabbarStyle.bottomGap == 0
             let bottomExtension = curveExtendsToBottom ? safeInsets.bottom : 0
+            let contentHeight = tabbarStyle.shape == .curve ? min(tabbarStyle.height, 49) : tabbarStyle.height
+            let barTop = tabbarStyle.shape == .curve ? tabbarStyle.centerButtonLift : 0
+            let totalHeight = contentHeight + barTop
             let originX = (width - tabbarWidth) / 2
-            let originY = height - (curveExtendsToBottom ? 0 : safeInsets.bottom) - tabbarStyle.bottomGap - tabbarStyle.totalHeight
-            container.frame = CGRect(x: originX, y: originY, width: tabbarWidth, height: tabbarStyle.totalHeight + bottomExtension)
+            // Keep the home-indicator fill inside the screen. The previous origin
+            // pushed that extension below the bezel and left labels on the edge.
+            let originY = height - tabbarStyle.bottomGap - totalHeight - bottomExtension - (curveExtendsToBottom ? 0 : safeInsets.bottom)
+            container.frame = CGRect(x: originX, y: originY, width: tabbarWidth, height: totalHeight + bottomExtension)
+            floatingTabBar?.curveContentHeightOverride = tabbarStyle.shape == .curve ? contentHeight : nil
             floatingTabBar?.frame = container.bounds
             floatingTabBar?.layer.cornerRadius = 0
             floatingTabBar?.layoutIfNeeded()
@@ -2113,7 +2119,7 @@ private enum NativeNavigationTabbarBackgroundPath {
             return UIBezierPath(roundedRect: bounds, cornerRadius: style.cornerRadius)
         }
 
-        let barRect = CGRect(x: 0, y: style.barTop, width: bounds.width, height: max(bounds.maxY - style.barTop, style.height))
+        let barRect = CGRect(x: 0, y: style.barTop, width: bounds.width, height: max(bounds.maxY - style.barTop, 1))
         let cornerRadius = min(style.cornerRadius, barRect.height / 2)
         let centerX = bounds.midX
         let centerRadius = style.centerButtonDiameter / 2
@@ -2169,6 +2175,7 @@ private final class NativeNavigationFloatingTabBar: UIView {
     private var iconsVisible = true
     private let backgroundShapeView = NativeNavigationTabbarBackgroundView()
     private var tabbarStyle = NativeNavigationTabbarStyleConfig()
+    var curveContentHeightOverride: CGFloat?
 
     var selectedIndex = 0
     var selectedTintColor = UIColor.systemBlue {
@@ -2260,7 +2267,7 @@ private final class NativeNavigationFloatingTabBar: UIView {
         if let centerIndex = centerButtonIndex(), buttons.indices.contains(centerIndex) {
             let buttonDiameter = tabbarStyle.centerButtonDiameter
             let centerGap = min(buttonDiameter + 4, bounds.width * 0.34)
-            let barFrame = CGRect(x: 0, y: tabbarStyle.barTop, width: bounds.width, height: tabbarStyle.height)
+            let barFrame = CGRect(x: 0, y: tabbarStyle.barTop, width: bounds.width, height: curveContentHeightOverride ?? tabbarStyle.height)
             let leftWidth = max(0, bounds.midX - centerGap / 2)
             let rightX = min(bounds.width, bounds.midX + centerGap / 2)
             let centerFrame = CGRect(
@@ -2532,8 +2539,16 @@ private final class NativeNavigationFloatingTabButton: UIControl {
                 titleLabel.frame = CGRect(x: 8, y: (bounds.height - 18) / 2, width: bounds.width - 16, height: 18)
             }
         } else if hasIcon && hasLabel {
-            imageView.frame = CGRect(x: (bounds.width - iconSize) / 2, y: 10, width: iconSize, height: iconSize)
-            titleLabel.frame = CGRect(x: 5, y: bounds.height - 23, width: bounds.width - 10, height: 15)
+            let labelHeight: CGFloat = 14
+            let gap: CGFloat = 2
+            let stackHeight = iconSize + gap + labelHeight
+            // Tall curve cells sit above the home indicator. Keep the label
+            // under the icon, not on the bezel.
+            let stackY = bounds.height >= 72
+                ? max(6, bounds.height - 10 - stackHeight)
+                : max(4, (bounds.height - stackHeight) / 2)
+            imageView.frame = CGRect(x: (bounds.width - iconSize) / 2, y: stackY, width: iconSize, height: iconSize)
+            titleLabel.frame = CGRect(x: 4, y: stackY + iconSize + gap, width: bounds.width - 8, height: labelHeight)
         } else if hasIcon {
             imageView.frame = CGRect(x: (bounds.width - iconSize) / 2, y: (bounds.height - iconSize) / 2, width: iconSize, height: iconSize)
             titleLabel.frame = .zero

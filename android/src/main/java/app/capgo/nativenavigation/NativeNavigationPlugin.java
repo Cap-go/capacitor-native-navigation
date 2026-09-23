@@ -1510,7 +1510,7 @@ public class NativeNavigationPlugin extends Plugin {
         String requestedShape = rawStyle.getString("shape", "floating");
         boolean curve = "curve".equalsIgnoreCase(requestedShape);
         int centerButtonDiameter = Math.max(styleDimension(rawStyle, "centerButtonDiameter", 56), 44);
-        int height = Math.max(styleDimension(rawStyle, "height", curve ? 76 : DEFAULT_TABBAR_DP), 44);
+        int height = Math.max(styleDimension(rawStyle, "height", curve ? 49 : DEFAULT_TABBAR_DP), 44);
         int centerButtonLift = Math.max(styleDimension(rawStyle, "centerButtonLift", centerButtonDiameter / 2), 0);
         int bottomGap = Math.max(styleDimension(rawStyle, "bottomGap", curve ? 0 : 10), 0);
         int horizontalMargin = Math.max(styleDimension(rawStyle, "horizontalMargin", curve ? 0 : 24), 0);
