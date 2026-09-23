@@ -20,47 +20,27 @@
 
 Native navbar, tabbar, safe-area handling, and WebView snapshot transitions for Capacitor apps. Your web framework keeps routing and page rendering while this plugin owns the platform surfaces users expect to feel native.
 
+**iOS 27 and iPhone Duo.** System tab bars, Liquid Glass, and the curved center button follow the window when a Duo folds and unfolds.
+
 ## Demo
 
-<img src="./docs/demo.webp" alt="Demo of capacitor-native-navigation in action" width="300" />
+| App | Tap flow | SVG icons | Styling |
+| --- | --- | --- | --- |
+| <img src="./docs/demo.webp" alt="Demo of capacitor-native-navigation in action" width="160" /> | <img src="./docs/demo-navigation.webp" alt="Animated native navigation tap flow showing tab selection, push transition, and native back" width="160" /> | <img src="./docs/demo-svg-icons.webp" alt="Animated native SVG icon demo showing inline SVG icons, native tint, labels, and tab selection" width="160" /> | <img src="./docs/demo-options.webp" alt="Animated native navigation options demo showing dynamic colors, selected labels, custom indicators, badges, system Liquid Glass, and zoom transitions" width="160" /> |
 
-### Native navigation tap flow
+| iOS Liquid Glass | Android Liquid Glass | Curved tabbar |
+| --- | --- | --- |
+| <img src="./docs/native-liquid-glass-ios.webp" alt="iOS native Liquid Glass navbar and tabbar screenshot" width="160" /> | <img src="./docs/native-liquid-glass-android.webp" alt="Android Liquid Glass-style native navbar and tabbar screenshot" width="160" /> | <img src="./docs/native-screenshots/android-curved-tabbar.png" alt="Android native curved tabbar with raised center camera action and side margin" width="160" /> |
 
-<img
-  src="./docs/demo-navigation.webp"
-  alt="Animated native navigation tap flow showing tab selection, push transition, and native back"
-  width="320"
-/>
+### iPhone Duo
 
-### SVG icon descriptors
+Folded or open, iOS places the system tab bar as a vertical rail on the trailing edge. The curved center bar stays on the bottom, and its cradle stays a circle around the button when the window widens.
 
-<img
-  src="./docs/demo-svg-icons.webp"
-  alt="Animated native SVG icon demo showing inline SVG icons, native tint, labels, and tab selection"
-  width="320"
-/>
+| Folded, center | Open, center | Open, system | Folded, system |
+| --- | --- | --- | --- |
+| <img src="./docs/iphone-duo-folded-center.webp" alt="iPhone Duo folded with a curved bottom tab bar and a circular center camera button" width="160" /> | <img src="./docs/iphone-duo-open-center.webp" alt="iPhone Duo open with the curved center camera button keeping a circular cradle" width="220" /> | <img src="./docs/iphone-duo-open-system.webp" alt="iPhone Duo open in landscape with the system tab bar as a vertical rail" width="220" /> | <img src="./docs/iphone-duo-folded-system.webp" alt="iPhone Duo folded with the system tab bar as a vertical rail" width="160" /> |
 
-### Native styling and zoom options
-
-<img
-  src="./docs/demo-options.webp"
-  alt="Animated native navigation options demo showing dynamic colors, selected labels, custom indicators, badges, system Liquid Glass, and zoom transitions"
-  width="320"
-/>
-
-### Native Liquid Glass screenshots
-
-| iOS native Liquid Glass | Android Liquid Glass style |
-| --- | --- |
-| <img src="./docs/native-liquid-glass-ios.webp" alt="iOS native Liquid Glass navbar and tabbar screenshot" width="260" /> | <img src="./docs/native-liquid-glass-android.webp" alt="Android Liquid Glass-style native navbar and tabbar screenshot" width="260" /> |
-
-### Curved native tabbar screenshot
-
-<img
-  src="./docs/native-screenshots/android-curved-tabbar.png"
-  alt="Android native curved tabbar with raised center camera action and side margin"
-  width="300"
-/>
+<img src="./docs/iphone-duo-unfold.webp" alt="iPhone Duo unfolding while the center camera cradle stays a circle around the button" width="280" />
 
 ## Features
 
@@ -81,7 +61,7 @@ Native navbar, tabbar, safe-area handling, and WebView snapshot transitions for 
 
 ## Compatibility
 
-`@capgo/capacitor-native-navigation` targets Capacitor 8 and Node.js 22+.
+`@capgo/capacitor-native-navigation` targets Capacitor 8 and Node.js 22+. iOS 27 is supported, including iPhone Duo.
 
 ## Install
 
@@ -395,16 +375,6 @@ const icon = {
 ```
 
 Inline SVG supports the icon-focused subset used by common sets such as Lucide and Feather: `path`, `line`, `polyline`, `polygon`, `circle`, and `rect`. The SVG is rendered as a template image by default, so native tint colors can recolor it without bundling a platform asset.
-
-## iPhone Duo
-
-On iPhone Duo the system tab bar follows the window. Folded or open, iOS places it as a vertical rail on the trailing edge. The curved center bar stays on the bottom. Its cradle is redrawn from the center button when the window widens, so unfolding does not stretch the circle.
-
-| Folded, center | Open, center | Open, system | Folded, system |
-| --- | --- | --- | --- |
-| <img src="./docs/iphone-duo-folded-center.webp" alt="iPhone Duo folded with a curved bottom tab bar and a circular center camera button" width="220" /> | <img src="./docs/iphone-duo-open-center.webp" alt="iPhone Duo open with the curved center camera button keeping a circular cradle" width="300" /> | <img src="./docs/iphone-duo-open-system.webp" alt="iPhone Duo open in landscape with the system tab bar as a vertical rail" width="300" /> | <img src="./docs/iphone-duo-folded-system.webp" alt="iPhone Duo folded with the system tab bar as a vertical rail" width="220" /> |
-
-<img src="./docs/iphone-duo-unfold.webp" alt="iPhone Duo unfolding while the center camera cradle stays a circle around the button" width="420" />
 
 ## Platform Notes
 
