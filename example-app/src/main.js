@@ -88,6 +88,7 @@ let shapeOverride = null;
 let removedTabIds = [];
 let addedTabIds = [];
 let activityBadge = 3;
+let standardBarHeight = true;
 const itemPatches = {};
 const activityTitles = ['Activity', 'Inbox', 'Updates'];
 const activityIcons = [icons.activity, icons.star];
@@ -197,6 +198,10 @@ const pages = {
           <span>Badge</span>
           <small id="badge-state">Activity count on</small>
         </button>
+        <button class="tile" data-action="toggle-height">
+          <span>Bar height</span>
+          <small id="height-state">Standard 49pt, 83pt with the home indicator</small>
+        </button>
         <button class="tile" data-action="update-label">
           <span>Update one label</span>
           <small id="label-item-state">Activity</small>
@@ -297,12 +302,14 @@ const tabsForNative = () =>
     return tab;
   });
 
-const tabbarStyle = () =>
-  tabbarShape() === 'curve'
+const tabbarStyle = () => {
+  const curve = tabbarShape() === 'curve';
+  const height = standardBarHeight ? (curve ? 49 : 64) : 80;
+  return curve
     ? {
         shape: 'curve',
         centerItemId: 'capture',
-        height: 49,
+        height,
         horizontalMargin: 0,
         maxWidth: 0,
         bottomGap: 0,
@@ -314,11 +321,12 @@ const tabbarStyle = () =>
       }
     : {
         shape: 'floating',
-        height: 64,
+        height,
         horizontalMargin: 24,
         maxWidth: 430,
         bottomGap: 10,
       };
+};
 const topButtonItems = [
   {
     id: 'compose',
@@ -448,6 +456,12 @@ const syncControls = () => {
   }
   if (badgeState) {
     badgeState.textContent = activityBadge ? `Activity count ${activityBadge}` : 'Activity count off';
+  }
+  const heightState = document.getElementById('height-state');
+  if (heightState) {
+    heightState.textContent = standardBarHeight
+      ? 'Standard 49pt, 83pt with the home indicator'
+      : 'Tall 80pt body, plus the home indicator';
   }
   const labelItemState = document.getElementById('label-item-state');
   const iconItemState = document.getElementById('icon-item-state');
@@ -615,6 +629,12 @@ app.addEventListener('click', async (event) => {
   }
   if (target.dataset.action === 'toggle-badge') {
     activityBadge = activityBadge ? 0 : 3;
+    render();
+    await updateTabbar();
+    return;
+  }
+  if (target.dataset.action === 'toggle-height') {
+    standardBarHeight = !standardBarHeight;
     render();
     await updateTabbar();
     return;

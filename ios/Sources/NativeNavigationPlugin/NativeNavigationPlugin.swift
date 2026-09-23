@@ -1810,7 +1810,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             let tabbarWidth = min(availableWidth, maxWidth + trailingExtra)
             let curveExtendsToBottom = tabbarStyle.shape == .curve && tabbarStyle.horizontalMargin == 0 && tabbarStyle.bottomGap == 0
             let bottomExtension = curveExtendsToBottom ? safeInsets.bottom : 0
-            let contentHeight = tabbarStyle.shape == .curve ? min(tabbarStyle.height, 49) : tabbarStyle.height
+            let contentHeight = tabbarStyle.height
             let barTop = tabbarStyle.shape == .curve ? tabbarStyle.centerButtonLift : 0
             let totalHeight = contentHeight + barTop
             let originX = (width - tabbarWidth) / 2
