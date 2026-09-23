@@ -396,6 +396,16 @@ const icon = {
 
 Inline SVG supports the icon-focused subset used by common sets such as Lucide and Feather: `path`, `line`, `polyline`, `polygon`, `circle`, and `rect`. The SVG is rendered as a template image by default, so native tint colors can recolor it without bundling a platform asset.
 
+## iPhone Duo
+
+On iPhone Duo the system tab bar follows the window. Folded or open, iOS places it as a vertical rail on the trailing edge. The curved center bar stays on the bottom. Its cradle is redrawn from the center button when the window widens, so unfolding does not stretch the circle.
+
+| Folded, center | Open, center | Open, system | Folded, system |
+| --- | --- | --- | --- |
+| <img src="./docs/iphone-duo-folded-center.webp" alt="iPhone Duo folded with a curved bottom tab bar and a circular center camera button" width="220" /> | <img src="./docs/iphone-duo-open-center.webp" alt="iPhone Duo open with the curved center camera button keeping a circular cradle" width="300" /> | <img src="./docs/iphone-duo-open-system.webp" alt="iPhone Duo open in landscape with the system tab bar as a vertical rail" width="300" /> | <img src="./docs/iphone-duo-folded-system.webp" alt="iPhone Duo folded with the system tab bar as a vertical rail" width="220" /> |
+
+<img src="./docs/iphone-duo-unfold.webp" alt="iPhone Duo unfolding while the center camera cradle stays a circle around the button" width="420" />
+
 ## Platform Notes
 
 - iOS uses UIKit `UINavigationBar`, `UITabBar`, and `UITabBarController` so the system owns tab interaction, Liquid Glass rendering, and safe-area behavior.

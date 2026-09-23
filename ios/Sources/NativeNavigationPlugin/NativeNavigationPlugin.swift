@@ -2250,6 +2250,9 @@ private final class NativeNavigationFloatingTabBar: UIView {
         super.layoutSubviews()
         let capsule = capsuleBounds(in: bounds)
         backgroundShapeView.frame = capsule
+        // Unfolding resizes the bar without a new style pass. Rebuild the shadow
+        // from the current bounds so the cradle stays a circle around the button.
+        superview?.layer.shadowPath = NativeNavigationTabbarBackgroundPath.path(in: capsule, style: tabbarStyle).cgPath
         guard !buttons.isEmpty else {
             return
         }
@@ -2407,6 +2410,8 @@ private final class NativeNavigationTabbarBackgroundView: UIView {
         super.init(frame: frame)
         isOpaque = false
         backgroundColor = .clear
+        // Default scaleToFill stretches the last bitmap when the bar widens.
+        contentMode = .redraw
     }
 
     required init?(coder: NSCoder) {
