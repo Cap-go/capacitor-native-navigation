@@ -626,14 +626,15 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         tabBarController?.view.layoutIfNeeded()
 
         if let tabBar = tabBar {
-            if usesSystemLiquidGlass, !lastSetTabbarOptions.isEmpty {
-                let refreshCall = CAPPluginCall(
-                    callbackId: "tabbar-refresh",
-                    methodName: "setTabbar",
-                    options: lastSetTabbarOptions,
-                    success: { _, _ in },
-                    error: { _ in }
-                )
+            if usesSystemLiquidGlass,
+               !lastSetTabbarOptions.isEmpty,
+               let refreshCall = CAPPluginCall(
+                   callbackId: "tabbar-refresh",
+                   methodName: "setTabbar",
+                   options: lastSetTabbarOptions,
+                   success: { _, _ in },
+                   error: { _ in }
+               ) {
                 applyTabBarAppearance(tabBar: tabBar, options: refreshCall)
             } else {
                 tabBar.isTranslucent = !prefersOpaqueTabBarBackground()
