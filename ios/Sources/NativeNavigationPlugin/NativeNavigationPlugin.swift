@@ -69,6 +69,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var tabBaseImages: [UIImage?] = []
     private var tabSelectedImages: [UIImage?] = []
     private var suppressTabSelectEvent = false
+    private var tabSelectEmittedForReTap = false
     private var transitionSnapshot: UIView?
     private var activeTransitionId: String?
     private var activeTransitionDirection = "forward"
@@ -543,12 +544,11 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         if usesSystemLiquidGlass {
             hostWebView(in: viewController)
         }
-        // UITabBarController does not call didSelect when the already-selected
-        // tab is tapped. shouldSelect still runs — emit tabSelect so JS can
-        // scroll the current tab to the top. Skip during setTabbar.
+        tabSelectEmittedForReTap = false
         if !suppressTabSelectEvent,
            tabBarController.selectedViewController === viewController {
             notifyTabSelect(index: viewController.tabBarItem.tag)
+            tabSelectEmittedForReTap = true
         }
         return true
     }
@@ -560,7 +560,10 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         }
         let index = viewController.tabBarItem.tag
         hostWebViewInSelectedSystemTab()
-        notifyTabSelect(index: index)
+        if !tabSelectEmittedForReTap {
+            notifyTabSelect(index: index)
+        }
+        tabSelectEmittedForReTap = false
     }
 
     private func notifyTabSelect(index: Int) {

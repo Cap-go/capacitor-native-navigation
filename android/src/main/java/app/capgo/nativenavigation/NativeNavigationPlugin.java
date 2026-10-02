@@ -1897,6 +1897,7 @@ public class NativeNavigationPlugin extends Plugin {
         return insets;
     }
 
+    /** Converts a layout pixel value to CSS pixels for WebView CSS variables. */
     private int cssPx(int devicePx) {
         float density = getContext().getResources().getDisplayMetrics().density;
         if (density <= 0f) {
