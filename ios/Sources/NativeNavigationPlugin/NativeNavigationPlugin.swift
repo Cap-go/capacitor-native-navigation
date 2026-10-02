@@ -555,6 +555,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
     public func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
         guard !suppressTabSelectEvent else {
+            tabSelectEmittedForReTap = false
             hostWebViewInSelectedSystemTab()
             return
         }
