@@ -1883,16 +1883,27 @@ public class NativeNavigationPlugin extends Plugin {
     }
 
     private JSObject currentInsets() {
+        // View layout uses device pixels; CSS variables must be density-independent
+        // or a 3x screen writes `192px` which CSS treats as 192 CSS px.
         int top = navbarVisible ? statusBarInset() + dp(DEFAULT_NAVBAR_DP) : 0;
         int bottom = tabbarVisible ? navigationBarInset() + dp(tabbarStyle.totalHeight()) + dp(tabbarStyle.bottomGap) : 0;
         JSObject insets = new JSObject();
-        insets.put("top", top);
+        insets.put("top", cssPx(top));
         insets.put("right", 0);
-        insets.put("bottom", bottom);
+        insets.put("bottom", cssPx(bottom));
         insets.put("left", 0);
-        insets.put("navbarHeight", top);
-        insets.put("tabbarHeight", bottom);
+        insets.put("navbarHeight", cssPx(top));
+        insets.put("tabbarHeight", cssPx(bottom));
         return insets;
+    }
+
+    /** Converts a layout pixel value to CSS pixels for WebView CSS variables. */
+    private int cssPx(int devicePx) {
+        float density = getContext().getResources().getDisplayMetrics().density;
+        if (density <= 0f) {
+            return devicePx;
+        }
+        return Math.round(devicePx / density);
     }
 
     private JSObject insetsResult() {
