@@ -19,7 +19,7 @@ jobs:
         with:
           node-version: 24.x
       - name: Check out
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Enforce capacitor-swift-pm version
         run: |
           set -euo pipefail
@@ -33,7 +33,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Check out
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
@@ -63,7 +63,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Check out
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
@@ -93,7 +93,7 @@ jobs:
         with:
           node-version: 24.x
       - name: Check out
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
       - name: Install dependencies
         id: install_code
