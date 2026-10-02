@@ -70,6 +70,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var tabSelectedImages: [UIImage?] = []
     private var suppressTabSelectEvent = false
     private var tabSelectEmittedForReTap = false
+    private var lastSetTabbarOptions: [String: Any] = [:]
     private var transitionSnapshot: UIView?
     private var activeTransitionId: String?
     private var activeTransitionDirection = "forward"
@@ -234,6 +235,9 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                     icons: icons
                 )
                 self.applySystemTabBarItems(items, selectedIndex: selectedIndex, animated: call.getBool("animated", false))
+                if let options = call.options as? [String: Any] {
+                    self.lastSetTabbarOptions = options
+                }
                 self.applyTabBarAppearance(tabBar: tabBar, options: call)
                 if items.isEmpty {
                     self.tabbarVisible = false
@@ -622,17 +626,28 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         tabBarController?.view.layoutIfNeeded()
 
         if let tabBar = tabBar {
-            tabBar.isTranslucent = !prefersOpaqueTabBarBackground()
-            let standardAppearance = tabBar.standardAppearance
-            tabBar.standardAppearance = standardAppearance
-            if #available(iOS 15.0, *) {
-                let scrollEdgeAppearance = tabBar.scrollEdgeAppearance ?? standardAppearance
-                tabBar.scrollEdgeAppearance = scrollEdgeAppearance
-            }
-            tabBar.items?.forEach { item in
-                item.standardAppearance = standardAppearance
+            if usesSystemLiquidGlass, !lastSetTabbarOptions.isEmpty {
+                let refreshCall = CAPPluginCall(
+                    callbackId: "tabbar-refresh",
+                    methodName: "setTabbar",
+                    options: lastSetTabbarOptions,
+                    success: { _, _ in },
+                    error: { _ in }
+                )
+                applyTabBarAppearance(tabBar: tabBar, options: refreshCall)
+            } else {
+                tabBar.isTranslucent = !prefersOpaqueTabBarBackground()
+                let standardAppearance = tabBar.standardAppearance
+                tabBar.standardAppearance = standardAppearance
                 if #available(iOS 15.0, *) {
-                    item.scrollEdgeAppearance = tabBar.scrollEdgeAppearance
+                    let scrollEdgeAppearance = tabBar.scrollEdgeAppearance ?? standardAppearance
+                    tabBar.scrollEdgeAppearance = scrollEdgeAppearance
+                }
+                tabBar.items?.forEach { item in
+                    item.standardAppearance = standardAppearance
+                    if #available(iOS 15.0, *) {
+                        item.scrollEdgeAppearance = tabBar.scrollEdgeAppearance
+                    }
                 }
             }
             tabBar.setNeedsLayout()
