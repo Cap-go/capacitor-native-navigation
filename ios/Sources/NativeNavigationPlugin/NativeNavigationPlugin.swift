@@ -1480,7 +1480,9 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private func applyTabBarAppearance(tabBar: UITabBar, options call: CAPPluginCall) {
         if usesSystemLiquidGlass {
             let standardAppearance = UITabBarAppearance()
-            configureSystemTabBarStandardBackground(standardAppearance)
+            // Match scroll-edge background so UIKit does not swap Liquid Glass for
+            // legacy material when content scrolls under the bar (iOS 26+).
+            configureSystemTabBarScrollEdgeBackground(standardAppearance, options: call)
             applyTabBarColorOptions(standardAppearance, tabBar: tabBar, options: call)
             applyTabBarBadgeOptions(standardAppearance, options: call)
 
