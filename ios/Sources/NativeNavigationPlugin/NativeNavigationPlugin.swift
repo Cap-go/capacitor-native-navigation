@@ -69,6 +69,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var tabBaseImages: [UIImage?] = []
     private var tabSelectedImages: [UIImage?] = []
     private var suppressTabSelectEvent = false
+    private var tabSelectEmittedForReTap = false
     private var transitionSnapshot: UIView?
     private var activeTransitionId: String?
     private var activeTransitionDirection = "forward"
@@ -543,17 +544,27 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         if usesSystemLiquidGlass {
             hostWebView(in: viewController)
         }
+        tabSelectEmittedForReTap = false
+        if !suppressTabSelectEvent,
+           tabBarController.selectedViewController === viewController {
+            notifyTabSelect(index: viewController.tabBarItem.tag)
+            tabSelectEmittedForReTap = true
+        }
         return true
     }
 
     public func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
         guard !suppressTabSelectEvent else {
+            tabSelectEmittedForReTap = false
             hostWebViewInSelectedSystemTab()
             return
         }
         let index = viewController.tabBarItem.tag
         hostWebViewInSelectedSystemTab()
-        notifyTabSelect(index: index)
+        if !tabSelectEmittedForReTap {
+            notifyTabSelect(index: index)
+        }
+        tabSelectEmittedForReTap = false
     }
 
     private func notifyTabSelect(index: Int) {
@@ -1791,7 +1802,13 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
         if let container = systemTabRootContainer {
             container.frame = rootView.bounds
-            webView?.frame = container.bounds
+            // Capacitor's root view is the WKWebView. After the webview is
+            // hosted in a tab content controller, stretching it to this
+            // container's full bounds overflows the tab VC (clipsToBounds is
+            // off) and paints over the system tab bar.
+            if !isWebViewHostedInSystemTabController {
+                webView?.frame = container.bounds
+            }
         }
 
         if let container = navContainer {
@@ -1852,8 +1869,11 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
     private func bringChromeToFront() {
         if usesSystemLiquidGlass && tabbarStyle.shape != .curve {
+            if let tabBarController = tabBarController {
+                (systemTabRootContainer ?? bridge?.viewController?.view)?.bringSubviewToFront(tabBarController.view)
+            }
             if let navContainer = navContainer {
-                bridge?.viewController?.view.bringSubviewToFront(navContainer)
+                (systemTabRootContainer ?? bridge?.viewController?.view)?.bringSubviewToFront(navContainer)
             }
             bringLiftedWebViewOverlaysToFront()
             return
@@ -1975,7 +1995,12 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         let usesSystemTabbar = usesSystemLiquidGlass && tabbarStyle.shape != .curve
         let nativeTabHeight = max(tabBar?.frame.height ?? 0, 49 + safeInsets.bottom)
         let customTabHeight = tabbarHeight + safeInsets.bottom + tabbarStyle.bottomGap
-        let tabHeight = isEnabled && tabbarVisible ? (usesSystemTabbar ? nativeTabHeight : customTabHeight) : 0
+        // Hosted in the tab content VC: the WebView already ends above the
+        // bar. Reporting the bar height as CSS overlap lifts the FAB by a
+        // second bar.
+        let tabHeight = isEnabled && tabbarVisible && !isWebViewHostedInSystemTabController
+            ? (usesSystemTabbar ? nativeTabHeight : customTabHeight)
+            : 0
         return [
             "top": navHeight,
             "right": safeInsets.right,
@@ -2674,6 +2699,7 @@ final class NativeNavigationTabContentController: UIViewController {
         let view = UIView()
         view.backgroundColor = .systemBackground
         view.isOpaque = true
+        view.clipsToBounds = true
         self.view = view
     }
 
@@ -2714,7 +2740,8 @@ final class NativeNavigationTabContentController: UIViewController {
         snapshotPlaceholder = nil
         hostedWebView = webView
         if webView.superview !== view {
-            webView.removeFromSuperview()
+            // addSubview reparents in one step. removeFromSuperview() first
+            // leaves a frame of this VC's backing colour (system white).
             view.addSubview(webView)
         }
         webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
