@@ -59,6 +59,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var navbarVisible = false
     private var tabbarVisible = false
     private var tabbarSoftHidden = false
+    private var tabbarSkipImmediateSystemReveal = false
+    private var floatingTabBarWantsHidden = false
     private var contentInsetMode = "css"
     private var isEnabled = true
     private var defaultTransitionDuration: TimeInterval = 0.35
@@ -222,10 +224,15 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                         usesSystemLiquidGlass: self.usesSystemLiquidGlass,
                         shape: self.tabbarStyle.shape == .curve ? "curve" : "floating"
                     ) {
+                        self.tabbarSkipImmediateSystemReveal = true
                         self.setSystemTabBarHidden(false, animated: true, syncSubviewState: false)
                     } else {
                         self.setFloatingTabBarVisibility(hidden: false, animated: true)
                     }
+                } else if self.usesSystemLiquidGlass && self.tabbarStyle.shape != .curve {
+                    self.setSystemTabBarHidden(false, animated: false, syncSubviewState: true)
+                } else {
+                    self.setFloatingTabBarVisibility(hidden: false, animated: false)
                 }
             }
 
@@ -992,6 +999,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
 
     private func setFloatingTabBarVisibility(hidden: Bool, animated: Bool) {
+        floatingTabBarWantsHidden = hidden
         let targets = [tabContainer, floatingTabBar].compactMap { $0 }
         guard !targets.isEmpty else {
             return
@@ -1008,7 +1016,10 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         if hidden {
             UIView.animate(withDuration: 0.2, animations: {
                 targets.forEach { $0.alpha = 0 }
-            }, completion: { _ in
+            }, completion: { finished in
+                guard finished, self.floatingTabBarWantsHidden else {
+                    return
+                }
                 targets.forEach { $0.isHidden = true }
             })
             return
@@ -1028,7 +1039,10 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         floatingTabBar?.isHidden = true
         tabBarController?.view.isHidden = false
         if usesSystemLiquidGlass && tabbarStyle.shape != .curve {
-            setSystemTabBarHidden(false)
+            if !tabbarSkipImmediateSystemReveal {
+                setSystemTabBarHidden(false)
+            }
+            tabbarSkipImmediateSystemReveal = false
             liftWebViewOverlaysAboveSystemTabs()
             hostWebViewInSelectedSystemTab()
         } else {

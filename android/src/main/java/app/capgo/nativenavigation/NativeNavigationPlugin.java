@@ -105,6 +105,7 @@ public class NativeNavigationPlugin extends Plugin {
     private final Map<Integer, String> menuActionPlacements = new HashMap<>();
     private final List<NativeTabItem> tabItems = new ArrayList<>();
     private int selectedTabIndex = 0;
+    private boolean tabbarChromeHideAnimating = false;
 
     @Override
     public void load() {
@@ -1755,7 +1756,8 @@ public class NativeNavigationPlugin extends Plugin {
         int bottom = navigationBarInset();
         int navbarHeight = navbarVisible ? status + dp(DEFAULT_NAVBAR_DP) : 0;
         int tabbarHeight = dp(tabbarStyle.totalHeight());
-        int tabbarBottomMargin = tabbarVisible ? bottom + dp(tabbarStyle.bottomGap) : bottom;
+        boolean tabbarLayoutVisible = tabbarVisible || tabbarChromeHideAnimating;
+        int tabbarBottomMargin = tabbarLayoutVisible ? bottom + dp(tabbarStyle.bottomGap) : bottom;
 
         if (navbarContainer != null) {
             FrameLayout.LayoutParams containerParams = new FrameLayout.LayoutParams(
@@ -1776,7 +1778,7 @@ public class NativeNavigationPlugin extends Plugin {
         }
 
         if (tabbarBackdrop != null) {
-            int backdropHeight = tabbarVisible ? bottom + dp(tabbarStyle.bottomGap) : 0;
+            int backdropHeight = tabbarLayoutVisible ? bottom + dp(tabbarStyle.bottomGap) : 0;
             FrameLayout.LayoutParams backdropParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 backdropHeight,
@@ -1784,7 +1786,7 @@ public class NativeNavigationPlugin extends Plugin {
             );
             tabbarBackdrop.setLayoutParams(backdropParams);
             tabbarBackdrop.setBackgroundColor(resolvedTabbarSurfaceColor());
-            tabbarBackdrop.setVisibility(tabbarVisible && backdropHeight > 0 ? View.VISIBLE : View.GONE);
+            tabbarBackdrop.setVisibility(tabbarLayoutVisible && backdropHeight > 0 ? View.VISIBLE : View.GONE);
         }
         if (tabbarContainer != null) {
             int rootWidth = root.getWidth() > 0 ? root.getWidth() : Resources.getSystem().getDisplayMetrics().widthPixels;
@@ -1849,15 +1851,17 @@ public class NativeNavigationPlugin extends Plugin {
         }
 
         if (!visible) {
-            if (tabbar != null) {
-                tabbar.setVisibility(View.GONE);
-            }
+            tabbarChromeHideAnimating = true;
             tabbarContainer
                 .animate()
                 .translationY(slideDistance)
                 .alpha(0f)
                 .setDuration(TabbarChromeSupport.TABBAR_VISIBILITY_ANIMATION_MS)
                 .withEndAction(() -> {
+                    tabbarChromeHideAnimating = false;
+                    if (tabbar != null) {
+                        tabbar.setVisibility(View.GONE);
+                    }
                     tabbarContainer.setVisibility(View.GONE);
                     if (tabbarBackdrop != null) {
                         tabbarBackdrop.setVisibility(View.GONE);
@@ -1870,6 +1874,7 @@ public class NativeNavigationPlugin extends Plugin {
             return;
         }
 
+        tabbarChromeHideAnimating = false;
         tabbarContainer.setVisibility(View.VISIBLE);
         tabbarContainer.setAlpha(0f);
         tabbarContainer.setTranslationY(slideDistance);
