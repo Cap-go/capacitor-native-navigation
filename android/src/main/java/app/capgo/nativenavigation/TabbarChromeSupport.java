@@ -1,7 +1,5 @@
 package app.capgo.nativenavigation;
 
-import android.graphics.Color;
-
 public final class TabbarChromeSupport {
 
     private TabbarChromeSupport() {}
@@ -10,7 +8,7 @@ public final class TabbarChromeSupport {
         if (explicitColor != null) {
             return explicitColor;
         }
-        return Color.argb(34, Color.red(tintColor), Color.green(tintColor), Color.blue(tintColor));
+        return (34 << 24) | (tintColor & 0x00FFFFFF);
     }
 
     public static float floatingPillOutlineRadius(float height) {
