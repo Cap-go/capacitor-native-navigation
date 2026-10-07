@@ -265,6 +265,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 self.applyTabBarAppearance(tabBar: tabBar, options: call)
                 if items.isEmpty {
                     self.tabbarVisible = false
+                    self.tabbarSkipImmediateSystemReveal = false
                     self.hideSystemTabBarChromeCompletely()
                 } else {
                     self.showTabBarChrome(tabBar)
