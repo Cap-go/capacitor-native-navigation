@@ -1852,7 +1852,9 @@ public class NativeNavigationPlugin extends Plugin {
         }
 
         if (tabbarBackdrop != null) {
-            int backdropHeight = tabbarVisible ? bottom + dp(tabbarStyle.bottomGap) : 0;
+            // Only the edge-to-edge curve bar extends its surface under the gesture area. A floating
+            // tabbar must leave the page visible below it, or it sits on a solid band.
+            int backdropHeight = tabbarVisible && tabbarStyle.isCurve() ? bottom + dp(tabbarStyle.bottomGap) : 0;
             FrameLayout.LayoutParams backdropParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 backdropHeight,
