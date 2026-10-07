@@ -105,6 +105,8 @@ public class NativeNavigationPlugin extends Plugin {
     private final Map<Integer, String> menuActionPlacements = new HashMap<>();
     private final List<NativeTabItem> tabItems = new ArrayList<>();
     private int selectedTabIndex = 0;
+    private boolean tabbarDisableIndicator = false;
+    private Integer tabbarIndicatorColor = null;
 
     @Override
     public void load() {
@@ -244,6 +246,8 @@ public class NativeNavigationPlugin extends Plugin {
             tabbarGlassOptions = GlassOptions.from(tabbarGlassConfig, defaultGlassOptions);
             badgeBackgroundColor = colorOption(call, colors, "badgeBackgroundColor", "badgeBackground", Color.rgb(255, 59, 48));
             badgeTextColor = colorOption(call, colors, "badgeTextColor", "badgeText", Color.WHITE);
+            tabbarDisableIndicator = call.getBoolean("disableIndicator", false);
+            tabbarIndicatorColor = colorOption(call, colors, "indicatorColor", "indicator", null);
 
             for (int sourceIndex = 0; sourceIndex < tabs.length(); sourceIndex++) {
                 JSONObject tab = tabs.optJSONObject(sourceIndex);
@@ -644,6 +648,34 @@ public class NativeNavigationPlugin extends Plugin {
         };
     }
 
+    private void installTabbarPillOutline() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP || tabbarContainer == null) {
+            return;
+        }
+        ViewOutlineProvider tabbarPillOutlineProvider = new ViewOutlineProvider() {
+            @Override
+            public void getOutline(View view, Outline outline) {
+                outline.setRoundRect(
+                    0,
+                    0,
+                    view.getWidth(),
+                    view.getHeight(),
+                    TabbarChromeSupport.floatingPillOutlineRadius(view.getHeight())
+                );
+            }
+        };
+        tabbarContainer.setClipToOutline(false);
+        tabbarContainer.setOutlineProvider(tabbarPillOutlineProvider);
+        if (tabbarGlassBackdrop != null) {
+            tabbarGlassBackdrop.setClipToOutline(true);
+            tabbarGlassBackdrop.setOutlineProvider(tabbarPillOutlineProvider);
+        }
+        if (tabbarGlassSurface != null) {
+            tabbarGlassSurface.setClipToOutline(true);
+            tabbarGlassSurface.setOutlineProvider(tabbarPillOutlineProvider);
+        }
+    }
+
     private Toolbar ensureToolbar() {
         if (toolbar != null) {
             return toolbar;
@@ -698,6 +730,7 @@ public class NativeNavigationPlugin extends Plugin {
         tabbarGlassSurface = new View(getContext());
         tabbarGlassBackdrop.setVisibility(View.GONE);
         tabbarGlassSurface.setVisibility(View.GONE);
+        installTabbarPillOutline();
 
         tabbar = new NativeTabbarLayout(getContext());
         tabbar.setClipChildren(false);
@@ -788,10 +821,10 @@ public class NativeNavigationPlugin extends Plugin {
             button.addView(centerFill, new FrameLayout.LayoutParams(centerFillDiameter, centerFillDiameter, Gravity.CENTER));
         }
 
-        if (!center && selected) {
+        if (!center && selected && !tabbarDisableIndicator) {
             GradientDrawable selectedBackground = new GradientDrawable();
             selectedBackground.setShape(GradientDrawable.OVAL);
-            selectedBackground.setColor(withAlpha(tintColor, 34));
+            selectedBackground.setColor(TabbarChromeSupport.resolveSelectedIndicatorColor(tabbarIndicatorColor, tintColor));
             View selectedCircle = new View(getContext());
             selectedCircle.setBackground(selectedBackground);
             button.addView(selectedCircle, new FrameLayout.LayoutParams(dp(58), dp(58), Gravity.CENTER));
@@ -1815,6 +1848,15 @@ public class NativeNavigationPlugin extends Plugin {
             tabbarContainer.setLayoutParams(tabbarContainerParams);
             fillContainer(tabbarGlassBackdrop);
             fillContainer(tabbarGlassSurface);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                tabbarContainer.invalidateOutline();
+                if (tabbarGlassBackdrop != null) {
+                    tabbarGlassBackdrop.invalidateOutline();
+                }
+                if (tabbarGlassSurface != null) {
+                    tabbarGlassSurface.invalidateOutline();
+                }
+            }
         }
 
         if (tabbar != null) {
