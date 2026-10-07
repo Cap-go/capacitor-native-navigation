@@ -243,7 +243,6 @@ public class NativeNavigationPlugin extends Plugin {
             String selectedId = call.getString("selectedId", null);
             JSObject colors = call.getObject("colors", new JSObject());
             tabbarGlassConfig = call.getObject("glass", null);
-            tabbarGlassOptions = GlassOptions.from(tabbarGlassConfig, defaultGlassOptions);
             badgeBackgroundColor = colorOption(call, colors, "badgeBackgroundColor", "badgeBackground", Color.rgb(255, 59, 48));
             badgeTextColor = colorOption(call, colors, "badgeTextColor", "badgeText", Color.WHITE);
             tabbarDisableIndicator = call.getBoolean("disableIndicator", false);
@@ -273,6 +272,7 @@ public class NativeNavigationPlugin extends Plugin {
 
             applyTabbarColors(call, colors);
             tabbarStyle = makeTabbarStyle(call.getObject("style", new JSObject()));
+            tabbarGlassOptions = resolveTabbarGlassOptions(call);
 
             // Keep at most one detached trailing action for floating bars.
             // Curve bars ignore role so tab order / center selection stay stable.
@@ -759,6 +759,10 @@ public class NativeNavigationPlugin extends Plugin {
         tabbarContainer.setClipChildren(false);
         tabbarContainer.setClipToPadding(false);
         tabbarContainer.setElevation(dp(12));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            tabbarContainer.setOutlineAmbientShadowColor(0x33000000);
+            tabbarContainer.setOutlineSpotShadowColor(0x66000000);
+        }
 
         tabbarGlassBackdrop = new GlassBackdropView(getContext());
         tabbarGlassSurface = new View(getContext());
@@ -1668,15 +1672,30 @@ public class NativeNavigationPlugin extends Plugin {
             }
         }
 
-        tabbar.setTabbarStyle(tabbarStyle, drawColor, centerIndex);
+        int tabbarFillColor = resolvedGlassOptions.isLiquidGlass() ? Color.TRANSPARENT : drawColor;
+        tabbar.setTabbarStyle(tabbarStyle, tabbarFillColor, centerIndex);
         applyTabbarContainerOutline();
+    }
+
+    private GlassOptions resolveTabbarGlassOptions(PluginCall call) {
+        if (tabbarGlassConfig != null) {
+            return GlassOptions.from(tabbarGlassConfig, defaultGlassOptions);
+        }
+        if (!tabbarStyle.isCurve() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            return GlassOptions.from(new JSObject().put("effect", "liquidGlass"), defaultGlassOptions);
+        }
+        return GlassOptions.from(null, defaultGlassOptions);
     }
 
     private int resolvedTabbarSurfaceColor() {
         GlassOptions resolvedGlassOptions = tabbarGlassOptions == null ? GlassOptions.defaults() : tabbarGlassOptions;
-        return resolvedGlassOptions.isLiquidGlass()
-            ? glassSurfaceColor(tabbarBackgroundColor, resolvedGlassOptions)
-            : tabbarBackgroundColor;
+        if (resolvedGlassOptions.isLiquidGlass()) {
+            return glassSurfaceColor(tabbarBackgroundColor, resolvedGlassOptions);
+        }
+        if (!tabbarStyle.isCurve()) {
+            return glassSurfaceColor(tabbarBackgroundColor, resolvedGlassOptions);
+        }
+        return tabbarBackgroundColor;
     }
 
     private void reapplyVisibleChromeBackgrounds() {
