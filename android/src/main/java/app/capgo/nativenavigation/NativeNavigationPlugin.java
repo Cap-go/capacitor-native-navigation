@@ -648,32 +648,66 @@ public class NativeNavigationPlugin extends Plugin {
         };
     }
 
-    private void installTabbarPillOutline() {
+    private void applyTabbarContainerOutline() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP || tabbarContainer == null) {
             return;
         }
-        ViewOutlineProvider tabbarPillOutlineProvider = new ViewOutlineProvider() {
-            @Override
-            public void getOutline(View view, Outline outline) {
-                outline.setRoundRect(
-                    0,
-                    0,
-                    view.getWidth(),
-                    view.getHeight(),
-                    TabbarChromeSupport.floatingPillOutlineRadius(view.getHeight())
-                );
+
+        if (tabbarStyle.isCurve()) {
+            tabbarContainer.setClipToOutline(false);
+            tabbarContainer.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
+            if (tabbarGlassBackdrop != null) {
+                tabbarGlassBackdrop.setClipToOutline(false);
+                tabbarGlassBackdrop.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
             }
-        };
+            if (tabbarGlassSurface != null) {
+                tabbarGlassSurface.setClipToOutline(false);
+                tabbarGlassSurface.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
+            }
+            return;
+        }
+
+        ViewOutlineProvider floatingOutlineProvider = floatingTabbarOutlineProvider();
         tabbarContainer.setClipToOutline(false);
-        tabbarContainer.setOutlineProvider(tabbarPillOutlineProvider);
+        tabbarContainer.setOutlineProvider(floatingOutlineProvider);
         if (tabbarGlassBackdrop != null) {
             tabbarGlassBackdrop.setClipToOutline(true);
-            tabbarGlassBackdrop.setOutlineProvider(tabbarPillOutlineProvider);
+            tabbarGlassBackdrop.setOutlineProvider(floatingOutlineProvider);
         }
         if (tabbarGlassSurface != null) {
             tabbarGlassSurface.setClipToOutline(true);
-            tabbarGlassSurface.setOutlineProvider(tabbarPillOutlineProvider);
+            tabbarGlassSurface.setOutlineProvider(floatingOutlineProvider);
         }
+    }
+
+    private ViewOutlineProvider floatingTabbarOutlineProvider() {
+        return new ViewOutlineProvider() {
+            @Override
+            public void getOutline(View view, Outline outline) {
+                int width = view.getWidth();
+                int height = view.getHeight();
+                if (width <= 0 || height <= 0 || tabbar == null) {
+                    outline.setEmpty();
+                    return;
+                }
+
+                Path path = tabbar.chromeBackgroundPath(width, height);
+                if (TabbarChromeSupport.canApplyPathOutline()) {
+                    outline.setPath(path, 1f);
+                    return;
+                }
+
+                boolean hasDetachedTrailing = tabItems.stream().anyMatch((item) -> item.detachedTrailing);
+                int capsuleWidth = TabbarChromeSupport.floatingCapsuleWidth(
+                    width,
+                    dp(tabbarStyle.height),
+                    dp(10),
+                    hasDetachedTrailing
+                );
+                float radius = Math.min(dp(tabbarStyle.cornerRadius), height / 2f);
+                outline.setRoundRect(0, 0, capsuleWidth, height, radius);
+            }
+        };
     }
 
     private Toolbar ensureToolbar() {
@@ -730,8 +764,6 @@ public class NativeNavigationPlugin extends Plugin {
         tabbarGlassSurface = new View(getContext());
         tabbarGlassBackdrop.setVisibility(View.GONE);
         tabbarGlassSurface.setVisibility(View.GONE);
-        installTabbarPillOutline();
-
         tabbar = new NativeTabbarLayout(getContext());
         tabbar.setClipChildren(false);
         tabbar.setClipToPadding(false);
@@ -755,6 +787,7 @@ public class NativeNavigationPlugin extends Plugin {
                 new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(DEFAULT_TABBAR_DP))
             );
         }
+        applyTabbarContainerOutline();
         return tabbar;
     }
 
@@ -1278,25 +1311,21 @@ public class NativeNavigationPlugin extends Plugin {
             );
         }
 
+        Path chromeBackgroundPath(int width, int height) {
+            return backgroundPath(width, height);
+        }
+
         private Path backgroundPath(int width, int height) {
             Path path = new Path();
             if (!style.isCurve()) {
-                float radius = dp(style.cornerRadius);
-                int capsuleWidth = capsuleWidth(width);
-                path.addRoundRect(new RectF(0, 0, capsuleWidth, height), radius, radius, Path.Direction.CW);
-                int trailingIndex = detachedTrailingIndex();
-                if (trailingIndex >= 0) {
-                    float diameter = dp(style.height);
-                    float left = width - diameter;
-                    float top = (height - diameter) / 2f;
-                    path.addRoundRect(
-                        new RectF(left, top, left + diameter, top + diameter),
-                        diameter / 2f,
-                        diameter / 2f,
-                        Path.Direction.CW
-                    );
-                }
-                return path;
+                return TabbarChromeSupport.buildFloatingTabbarPath(
+                    width,
+                    height,
+                    dp(style.cornerRadius),
+                    dp(style.height),
+                    dp(10),
+                    detachedTrailingIndex() >= 0
+                );
             }
             float barTop = dp(style.barTop());
             float barHeight = dp(style.height);
@@ -1640,6 +1669,7 @@ public class NativeNavigationPlugin extends Plugin {
         }
 
         tabbar.setTabbarStyle(tabbarStyle, drawColor, centerIndex);
+        applyTabbarContainerOutline();
     }
 
     private int resolvedTabbarSurfaceColor() {
