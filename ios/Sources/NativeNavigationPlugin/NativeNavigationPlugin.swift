@@ -220,7 +220,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                     if nativeNavigationPrefersAnimatedSystemTabbarVisibility(
                         animated: true,
                         usesSystemLiquidGlass: self.usesSystemLiquidGlass,
-                        shape: self.tabbarStyle.shape
+                        shape: self.tabbarStyle.shape == .curve ? "curve" : "floating"
                     ) {
                         self.setSystemTabBarHidden(false, animated: true, syncSubviewState: false)
                     } else {
@@ -968,7 +968,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         if nativeNavigationPrefersAnimatedSystemTabbarVisibility(
             animated: animated,
             usesSystemLiquidGlass: usesSystemLiquidGlass,
-            shape: tabbarStyle.shape
+            shape: tabbarStyle.shape == .curve ? "curve" : "floating"
         ) {
             tabbarSoftHidden = true
             setSystemTabBarHidden(true, animated: true, syncSubviewState: false)
