@@ -7,6 +7,9 @@ public final class TabbarChromeSupport {
     private TabbarChromeSupport() {}
 
     public static float tabbarSlideDistancePx(int containerHeight, int bottomMargin, int fallbackDistance) {
-        return containerHeight > 0 ? containerHeight + bottomMargin : fallbackDistance;
+        if (containerHeight > 0) {
+            return (float) containerHeight + (float) bottomMargin;
+        }
+        return (float) fallbackDistance;
     }
 }
