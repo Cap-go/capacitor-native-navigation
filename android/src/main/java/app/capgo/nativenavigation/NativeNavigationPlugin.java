@@ -693,7 +693,7 @@ public class NativeNavigationPlugin extends Plugin {
 
                 Path path = tabbar.chromeBackgroundPath(width, height);
                 if (TabbarChromeSupport.canApplyPathOutline()) {
-                    outline.setPath(path, 1f);
+                    outline.setPath(path);
                     return;
                 }
 
