@@ -58,6 +58,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var tabbarHeight: CGFloat = NativeNavigationTabbarStyleConfig().totalHeight
     private var navbarVisible = false
     private var tabbarVisible = false
+    private var tabbarSoftHidden = false
     private var contentInsetMode = "css"
     private var isEnabled = true
     private var defaultTransitionDuration: TimeInterval = 0.35
@@ -203,13 +204,29 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             }
 
             let hidden = call.getBool("hidden", false)
+            let animated = call.getBool("animated", false)
             self.tabbarVisible = !hidden
 
             guard !hidden else {
-                self.hideTabBarChrome()
+                self.hideTabBarChrome(animated: animated)
                 self.updateInsetsAndNotify()
                 call.resolve(self.insetsResult())
                 return
+            }
+
+            if self.tabbarSoftHidden {
+                self.tabbarSoftHidden = false
+                if animated {
+                    if nativeNavigationPrefersAnimatedSystemTabbarVisibility(
+                        animated: true,
+                        usesSystemLiquidGlass: self.usesSystemLiquidGlass,
+                        shape: self.tabbarStyle.shape
+                    ) {
+                        self.setSystemTabBarHidden(false, animated: true, syncSubviewState: false)
+                    } else {
+                        self.setFloatingTabBarVisibility(hidden: false, animated: true)
+                    }
+                }
             }
 
             self.tabbarStyle = self.makeTabbarStyle(from: call)
@@ -904,16 +921,20 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         }
     }
 
-    private func setSystemTabBarHidden(_ hidden: Bool) {
+    private func setSystemTabBarHidden(_ hidden: Bool, animated: Bool = false, syncSubviewState: Bool = true) {
         guard let tabBarController = tabBarController else {
             return
         }
 
         let tabBar = tabBarController.tabBar
         if #available(iOS 18.0, *) {
-            tabBarController.setTabBarHidden(hidden, animated: false)
+            tabBarController.setTabBarHidden(hidden, animated: animated)
         } else {
             tabBar.isHidden = hidden
+        }
+
+        guard syncSubviewState else {
+            return
         }
 
         if hidden {
@@ -943,13 +964,62 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         floatingTabBar?.isHidden = true
     }
 
-    private func hideTabBarChrome() {
+    private func hideTabBarChrome(animated: Bool = false) {
+        if nativeNavigationPrefersAnimatedSystemTabbarVisibility(
+            animated: animated,
+            usesSystemLiquidGlass: usesSystemLiquidGlass,
+            shape: tabbarStyle.shape
+        ) {
+            tabbarSoftHidden = true
+            setSystemTabBarHidden(true, animated: true, syncSubviewState: false)
+            return
+        }
+
+        if animated {
+            tabbarSoftHidden = true
+            setFloatingTabBarVisibility(hidden: true, animated: true)
+            return
+        }
+
+        tabbarSoftHidden = false
         if usesSystemLiquidGlass && tabbarStyle.shape != .curve {
             hideSystemTabBarChromeCompletely()
         } else {
             restoreWebViewFromSystemTabController()
             hideSystemTabBarChromeCompletely()
             tabBar?.isHidden = true
+        }
+    }
+
+    private func setFloatingTabBarVisibility(hidden: Bool, animated: Bool) {
+        let targets = [tabContainer, floatingTabBar].compactMap { $0 }
+        guard !targets.isEmpty else {
+            return
+        }
+
+        if !animated {
+            targets.forEach { view in
+                view.isHidden = hidden
+                view.alpha = hidden ? 0 : 1
+            }
+            return
+        }
+
+        if hidden {
+            UIView.animate(withDuration: 0.2, animations: {
+                targets.forEach { $0.alpha = 0 }
+            }, completion: { _ in
+                targets.forEach { $0.isHidden = true }
+            })
+            return
+        }
+
+        targets.forEach { view in
+            view.isHidden = false
+            view.alpha = 0
+        }
+        UIView.animate(withDuration: 0.2) {
+            targets.forEach { $0.alpha = 1 }
         }
     }
 
@@ -2778,6 +2848,14 @@ private func nativeNavigationFallbackBackground(for view: UIView) -> UIColor {
 
 func nativeNavigationUsesStationaryTransitionCrossfade(direction: String) -> Bool {
     direction == "tab" || direction == "root" || direction == "none"
+}
+
+func nativeNavigationPrefersAnimatedSystemTabbarVisibility(
+    animated: Bool,
+    usesSystemLiquidGlass: Bool,
+    shape: String
+) -> Bool {
+    animated && usesSystemLiquidGlass && shape != "curve"
 }
 
 private func nativeNavigationNeedsTransitionSurface(_ color: UIColor?) -> Bool {

@@ -213,17 +213,10 @@ public class NativeNavigationPlugin extends Plugin {
             }
 
             boolean hidden = call.getBoolean("hidden", false);
+            boolean animated = call.getBoolean("animated", false);
             tabbarVisible = !hidden;
             if (hidden) {
-                if (tabbar != null) {
-                    tabbar.setVisibility(View.GONE);
-                }
-                if (tabbarContainer != null) {
-                    tabbarContainer.setVisibility(View.GONE);
-                }
-                if (tabbarBackdrop != null) {
-                    tabbarBackdrop.setVisibility(View.GONE);
-                }
+                setTabbarChromeVisible(false, animated);
                 updateInsetsAndNotify();
                 call.resolve(insetsResult());
                 return;
@@ -310,14 +303,8 @@ public class NativeNavigationPlugin extends Plugin {
 
             applyTabbarBackground(centerTabIndex());
             renderTabbarItems(labelVisibilityMode, icons);
-            if (tabbarContainer != null) {
-                tabbarContainer.setVisibility(View.VISIBLE);
-            }
-            if (tabbarBackdrop != null) {
-                tabbarBackdrop.setVisibility(View.VISIBLE);
-            }
-            nativeTabbar.setVisibility(View.VISIBLE);
             layoutChrome();
+            setTabbarChromeVisible(true, animated);
             updateInsetsAndNotify();
             call.resolve(insetsResult());
         });
@@ -1828,6 +1815,93 @@ public class NativeNavigationPlugin extends Plugin {
         }
 
         bringChromeToFront();
+    }
+
+    private void setTabbarChromeVisible(boolean visible, boolean animated) {
+        if (!animated) {
+            int visibility = visible ? View.VISIBLE : View.GONE;
+            if (tabbar != null) {
+                tabbar.setVisibility(visibility);
+            }
+            if (tabbarContainer != null) {
+                tabbarContainer.animate().cancel();
+                tabbarContainer.setTranslationY(0f);
+                tabbarContainer.setAlpha(1f);
+                tabbarContainer.setVisibility(visibility);
+            }
+            if (tabbarBackdrop != null) {
+                tabbarBackdrop.animate().cancel();
+                tabbarBackdrop.setAlpha(1f);
+                tabbarBackdrop.setVisibility(visible && tabbarVisible ? View.VISIBLE : View.GONE);
+            }
+            return;
+        }
+
+        if (tabbarContainer == null) {
+            setTabbarChromeVisible(visible, false);
+            return;
+        }
+
+        float slideDistance = tabbarSlideDistance();
+        tabbarContainer.animate().cancel();
+        if (tabbarBackdrop != null) {
+            tabbarBackdrop.animate().cancel();
+        }
+
+        if (!visible) {
+            if (tabbar != null) {
+                tabbar.setVisibility(View.GONE);
+            }
+            tabbarContainer
+                .animate()
+                .translationY(slideDistance)
+                .alpha(0f)
+                .setDuration(TabbarChromeSupport.TABBAR_VISIBILITY_ANIMATION_MS)
+                .withEndAction(() -> {
+                    tabbarContainer.setVisibility(View.GONE);
+                    if (tabbarBackdrop != null) {
+                        tabbarBackdrop.setVisibility(View.GONE);
+                    }
+                })
+                .start();
+            if (tabbarBackdrop != null) {
+                tabbarBackdrop.animate().alpha(0f).setDuration(TabbarChromeSupport.TABBAR_VISIBILITY_ANIMATION_MS).start();
+            }
+            return;
+        }
+
+        tabbarContainer.setVisibility(View.VISIBLE);
+        tabbarContainer.setAlpha(0f);
+        tabbarContainer.setTranslationY(slideDistance);
+        if (tabbarBackdrop != null) {
+            tabbarBackdrop.setVisibility(View.VISIBLE);
+            tabbarBackdrop.setAlpha(0f);
+        }
+        if (tabbar != null) {
+            tabbar.setVisibility(View.VISIBLE);
+        }
+        tabbarContainer
+            .animate()
+            .translationY(0f)
+            .alpha(1f)
+            .setDuration(TabbarChromeSupport.TABBAR_VISIBILITY_ANIMATION_MS)
+            .start();
+        if (tabbarBackdrop != null) {
+            tabbarBackdrop.animate().alpha(1f).setDuration(TabbarChromeSupport.TABBAR_VISIBILITY_ANIMATION_MS).start();
+        }
+    }
+
+    private float tabbarSlideDistance() {
+        if (tabbarContainer == null) {
+            return dp(tabbarStyle.totalHeight() + tabbarStyle.bottomGap);
+        }
+        ViewGroup.LayoutParams params = tabbarContainer.getLayoutParams();
+        int bottomMargin = params instanceof ViewGroup.MarginLayoutParams ? ((ViewGroup.MarginLayoutParams) params).bottomMargin : 0;
+        return TabbarChromeSupport.tabbarSlideDistancePx(
+            tabbarContainer.getHeight(),
+            bottomMargin,
+            dp(tabbarStyle.totalHeight() + tabbarStyle.bottomGap)
+        );
     }
 
     private void bringChromeToFront() {
