@@ -1821,6 +1821,7 @@ public class NativeNavigationPlugin extends Plugin {
 
     private void setTabbarChromeVisible(boolean visible, boolean animated) {
         if (!animated) {
+            tabbarChromeHideAnimating = false;
             int visibility = visible ? View.VISIBLE : View.GONE;
             if (tabbar != null) {
                 tabbar.setVisibility(visibility);
