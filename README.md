@@ -1,21 +1,12 @@
 # @capgo/capacitor-native-navigation
 
-<a href="https://capgo.app/">
-  <img
-    src="https://capgo.app/readme-banner.svg?repo=Cap-go/capacitor-native-navigation"
-    alt="Capgo - Instant updates for Capacitor"
-  />
-</a>
+<a href="https://capgo.app/?ref=plugin_native_navigation"><img src="https://capgo.app/readme-banner.svg?repo=Cap-go/capacitor-native-navigation" alt="Capgo - Instant updates for Capacitor" /></a>
 
 <div align="center">
-  <h2>
-    <a href="https://capgo.app/?ref=plugin_native_navigation">Get instant updates for your app with Capgo</a>
-  </h2>
-  <h2>
-    <a href="https://capgo.app/consulting/?ref=plugin_native_navigation">
-      Missing a feature? We can build the plugin for you
-    </a>
-  </h2>
+  <p><b>Capgo</b>: open-source live updates for Ionic and Capacitor apps. Ship OTA fixes and features instantly, without waiting for app store review.</p>
+  <h2><a href="https://capgo.app/register/?ref=plugin_native_navigation">➡️ Get started for free</a></h2>
+  <p>14-day unlimited free trial. No credit card required</p>
+  <p><a href="https://capgo.app/consulting/?ref=plugin_native_navigation">Missing a feature? We'll build the plugin for you 💪</a></p>
 </div>
 
 Native navbar, tabbar, safe-area handling, and WebView snapshot transitions for Capacitor apps. Your web framework keeps routing and page rendering while this plugin owns the platform surfaces users expect to feel native.
