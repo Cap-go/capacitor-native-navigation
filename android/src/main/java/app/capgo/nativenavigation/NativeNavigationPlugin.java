@@ -105,6 +105,8 @@ public class NativeNavigationPlugin extends Plugin {
     private final Map<Integer, String> menuActionPlacements = new HashMap<>();
     private final List<NativeTabItem> tabItems = new ArrayList<>();
     private int selectedTabIndex = 0;
+    private boolean tabbarDisableIndicator = false;
+    private Integer tabbarIndicatorColor = null;
 
     @Override
     public void load() {
@@ -244,6 +246,8 @@ public class NativeNavigationPlugin extends Plugin {
             tabbarGlassOptions = GlassOptions.from(tabbarGlassConfig, defaultGlassOptions);
             badgeBackgroundColor = colorOption(call, colors, "badgeBackgroundColor", "badgeBackground", Color.rgb(255, 59, 48));
             badgeTextColor = colorOption(call, colors, "badgeTextColor", "badgeText", Color.WHITE);
+            tabbarDisableIndicator = call.getBoolean("disableIndicator", false);
+            tabbarIndicatorColor = colorOption(call, colors, "indicatorColor", "indicator", null);
 
             for (int sourceIndex = 0; sourceIndex < tabs.length(); sourceIndex++) {
                 JSONObject tab = tabs.optJSONObject(sourceIndex);
@@ -644,6 +648,68 @@ public class NativeNavigationPlugin extends Plugin {
         };
     }
 
+    private void applyTabbarContainerOutline() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP || tabbarContainer == null) {
+            return;
+        }
+
+        if (tabbarStyle.isCurve()) {
+            tabbarContainer.setClipToOutline(false);
+            tabbarContainer.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
+            if (tabbarGlassBackdrop != null) {
+                tabbarGlassBackdrop.setClipToOutline(false);
+                tabbarGlassBackdrop.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
+            }
+            if (tabbarGlassSurface != null) {
+                tabbarGlassSurface.setClipToOutline(false);
+                tabbarGlassSurface.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
+            }
+            return;
+        }
+
+        ViewOutlineProvider floatingOutlineProvider = floatingTabbarOutlineProvider();
+        tabbarContainer.setClipToOutline(false);
+        tabbarContainer.setOutlineProvider(floatingOutlineProvider);
+        if (tabbarGlassBackdrop != null) {
+            tabbarGlassBackdrop.setClipToOutline(true);
+            tabbarGlassBackdrop.setOutlineProvider(floatingOutlineProvider);
+        }
+        if (tabbarGlassSurface != null) {
+            tabbarGlassSurface.setClipToOutline(true);
+            tabbarGlassSurface.setOutlineProvider(floatingOutlineProvider);
+        }
+    }
+
+    private ViewOutlineProvider floatingTabbarOutlineProvider() {
+        return new ViewOutlineProvider() {
+            @Override
+            public void getOutline(View view, Outline outline) {
+                int width = view.getWidth();
+                int height = view.getHeight();
+                if (width <= 0 || height <= 0 || tabbar == null) {
+                    outline.setEmpty();
+                    return;
+                }
+
+                Path path = tabbar.chromeBackgroundPath(width, height);
+                if (TabbarChromeSupport.canApplyPathOutline()) {
+                    outline.setPath(path);
+                    return;
+                }
+
+                boolean hasDetachedTrailing = tabItems.stream().anyMatch((item) -> item.detachedTrailing);
+                int capsuleWidth = TabbarChromeSupport.floatingCapsuleWidth(
+                    width,
+                    dp(tabbarStyle.height),
+                    dp(10),
+                    hasDetachedTrailing
+                );
+                float radius = Math.min(dp(tabbarStyle.cornerRadius), height / 2f);
+                outline.setRoundRect(0, 0, capsuleWidth, height, radius);
+            }
+        };
+    }
+
     private Toolbar ensureToolbar() {
         if (toolbar != null) {
             return toolbar;
@@ -698,7 +764,6 @@ public class NativeNavigationPlugin extends Plugin {
         tabbarGlassSurface = new View(getContext());
         tabbarGlassBackdrop.setVisibility(View.GONE);
         tabbarGlassSurface.setVisibility(View.GONE);
-
         tabbar = new NativeTabbarLayout(getContext());
         tabbar.setClipChildren(false);
         tabbar.setClipToPadding(false);
@@ -722,6 +787,7 @@ public class NativeNavigationPlugin extends Plugin {
                 new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(DEFAULT_TABBAR_DP))
             );
         }
+        applyTabbarContainerOutline();
         return tabbar;
     }
 
@@ -788,10 +854,10 @@ public class NativeNavigationPlugin extends Plugin {
             button.addView(centerFill, new FrameLayout.LayoutParams(centerFillDiameter, centerFillDiameter, Gravity.CENTER));
         }
 
-        if (!center && selected) {
+        if (!center && selected && !tabbarDisableIndicator) {
             GradientDrawable selectedBackground = new GradientDrawable();
             selectedBackground.setShape(GradientDrawable.OVAL);
-            selectedBackground.setColor(withAlpha(tintColor, 34));
+            selectedBackground.setColor(TabbarChromeSupport.resolveSelectedIndicatorColor(tabbarIndicatorColor, tintColor));
             View selectedCircle = new View(getContext());
             selectedCircle.setBackground(selectedBackground);
             button.addView(selectedCircle, new FrameLayout.LayoutParams(dp(58), dp(58), Gravity.CENTER));
@@ -1245,25 +1311,21 @@ public class NativeNavigationPlugin extends Plugin {
             );
         }
 
+        Path chromeBackgroundPath(int width, int height) {
+            return backgroundPath(width, height);
+        }
+
         private Path backgroundPath(int width, int height) {
             Path path = new Path();
             if (!style.isCurve()) {
-                float radius = dp(style.cornerRadius);
-                int capsuleWidth = capsuleWidth(width);
-                path.addRoundRect(new RectF(0, 0, capsuleWidth, height), radius, radius, Path.Direction.CW);
-                int trailingIndex = detachedTrailingIndex();
-                if (trailingIndex >= 0) {
-                    float diameter = dp(style.height);
-                    float left = width - diameter;
-                    float top = (height - diameter) / 2f;
-                    path.addRoundRect(
-                        new RectF(left, top, left + diameter, top + diameter),
-                        diameter / 2f,
-                        diameter / 2f,
-                        Path.Direction.CW
-                    );
-                }
-                return path;
+                return TabbarChromeSupport.buildFloatingTabbarPath(
+                    width,
+                    height,
+                    dp(style.cornerRadius),
+                    dp(style.height),
+                    dp(10),
+                    detachedTrailingIndex() >= 0
+                );
             }
             float barTop = dp(style.barTop());
             float barHeight = dp(style.height);
@@ -1607,6 +1669,7 @@ public class NativeNavigationPlugin extends Plugin {
         }
 
         tabbar.setTabbarStyle(tabbarStyle, drawColor, centerIndex);
+        applyTabbarContainerOutline();
     }
 
     private int resolvedTabbarSurfaceColor() {
@@ -1815,6 +1878,15 @@ public class NativeNavigationPlugin extends Plugin {
             tabbarContainer.setLayoutParams(tabbarContainerParams);
             fillContainer(tabbarGlassBackdrop);
             fillContainer(tabbarGlassSurface);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                tabbarContainer.invalidateOutline();
+                if (tabbarGlassBackdrop != null) {
+                    tabbarGlassBackdrop.invalidateOutline();
+                }
+                if (tabbarGlassSurface != null) {
+                    tabbarGlassSurface.invalidateOutline();
+                }
+            }
         }
 
         if (tabbar != null) {
