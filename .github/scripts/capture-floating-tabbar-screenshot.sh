@@ -28,7 +28,7 @@ recover_from_crash() {
     dismiss_blocking_dialogs
     adb shell am force-stop "${PACKAGE}" >/dev/null 2>&1 || true
     adb shell am start -n "${ACTIVITY}" >/dev/null 2>&1 || true
-    sleep 5
+    sleep 8
   fi
 }
 
@@ -57,78 +57,63 @@ swipe_content_into_view() {
   adb shell input swipe "$((width * 3 / 4))" "$((height * 2 / 3))" "$((width / 8))" "$((height * 2 / 3))" 400
 }
 
-app_is_foreground() {
-  adb shell dumpsys window 2>/dev/null | tr -d '\r' | grep "mCurrentFocus" | grep -q "${PACKAGE}"
+capture_frame() {
+  wake_display
+  adb exec-out screencap -p > "${WORK_PNG}"
+  test -s "${WORK_PNG}"
 }
 
-screenshot_is_valid() {
-  local path="$1"
-  [ -s "${path}" ] && python3 "${VERIFY_SCRIPT}" --relaxed "${path}" >/dev/null 2>&1
-}
-
-wait_for_valid_screenshot() {
-  local attempt=0
-  local max_attempts=50
-  while [ "${attempt}" -lt "${max_attempts}" ]; do
-    recover_from_crash
-    wake_display
-    if ! app_is_foreground; then
-      adb shell am start -n "${ACTIVITY}" >/dev/null 2>&1 || true
-      sleep 2
-    fi
-    adb exec-out screencap -p > "${WORK_PNG}" || true
-    if app_is_foreground && screenshot_is_valid "${WORK_PNG}"; then
-      return 0
-    fi
-    if [ $((attempt % 8)) -eq 7 ]; then
-      dismiss_blocking_dialogs
-    fi
-    attempt=$((attempt + 1))
-    sleep 3
-  done
-  echo "Timed out waiting for floating tabbar screenshot content" >&2
-  if [ -s "${WORK_PNG}" ]; then
-    cp "${WORK_PNG}" "${REPO_ROOT}/android-floating-tabbar-capture-debug.png" || true
-  fi
-  adb logcat -d | tail -120 >&2 || true
-  adb shell dumpsys window windows 2>/dev/null | tail -60 >&2 || true
-  return 1
+try_capture_pass() {
+  local wait_seconds="$1"
+  adb shell am force-stop "${PACKAGE}" >/dev/null 2>&1 || true
+  adb shell am start -n "${ACTIVITY}" >/dev/null 2>&1 || true
+  sleep "${wait_seconds}"
+  recover_from_crash
+  dismiss_blocking_dialogs
+  swipe_content_into_view
+  sleep 2
+  capture_frame
+  cp "${WORK_PNG}" "${OUTPUT}"
+  python3 "${VERIFY_SCRIPT}" "${OUTPUT}"
 }
 
 adb wait-for-device
 adb shell true
-sleep 25
+sleep 20
 dismiss_blocking_dialogs
 adb shell settings put global package_verifier_enable 0
 adb shell settings put global verifier_verify_adb_installs 0
 
-install_apk() {
-  adb uninstall "${PACKAGE}" >/dev/null 2>&1 || true
-  local attempt=0
-  while [ "${attempt}" -lt 6 ]; do
-    if adb install -r "${APK_PATH}"; then
-      return 0
-    fi
-    attempt=$((attempt + 1))
-    sleep 20
-  done
+adb uninstall "${PACKAGE}" >/dev/null 2>&1 || true
+install_attempt=0
+while [ "${install_attempt}" -lt 6 ]; do
+  if adb install -r "${APK_PATH}"; then
+    break
+  fi
+  install_attempt=$((install_attempt + 1))
+  sleep 20
+done
+if [ "${install_attempt}" -ge 6 ]; then
   echo "Failed to install screenshot APK after retries" >&2
-  return 1
-}
+  exit 1
+fi
 
-install_apk
-adb shell am force-stop "${PACKAGE}"
 adb logcat -c >/dev/null 2>&1 || true
-adb shell am start -n "${ACTIVITY}"
-sleep 12
 
-wait_for_valid_screenshot
+if try_capture_pass 150; then
+  rm -f "${WORK_PNG}"
+  exit 0
+fi
 
-swipe_content_into_view
-sleep 2
+echo "First capture pass failed; retrying after relaunch" >&2
+if try_capture_pass 90; then
+  rm -f "${WORK_PNG}"
+  exit 0
+fi
 
-wake_display
-adb exec-out screencap -p > "${OUTPUT}"
-test -s "${OUTPUT}"
-python3 "${VERIFY_SCRIPT}" "${OUTPUT}"
-rm -f "${WORK_PNG}"
+if [ -s "${WORK_PNG}" ]; then
+  cp "${WORK_PNG}" "${REPO_ROOT}/android-floating-tabbar-capture-debug.png" || true
+fi
+adb logcat -d | tail -120 >&2 || true
+adb shell dumpsys window windows 2>/dev/null | tail -60 >&2 || true
+exit 1
