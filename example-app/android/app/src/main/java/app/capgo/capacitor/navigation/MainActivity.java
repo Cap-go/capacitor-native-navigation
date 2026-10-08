@@ -9,7 +9,8 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        if (BuildConfig.DEBUG) {
+        boolean screenshotMode = "floating-tabbar".equals(BuildConfig.SCREENSHOT_MODE);
+        if (BuildConfig.DEBUG || screenshotMode) {
             SplashScreen splashScreen = SplashScreen.installSplashScreen(this);
             splashScreen.setKeepOnScreenCondition(() -> false);
         }

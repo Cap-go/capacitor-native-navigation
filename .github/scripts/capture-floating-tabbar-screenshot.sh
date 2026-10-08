@@ -63,13 +63,19 @@ capture_frame() {
   test -s "${WORK_PNG}"
 }
 
+app_ready_signal() {
+  adb logcat -d 2>/dev/null | tr -d '\r' | grep -q 'NATIVE_NAV_SCREENSHOT_READY' \
+    || adb logcat -d 2>/dev/null | tr -d '\r' | grep -qi 'screenshot-ready' \
+    || adb shell dumpsys window windows 2>/dev/null | tr -d '\r' | grep -qi 'screenshot-ready'
+}
+
 wait_for_app_ready() {
   local max_seconds="$1"
   adb logcat -c >/dev/null 2>&1 || true
   local elapsed=0
   while [ "${elapsed}" -lt "${max_seconds}" ]; do
     recover_from_crash
-    if adb logcat -d 2>/dev/null | tr -d '\r' | grep -q 'NATIVE_NAV_SCREENSHOT_READY'; then
+    if app_ready_signal; then
       return 0
     fi
     sleep 5
@@ -118,13 +124,13 @@ fi
 
 adb logcat -c >/dev/null 2>&1 || true
 
-if try_capture_pass 180; then
+if try_capture_pass 120; then
   rm -f "${WORK_PNG}"
   exit 0
 fi
 
 echo "First capture pass failed; retrying after relaunch" >&2
-if try_capture_pass 120; then
+if try_capture_pass 90; then
   rm -f "${WORK_PNG}"
   exit 0
 fi

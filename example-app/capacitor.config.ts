@@ -17,6 +17,15 @@ const config: CapacitorConfig = {
       defaultChannel: 'production',
       version: pkg.version,
     },
+    ...(screenshotBuild
+      ? {
+          SplashScreen: {
+            launchAutoHide: true,
+            launchShowDuration: 0,
+            backgroundColor: '#ff7a45',
+          },
+        }
+      : {}),
   },
   android: {
     webContentsDebuggingEnabled: true,
