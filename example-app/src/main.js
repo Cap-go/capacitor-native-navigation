@@ -765,10 +765,14 @@ window.addEventListener('pageshow', () => {
   void restoreChrome();
 });
 
-applyScreenshotMode();
-render();
-if (screenshotMode) {
-  void SplashScreen.hide({ fadeOutDuration: 0 });
-  markScreenshotReady();
-}
-void configureChrome();
+void (async () => {
+  applyScreenshotMode();
+  if (screenshotMode) {
+    await SplashScreen.hide({ fadeOutDuration: 0 });
+  }
+  render();
+  if (screenshotMode) {
+    markScreenshotReady();
+  }
+  await configureChrome();
+})();

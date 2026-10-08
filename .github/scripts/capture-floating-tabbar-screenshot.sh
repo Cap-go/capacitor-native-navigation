@@ -63,7 +63,8 @@ wait_for_valid_screenshot() {
   while [ "${attempt}" -lt "${max_attempts}" ]; do
     wake_display
     if ! app_is_foreground; then
-      adb shell am start -W -n "${ACTIVITY}" >/dev/null 2>&1 || true
+      adb shell am start -n "${ACTIVITY}" >/dev/null 2>&1 || true
+      sleep 2
     fi
     adb exec-out screencap -p > "${WORK_PNG}" || true
     if app_is_foreground && screenshot_is_valid "${WORK_PNG}"; then
@@ -108,7 +109,8 @@ install_apk() {
 install_apk
 adb shell am force-stop "${PACKAGE}"
 adb logcat -c >/dev/null 2>&1 || true
-adb shell am start -W -n "${ACTIVITY}"
+adb shell am start -n "${ACTIVITY}"
+sleep 12
 
 wait_for_valid_screenshot
 
