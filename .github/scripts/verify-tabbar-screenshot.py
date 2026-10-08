@@ -52,7 +52,8 @@ def main() -> None:
         )
         return
 
-    bottom_colors = {image.getpixel((x, height - 72)) for x in range(0, width, 12)}
+    bottom_y = min(height - 1, int(height * 0.96))
+    bottom_colors = {image.getpixel((x, bottom_y)) for x in range(0, width, max(1, width // 90))}
     if len(bottom_colors) < 8:
         raise SystemExit(
             f"Bottom chrome region looks flat ({len(bottom_colors)} distinct colors). "

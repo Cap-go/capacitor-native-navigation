@@ -13,7 +13,7 @@ const config: CapacitorConfig = {
       appId: 'app.capgo.native.navigation.example',
       autoUpdate: !screenshotBuild,
       autoSplashscreen: !screenshotBuild,
-      directUpdate: screenshotBuild ? 'never' : 'always',
+      directUpdate: screenshotBuild ? false : 'always',
       defaultChannel: 'production',
       version: pkg.version,
     },

@@ -9,8 +9,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 VERIFY_SCRIPT="${REPO_ROOT}/.github/scripts/verify-tabbar-screenshot.py"
 WORK_PNG="${OUTPUT%.png}.work.png"
+VENV_DIR="${REPO_ROOT}/.github/.venv-tabbar-screenshot"
 
-python3 -m pip install --user pillow >/dev/null
+if [ ! -x "${VENV_DIR}/bin/python" ]; then
+  python3 -m venv "${VENV_DIR}"
+  "${VENV_DIR}/bin/pip" install -q pillow
+fi
+PYTHON="${VENV_DIR}/bin/python"
 
 screen_size() {
   adb shell wm size 2>/dev/null | tr -d '\r' | awk '/Physical size/ {print $3; exit}'
@@ -52,7 +57,7 @@ app_is_foreground() {
 
 screenshot_is_valid() {
   local path="$1"
-  [ -s "${path}" ] && python3 "${VERIFY_SCRIPT}" --relaxed "${path}" >/dev/null 2>&1
+  [ -s "${path}" ] && "${PYTHON}" "${VERIFY_SCRIPT}" --relaxed "${path}" >/dev/null 2>&1
 }
 
 wait_for_valid_screenshot() {
@@ -116,5 +121,5 @@ sleep 2
 wake_display
 adb exec-out screencap -p > "${OUTPUT}"
 test -s "${OUTPUT}"
-python3 "${VERIFY_SCRIPT}" "${OUTPUT}"
+"${PYTHON}" "${VERIFY_SCRIPT}" "${OUTPUT}"
 rm -f "${WORK_PNG}"
