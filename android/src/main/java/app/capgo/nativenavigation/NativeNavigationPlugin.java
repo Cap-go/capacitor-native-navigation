@@ -112,7 +112,10 @@ public class NativeNavigationPlugin extends Plugin {
     public void load() {
         Activity activity = getActivity();
         if (activity != null) {
-            activity.runOnUiThread(this::enableEdgeToEdge);
+            activity.runOnUiThread(() -> {
+                enableEdgeToEdge();
+                watchContentRootBounds();
+            });
         }
     }
 
@@ -2062,7 +2065,21 @@ public class NativeNavigationPlugin extends Plugin {
         }
     }
 
+    /**
+     * The chrome is laid out inside {@code android.R.id.content}, so it only needs to clear the part of a
+     * system bar that actually overlaps that view. Capacitor's SystemBars plugin (default
+     * {@code insetsHandling: 'css'} without {@code viewport-fit=cover}) pads the decor view by the system bars,
+     * which already moves the content root clear of them; adding the full inset again doubled the gap.
+     */
     private int statusBarInset() {
+        return Math.max(0, rawStatusBarInset() - contentRootTopOffset());
+    }
+
+    private int navigationBarInset() {
+        return Math.max(0, rawNavigationBarInset() - contentRootBottomOffset());
+    }
+
+    private int rawStatusBarInset() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             WindowInsets insets = getActivity().getWindow().getDecorView().getRootWindowInsets();
             if (insets != null) {
@@ -2072,7 +2089,7 @@ public class NativeNavigationPlugin extends Plugin {
         return systemDimension("status_bar_height");
     }
 
-    private int navigationBarInset() {
+    private int rawNavigationBarInset() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             WindowInsets insets = getActivity().getWindow().getDecorView().getRootWindowInsets();
             if (insets != null) {
@@ -2080,6 +2097,45 @@ public class NativeNavigationPlugin extends Plugin {
             }
         }
         return systemDimension("navigation_bar_height");
+    }
+
+    private int contentRootTopOffset() {
+        FrameLayout root = contentRoot();
+        if (root == null || !root.isLaidOut()) {
+            return 0;
+        }
+        int[] location = new int[2];
+        root.getLocationInWindow(location);
+        return Math.max(0, location[1]);
+    }
+
+    private int contentRootBottomOffset() {
+        FrameLayout root = contentRoot();
+        Activity activity = getActivity();
+        if (root == null || activity == null || !root.isLaidOut()) {
+            return 0;
+        }
+        View decor = activity.getWindow().getDecorView();
+        int[] location = new int[2];
+        root.getLocationInWindow(location);
+        return Math.max(0, decor.getHeight() - (location[1] + root.getHeight()));
+    }
+
+    private void watchContentRootBounds() {
+        FrameLayout root = contentRoot();
+        if (root == null) {
+            return;
+        }
+        // SystemBars can add or drop its decor padding after load (for example once viewport-fit=cover is
+        // detected), which moves the content root without a call into this plugin. Re-run layout when it moves.
+        root.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+            if (top == oldTop && bottom == oldBottom && left == oldLeft && right == oldRight) {
+                return;
+            }
+            if (navbarVisible || tabbarVisible) {
+                view.post(this::updateInsetsAndNotify);
+            }
+        });
     }
 
     private int systemDimension(String name) {
