@@ -26,22 +26,32 @@ def main() -> None:
         for x in range(0, width, 3):
             red, green, blue = image.getpixel((x, y))
             bright_orange = red > 175 and green > 65 and blue < 140 and red > green + 20
-            warm_venue = red > 80 and green > 20 and blue < 100 and red >= green - 5
+            warm_venue = (
+                red > 80
+                and green > 20
+                and blue < 100
+                and red >= green - 5
+                and red > green + 8
+                and max(red, green, blue) - min(red, green, blue) > 15
+            )
             if bright_orange or warm_venue:
                 orange_samples += 1
 
     tab_tint_samples = 0
+    tabbar_chrome_samples = 0
     for y in range(height - 140, height - 20):
         for x in range(0, width, 4):
             red, green, blue = image.getpixel((x, y))
             if blue > 170 and red < 120 and green < 170 and blue > red + 40:
                 tab_tint_samples += 1
-
-    bottom_region_colors = {
-        image.getpixel((x, y))
-        for y in range(height - 180, height - 40, 6)
-        for x in range(0, width, 5)
-    }
+            active_tab_blue = blue > 200 and red < 90 and green > 90 and blue > red + 80
+            frosted_bar = (
+                min(red, green, blue) > 145
+                and max(red, green, blue) < 252
+                and max(red, green, blue) - min(red, green, blue) < 45
+            )
+            if active_tab_blue or frosted_bar:
+                tabbar_chrome_samples += 1
 
     if orange_samples < 250:
         raise SystemExit(
@@ -49,10 +59,10 @@ def main() -> None:
             "Likely still on splash or home without content."
         )
 
-    if tab_tint_samples < 25 and len(bottom_region_colors) < 40:
+    if tab_tint_samples < 25 and tabbar_chrome_samples < 30:
         raise SystemExit(
             "Screenshot missing native tabbar chrome "
-            f"(tab_tint_samples={tab_tint_samples}, bottom_region_colors={len(bottom_region_colors)})."
+            f"(tab_tint_samples={tab_tint_samples}, tabbar_chrome_samples={tabbar_chrome_samples})."
         )
 
     if relaxed:
