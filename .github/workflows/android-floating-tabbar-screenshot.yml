@@ -34,6 +34,17 @@ jobs:
         with:
           distribution: zulu
           java-version: 21
+      - name: Cache Android 34 system image
+        uses: actions/cache@v4
+        id: emulator-sysimage-cache
+        with:
+          path: |
+            /usr/local/lib/android/sdk/system-images/android-34
+          key: android-34-google-apis-x86_64-v1
+      - name: Install Android 34 emulator system image
+        if: steps.emulator-sysimage-cache.outputs.cache-hit != 'true'
+        run: |
+          yes | sdkmanager "system-images;android-34;google_apis;x86_64"
       - name: Build plugin and screenshot example app
         run: |
           bun run build
@@ -64,6 +75,17 @@ jobs:
     steps:
       - name: Check out
         uses: actions/checkout@v7
+      - name: Cache Android 34 system image
+        uses: actions/cache@v4
+        id: emulator-sysimage-cache
+        with:
+          path: |
+            /usr/local/lib/android/sdk/system-images/android-34
+          key: android-34-google-apis-x86_64-v1
+      - name: Install Android 34 emulator system image
+        if: steps.emulator-sysimage-cache.outputs.cache-hit != 'true'
+        run: |
+          yes | sdkmanager "system-images;android-34;google_apis;x86_64"
       - name: Download screenshot APK
         uses: actions/download-artifact@v4
         with:
@@ -77,7 +99,7 @@ jobs:
           arch: x86_64
           disableAnimations: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: bash -lc 'sleep 15 && adb install -r screenshot-apks/app-debug.apk && adb shell am force-stop app.capgo.capacitor.navigation && adb shell am start -W -n app.capgo.capacitor.navigation/.MainActivity && sleep 35 && adb exec-out screencap -p > "${GITHUB_WORKSPACE}/android-floating-tabbar-after-full.png" && test -s "${GITHUB_WORKSPACE}/android-floating-tabbar-after-full.png"'
+          script: bash -lc 'sleep 10 && adb install -r screenshot-apks/app-debug.apk && adb shell am force-stop app.capgo.capacitor.navigation && adb shell am start -W -n app.capgo.capacitor.navigation/.MainActivity && sleep 28 && adb exec-out screencap -p > "${GITHUB_WORKSPACE}/android-floating-tabbar-after-full.png" && test -s "${GITHUB_WORKSPACE}/android-floating-tabbar-after-full.png"'
       - name: Resize and optimize screenshot
         run: |
           python3 -m pip install --user pillow
