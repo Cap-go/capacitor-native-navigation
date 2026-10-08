@@ -371,23 +371,37 @@ const setTopButtonVisible = (visible) => {
 };
 
 const configureChrome = async () => {
-  await NativeNavigation.configure({
-    contentInsetMode: 'css',
-    animationDuration: 360,
-    colors: {
-      tint: '#0a84ff',
-      inactiveTint: '#6b7280',
-    },
-    glass: {
-      effect: 'liquidGlass',
-      blurRadius: 18,
-      surfaceAlpha: 0.62,
-    },
-  });
-  chromeConfigured = true;
-  await updateNavbar();
-  await updateTabbar();
-  markScreenshotReady();
+  const applyNativeChrome = async () => {
+    await NativeNavigation.configure({
+      contentInsetMode: 'css',
+      animationDuration: 360,
+      colors: {
+        tint: '#0a84ff',
+        inactiveTint: '#6b7280',
+      },
+      glass: {
+        effect: 'liquidGlass',
+        blurRadius: 18,
+        surfaceAlpha: 0.62,
+      },
+    });
+    chromeConfigured = true;
+    await updateNavbar();
+    await updateTabbar();
+  };
+
+  if (screenshotMode) {
+    await Promise.race([
+      applyNativeChrome(),
+      new Promise((resolve) => {
+        window.setTimeout(resolve, 45000);
+      }),
+    ]);
+    markScreenshotReady();
+    return;
+  }
+
+  await applyNativeChrome();
 };
 
 const pageFor = (id) =>
@@ -750,4 +764,7 @@ window.addEventListener('pageshow', () => {
 
 applyScreenshotMode();
 render();
+if (screenshotMode) {
+  markScreenshotReady();
+}
 void configureChrome();
