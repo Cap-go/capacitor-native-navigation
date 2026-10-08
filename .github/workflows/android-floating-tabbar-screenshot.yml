@@ -78,19 +78,12 @@ jobs:
         with:
           path: |
             /usr/local/lib/android/sdk/system-images
-            ~/.android/avd
-          key: android-emulator-api-34-google-apis-x86_64-v1
+          key: android-emulator-api-34-google-apis-x86_64-v2
       - name: Download screenshot APK
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: android-floating-tabbar-apk
           path: screenshot-apks
-      - name: Start virtual display for screencap
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq xvfb
-          Xvfb :99 -screen 0 1280x720x24 &
-          sleep 2
       - name: Capture floating tabbar on emulator
         env:
           DISPLAY: :99
@@ -103,9 +96,17 @@ jobs:
           cores: 2
           ram-size: 2048M
           emulator-boot-timeout: 1200
-          force-avd-creation: false
+          avd-name: tabbar-screenshot-${{ github.run_id }}
+          force-avd-creation: true
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot-save
+          pre-emulator-launch-script: |
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq xvfb
+            Xvfb :99 -screen 0 1280x720x24 &
+            sleep 2
+            adb kill-server 2>/dev/null || true
+            pkill -9 -f qemu-system 2>/dev/null || true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: bash -lc 'chmod +x .github/scripts/capture-floating-tabbar-screenshot.sh && .github/scripts/capture-floating-tabbar-screenshot.sh screenshot-apks/app-debug.apk "${GITHUB_WORKSPACE}/android-floating-tabbar-after-full.png"'
       - name: Save Android emulator cache
         if: runner.os == 'Linux' && steps.emulator_capture.outcome == 'success' && steps.emulator-cache.outputs.cache-hit != 'true'
@@ -113,8 +114,7 @@ jobs:
         with:
           path: |
             /usr/local/lib/android/sdk/system-images
-            ~/.android/avd
-          key: android-emulator-api-34-google-apis-x86_64-v1
+          key: android-emulator-api-34-google-apis-x86_64-v2
       - name: Setup Python
         if: steps.emulator_capture.outcome == 'success'
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
