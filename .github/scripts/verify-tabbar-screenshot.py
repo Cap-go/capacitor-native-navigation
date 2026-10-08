@@ -12,6 +12,8 @@ def main() -> None:
     relaxed = "--relaxed" in sys.argv[1:]
     path = Path(args[0] if args else "android-floating-tabbar-after-full.png")
     image = Image.open(path).convert("RGB")
+    if image.width > 480:
+        image = image.resize((image.width // 2, image.height // 2))
     width, height = image.size
 
     if width < 8 or height < 8:

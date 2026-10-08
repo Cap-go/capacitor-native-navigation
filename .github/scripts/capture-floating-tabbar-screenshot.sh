@@ -23,6 +23,15 @@ wake_display() {
   adb shell svc power stayon true >/dev/null 2>&1 || true
 }
 
+recover_from_crash() {
+  if adb shell dumpsys window 2>/dev/null | tr -d '\r' | grep -qE "Application Error|Not Responding"; then
+    dismiss_blocking_dialogs
+    adb shell am force-stop "${PACKAGE}" >/dev/null 2>&1 || true
+    adb shell am start -n "${ACTIVITY}" >/dev/null 2>&1 || true
+    sleep 5
+  fi
+}
+
 dismiss_blocking_dialogs() {
   local size width height
   size="$(screen_size)"
@@ -59,8 +68,9 @@ screenshot_is_valid() {
 
 wait_for_valid_screenshot() {
   local attempt=0
-  local max_attempts=90
+  local max_attempts=50
   while [ "${attempt}" -lt "${max_attempts}" ]; do
+    recover_from_crash
     wake_display
     if ! app_is_foreground; then
       adb shell am start -n "${ACTIVITY}" >/dev/null 2>&1 || true

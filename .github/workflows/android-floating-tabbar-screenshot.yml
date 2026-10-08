@@ -90,11 +90,11 @@ jobs:
         id: emulator_capture
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
-          api-level: 31
+          api-level: 34
           target: google_apis
           arch: x86_64
           cores: 2
-          ram-size: 2048M
+          ram-size: 4096M
           emulator-boot-timeout: 1200
           avd-name: tabbar-screenshot-${{ github.run_id }}
           force-avd-creation: true
