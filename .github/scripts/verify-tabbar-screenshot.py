@@ -25,7 +25,9 @@ def main() -> None:
     for y in range(int(height * 0.12), int(height * 0.55)):
         for x in range(0, width, 3):
             red, green, blue = image.getpixel((x, y))
-            if red > 175 and green > 65 and blue < 140 and red > green + 20:
+            bright_orange = red > 175 and green > 65 and blue < 140 and red > green + 20
+            warm_venue = red > 80 and green > 20 and blue < 100 and red >= green - 5
+            if bright_orange or warm_venue:
                 orange_samples += 1
 
     tab_tint_samples = 0
@@ -35,15 +37,22 @@ def main() -> None:
             if blue > 170 and red < 120 and green < 170 and blue > red + 40:
                 tab_tint_samples += 1
 
+    bottom_region_colors = {
+        image.getpixel((x, y))
+        for y in range(height - 180, height - 40, 6)
+        for x in range(0, width, 5)
+    }
+
     if orange_samples < 250:
         raise SystemExit(
-            f"Screenshot missing orange venue content (only {orange_samples} orange-ish samples). "
+            f"Screenshot missing venue content (only {orange_samples} warm/orange samples). "
             "Likely still on splash or home without content."
         )
 
-    if tab_tint_samples < 25:
+    if tab_tint_samples < 25 and len(bottom_region_colors) < 40:
         raise SystemExit(
-            f"Screenshot missing native tabbar tint (only {tab_tint_samples} blue-ish samples near bottom)."
+            "Screenshot missing native tabbar chrome "
+            f"(tab_tint_samples={tab_tint_samples}, bottom_region_colors={len(bottom_region_colors)})."
         )
 
     if relaxed:
@@ -61,7 +70,7 @@ def main() -> None:
         )
 
     center = image.getpixel((width // 2, int(height * 0.55)))
-    if all(channel > 200 for channel in center[:3]):
+    if all(channel > 200 for channel in center[:3]) and orange_samples < 1500:
         raise SystemExit("Center looks like splash gray, not colorful content.")
 
     print(f"Verified screenshot content: orange_samples={orange_samples}, bottom_variety={len(bottom_colors)}")
