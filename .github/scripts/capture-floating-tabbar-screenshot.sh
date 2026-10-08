@@ -30,7 +30,7 @@ swipe_content_into_view() {
 
 screenshot_is_valid() {
   local path="$1"
-  [ -s "${path}" ] && python3 "${VERIFY_SCRIPT}" "${path}" >/dev/null 2>&1
+  [ -s "${path}" ] && python3 "${VERIFY_SCRIPT}" --relaxed "${path}" >/dev/null 2>&1
 }
 
 wait_for_valid_screenshot() {
@@ -41,18 +41,20 @@ wait_for_valid_screenshot() {
     if screenshot_is_valid "${WORK_PNG}"; then
       return 0
     fi
-    if [ "${attempt}" -eq 20 ]; then
-      adb shell am force-stop "${PACKAGE}"
-      adb shell am start -W -n "${ACTIVITY}" >/dev/null 2>&1 || true
-    fi
     attempt=$((attempt + 1))
     sleep 3
   done
   echo "Timed out waiting for floating tabbar screenshot content" >&2
+  if [ -s "${WORK_PNG}" ]; then
+    cp "${WORK_PNG}" "${REPO_ROOT}/android-floating-tabbar-capture-debug.png" || true
+  fi
   adb logcat -d | tail -120 >&2 || true
   adb shell dumpsys window windows 2>/dev/null | tail -60 >&2 || true
   return 1
 }
+
+adb wait-for-device
+adb shell true
 
 adb install -r "${APK_PATH}"
 adb shell am force-stop "${PACKAGE}"

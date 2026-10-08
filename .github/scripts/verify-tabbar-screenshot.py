@@ -8,7 +8,9 @@ from PIL import Image
 
 
 def main() -> None:
-    path = Path(sys.argv[1] if len(sys.argv) > 1 else "android-floating-tabbar-after-full.png")
+    args = [arg for arg in sys.argv[1:] if arg != "--relaxed"]
+    relaxed = "--relaxed" in sys.argv[1:]
+    path = Path(args[0] if args else "android-floating-tabbar-after-full.png")
     image = Image.open(path).convert("RGB")
     width, height = image.size
 
@@ -24,6 +26,10 @@ def main() -> None:
             f"Screenshot missing orange venue content (only {orange_samples} orange-ish samples). "
             "Likely still on splash or home without content."
         )
+
+    if relaxed:
+        print(f"Verified relaxed screenshot content: orange_samples={orange_samples}")
+        return
 
     bottom_colors = {image.getpixel((x, height - 72)) for x in range(0, width, 12)}
     if len(bottom_colors) < 8:

@@ -122,6 +122,14 @@ jobs:
           python .github/scripts/optimize-tabbar-screenshot.py
           python .github/scripts/verify-tabbar-screenshot.py docs/android-floating-tabbar-after-300.png
           cp android-floating-tabbar-after-full.png docs/android-floating-tabbar-after-full.png
+      - name: Upload failed capture debug image
+        if: failure() && steps.emulator_capture.outcome == 'failure'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: android-floating-tabbar-capture-debug
+          path: android-floating-tabbar-capture-debug.png
+          if-no-files-found: ignore
+
       - name: Upload screenshot artifacts
         if: steps.emulator_capture.outcome == 'success'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
