@@ -46,6 +46,7 @@ jobs:
           cd example-app
           VITE_SCREENSHOT_MODE=floating-tabbar bun run build
           VITE_SCREENSHOT_MODE=floating-tabbar bunx cap sync android
+          bash ../.github/scripts/prepare-screenshot-android.sh
       - name: Assemble debug APK
         run: |
           cd example-app/android

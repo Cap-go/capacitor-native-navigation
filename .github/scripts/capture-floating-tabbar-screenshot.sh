@@ -88,6 +88,11 @@ try_capture_pass() {
   local ready_timeout="$1"
   adb shell am force-stop "${PACKAGE}" >/dev/null 2>&1 || true
   adb shell am start -n "${ACTIVITY}" >/dev/null 2>&1 || true
+  sleep 3
+  if ! adb shell pidof "${PACKAGE}" >/dev/null 2>&1; then
+    echo "Screenshot app process is not running after launch" >&2
+    return 1
+  fi
   if ! wait_for_app_ready "${ready_timeout}"; then
     echo "App did not log NATIVE_NAV_SCREENSHOT_READY within ${ready_timeout}s" >&2
     sleep 25
