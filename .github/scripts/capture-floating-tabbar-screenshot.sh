@@ -62,26 +62,21 @@ screenshot_is_valid() {
 
 wait_for_screenshot_ready_log() {
   local attempt=0
-  local max_attempts=90
+  local max_attempts=45
   while [ "${attempt}" -lt "${max_attempts}" ]; do
-    if adb logcat -d -t 80 2>/dev/null | tr -d '\r' | grep -q 'NATIVE_NAV_SCREENSHOT_READY'; then
+    if adb logcat -d -t 40 2>/dev/null | tr -d '\r' | grep -q 'NATIVE_NAV_SCREENSHOT_READY'; then
       return 0
-    fi
-    if adb shell uiautomator dump /data/local/tmp/uidump.xml >/dev/null 2>&1; then
-      if adb shell cat /data/local/tmp/uidump.xml 2>/dev/null | grep -q 'screenshot-ready-flag'; then
-        return 0
-      fi
     fi
     attempt=$((attempt + 1))
     sleep 2
   done
-  echo "Screenshot readiness signal not observed; continuing with pixel validation" >&2
+  echo "Screenshot readiness log not observed; continuing with pixel validation" >&2
   return 0
 }
 
 wait_for_valid_screenshot() {
   local attempt=0
-  local max_attempts=60
+  local max_attempts=25
   while [ "${attempt}" -lt "${max_attempts}" ]; do
     wake_display
     if ! app_is_foreground; then
