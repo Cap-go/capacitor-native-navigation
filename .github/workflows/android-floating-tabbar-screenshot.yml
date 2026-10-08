@@ -15,6 +15,7 @@ on:
     branches:
       - cursor/android-floating-tabbar-glass
       - cursor/screenshot-tabbar-followup-be59
+      - cursor/android-translucent-tabbar-shadow-4485
 
 permissions:
   contents: read
