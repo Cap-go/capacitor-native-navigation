@@ -16,6 +16,11 @@ screen_size() {
   adb shell wm size 2>/dev/null | tr -d '\r' | awk '/Physical size/ {print $3; exit}'
 }
 
+wake_display() {
+  adb shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1 || true
+  adb shell svc power stayon true >/dev/null 2>&1 || true
+}
+
 dismiss_blocking_dialogs() {
   local size width height
   size="$(screen_size)"
@@ -50,6 +55,7 @@ wait_for_valid_screenshot() {
   local attempt=0
   local max_attempts=60
   while [ "${attempt}" -lt "${max_attempts}" ]; do
+    wake_display
     adb exec-out screencap -p > "${WORK_PNG}" || true
     if screenshot_is_valid "${WORK_PNG}"; then
       return 0
@@ -99,6 +105,7 @@ wait_for_valid_screenshot
 swipe_content_into_view
 sleep 2
 
+wake_display
 adb exec-out screencap -p > "${OUTPUT}"
 test -s "${OUTPUT}"
 python3 "${VERIFY_SCRIPT}" "${OUTPUT}"

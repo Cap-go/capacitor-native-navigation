@@ -14,6 +14,13 @@ def main() -> None:
     image = Image.open(path).convert("RGB")
     width, height = image.size
 
+    if width < 8 or height < 8:
+        raise SystemExit("Screenshot is too small to verify.")
+
+    sample_pixels = [image.getpixel((x, y)) for x in (0, width // 2, width - 1) for y in (0, height // 2, height - 1)]
+    if all(all(channel < 8 for channel in pixel[:3]) for pixel in sample_pixels):
+        raise SystemExit("Screenshot looks blank (display off or failed screencap).")
+
     orange_samples = 0
     for y in range(int(height * 0.1), int(height * 0.72)):
         for x in range(0, width, 3):
