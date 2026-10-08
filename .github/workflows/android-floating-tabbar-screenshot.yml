@@ -60,7 +60,8 @@ jobs:
     needs: build_apks
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # API 34 system image install plus boot can exceed 10 minutes on a cold runner.
+    timeout-minutes: 20
     steps:
       - name: Check out
         uses: actions/checkout@v7
