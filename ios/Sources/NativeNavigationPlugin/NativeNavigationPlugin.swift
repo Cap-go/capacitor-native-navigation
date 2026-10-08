@@ -2,7 +2,6 @@
 
 import Foundation
 import Capacitor
-import ObjectiveC
 import UIKit
 
 private struct NativeNavigationTransitionContext {
@@ -2052,44 +2051,25 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
 
     private func liquidGlassEffect() -> UIVisualEffect? {
-        guard usesSystemLiquidGlass,
-              let effectClass = NSClassFromString("UIGlassEffect") else {
+        guard usesSystemLiquidGlass else {
             return nil
         }
-
-        let styleSelector = NSSelectorFromString("effectWithStyle:")
-        if let method = class_getClassMethod(effectClass, styleSelector) {
-            typealias EffectWithStyle = @convention(c) (AnyClass, Selector, Int) -> AnyObject?
-            let factory = unsafeBitCast(method_getImplementation(method), to: EffectWithStyle.self)
-            if let effect = factory(effectClass, styleSelector, 0) as? UIVisualEffect {
-                return effect
-            }
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            return UIGlassEffect(style: .regular)
         }
-
-        if let objectType = effectClass as? NSObject.Type {
-            return objectType.init() as? UIVisualEffect
-        }
-
+        #endif
         return nil
     }
 
     private func configureGlassBarButtonItem(_ item: UIBarButtonItem, id: String) {
-        guard #available(iOS 26.0, *) else {
-            return
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            item.identifier = id
+            item.sharesBackground = true
+            item.hidesSharedBackground = false
         }
-
-        // Keep older SDK builds working while adopting the native iOS 26 bar
-        // button Liquid Glass grouping APIs when the runtime exposes them.
-        let object = item as NSObject
-        if object.responds(to: NSSelectorFromString("setIdentifier:")) {
-            object.setValue(id, forKey: "identifier")
-        }
-        if object.responds(to: NSSelectorFromString("setSharesBackground:")) {
-            object.setValue(true, forKey: "sharesBackground")
-        }
-        if object.responds(to: NSSelectorFromString("setHidesSharedBackground:")) {
-            object.setValue(false, forKey: "hidesSharedBackground")
-        }
+        #endif
     }
 
     private func currentInsets() -> [String: Any] {
