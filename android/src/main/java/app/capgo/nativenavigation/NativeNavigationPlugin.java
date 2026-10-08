@@ -136,7 +136,7 @@ public class NativeNavigationPlugin extends Plugin {
             configureSpecifiedGlassEffect = configureGlass != null && configureGlass.has("effect");
             defaultGlassOptions = GlassOptions.from(configureGlass, defaultGlassOptions);
             navbarGlassOptions = GlassOptions.from(navbarGlassConfig, defaultGlassOptions);
-            tabbarGlassOptions = GlassOptions.from(tabbarGlassConfig, defaultGlassOptions);
+            tabbarGlassOptions = resolveTabbarGlassOptions(call);
             Double duration = call.getDouble("animationDuration");
             if (duration != null) {
                 defaultTransitionMs = Math.max(0, duration.intValue());
@@ -1755,11 +1755,14 @@ public class NativeNavigationPlugin extends Plugin {
             if (tabbarContainer != null) {
                 tabbarContainer.setBackgroundColor(Color.TRANSPARENT);
             }
-            hideGlassBackground(null, tabbarGlassSurface);
+            if (tabbarGlassSurface != null) {
+                tabbarGlassSurface.setBackground(chromeBackgroundDrawable(drawColor, 0f));
+                tabbarGlassSurface.setVisibility(View.VISIBLE);
+            }
             if (tabbarGlassBackdrop != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 View webView = getBridge() == null ? null : getBridge().getWebView();
                 tabbarGlassBackdrop.setClipPathProvider((width, height) -> tabbar.backgroundPath(width, height));
-                tabbarGlassBackdrop.configure(webView, dp(resolvedGlassOptions.blurRadiusDp), drawColor);
+                tabbarGlassBackdrop.configure(webView, dp(resolvedGlassOptions.blurRadiusDp), Color.TRANSPARENT);
                 tabbarGlassBackdrop.setVisibility(View.VISIBLE);
             } else if (tabbarGlassBackdrop != null) {
                 tabbarGlassBackdrop.setClipPathProvider((width, height) -> tabbar.backgroundPath(width, height));

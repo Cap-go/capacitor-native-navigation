@@ -172,7 +172,7 @@ const markScreenshotReady = () => {
   const flag = document.createElement('div');
   flag.className = 'screenshot-ready-flag';
   flag.textContent = 'screenshot-ready';
-  flag.setAttribute('aria-hidden', 'true');
+  flag.setAttribute('role', 'status');
   document.body.appendChild(flag);
   console.log('NATIVE_NAV_SCREENSHOT_READY');
 };
