@@ -34,17 +34,6 @@ jobs:
         with:
           distribution: zulu
           java-version: 21
-      - name: Cache Android 34 system image
-        uses: actions/cache@v4
-        id: emulator-sysimage-cache
-        with:
-          path: |
-            /usr/local/lib/android/sdk/system-images/android-34
-          key: android-34-google-apis-x86_64-v1
-      - name: Install Android 34 emulator system image
-        if: github.event_name != 'pull_request' && steps.emulator-sysimage-cache.outputs.cache-hit != 'true'
-        run: |
-          yes | sdkmanager "system-images;android-34;google_apis;x86_64"
       - name: Build plugin and screenshot example app
         run: |
           bun run build
@@ -75,37 +64,46 @@ jobs:
     steps:
       - name: Check out
         uses: actions/checkout@v7
-      - name: Cache Android 34 system image
-        uses: actions/cache@v4
-        id: emulator-sysimage-cache
+      - name: Restore Android emulator cache
+        uses: actions/cache/restore@v4
+        id: emulator-cache
         with:
           path: |
-            /usr/local/lib/android/sdk/system-images/android-34
-          key: android-34-google-apis-x86_64-v1
-      - name: Install Android 34 emulator system image
-        if: steps.emulator-sysimage-cache.outputs.cache-hit != 'true'
-        run: |
-          yes | sdkmanager "system-images;android-34;google_apis;x86_64"
+            /usr/local/lib/android/sdk/system-images
+            ~/.android/avd
+          key: android-emulator-api-34-google-apis-x86_64-v1
       - name: Download screenshot APK
         uses: actions/download-artifact@v4
         with:
           name: android-floating-tabbar-apk
           path: screenshot-apks
       - name: Capture floating tabbar on emulator
+        id: emulator_capture
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
           target: google_apis
           arch: x86_64
           disableAnimations: false
+          cores: 2
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: bash -lc 'sleep 10 && adb install -r screenshot-apks/app-debug.apk && adb shell am force-stop app.capgo.capacitor.navigation && adb shell am start -W -n app.capgo.capacitor.navigation/.MainActivity && sleep 28 && adb exec-out screencap -p > "${GITHUB_WORKSPACE}/android-floating-tabbar-after-full.png" && test -s "${GITHUB_WORKSPACE}/android-floating-tabbar-after-full.png"'
+      - name: Save Android emulator cache
+        if: always() && steps.emulator-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            /usr/local/lib/android/sdk/system-images
+            ~/.android/avd
+          key: android-emulator-api-34-google-apis-x86_64-v1
       - name: Resize and optimize screenshot
+        if: steps.emulator_capture.outcome == 'success'
         run: |
           python3 -m pip install --user pillow
           python3 .github/scripts/optimize-tabbar-screenshot.py
           cp android-floating-tabbar-after-full.png docs/android-floating-tabbar-after-full.png
       - name: Upload screenshot artifacts
+        if: steps.emulator_capture.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: android-floating-tabbar-screenshot
