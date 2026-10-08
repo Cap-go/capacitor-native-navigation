@@ -20,7 +20,9 @@ screen_size() {
 
 wake_display() {
   adb shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1 || true
+  adb shell wm dismiss-keyguard >/dev/null 2>&1 || true
   adb shell svc power stayon true >/dev/null 2>&1 || true
+  adb shell input keyevent KEYCODE_MENU >/dev/null 2>&1 || true
 }
 
 dismiss_blocking_dialogs() {
@@ -89,7 +91,7 @@ if [ "${install_attempt}" -ge 6 ]; then
   exit 1
 fi
 
-if try_capture_pass 75; then
+if try_capture_pass 90; then
   rm -f "${WORK_PNG}"
   exit 0
 fi

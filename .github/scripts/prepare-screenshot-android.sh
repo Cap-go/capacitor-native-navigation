@@ -12,7 +12,6 @@ for file in \
     exit 1
   fi
   sed -i '/capgo-capacitor-updater/d' "${file}"
-  sed -i '/capacitor-splash-screen/d' "${file}"
 done
 
-echo "Removed Capgo updater and SplashScreen plugin from screenshot Android build."
+echo "Removed @capgo/capacitor-updater from screenshot Android build."
