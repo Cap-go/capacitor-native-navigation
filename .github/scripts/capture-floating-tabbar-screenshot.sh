@@ -23,15 +23,6 @@ wake_display() {
   adb shell svc power stayon true >/dev/null 2>&1 || true
 }
 
-recover_from_crash() {
-  if adb shell dumpsys window 2>/dev/null | tr -d '\r' | grep -qE "Application Error|Not Responding"; then
-    dismiss_blocking_dialogs
-    adb shell am force-stop "${PACKAGE}" >/dev/null 2>&1 || true
-    adb shell am start -n "${ACTIVITY}" >/dev/null 2>&1 || true
-    sleep 8
-  fi
-}
-
 dismiss_blocking_dialogs() {
   local size width height
   size="$(screen_size)"
@@ -63,41 +54,12 @@ capture_frame() {
   test -s "${WORK_PNG}"
 }
 
-app_ready_signal() {
-  adb logcat -d 2>/dev/null | tr -d '\r' | grep -q 'NATIVE_NAV_SCREENSHOT_READY' \
-    || adb logcat -d 2>/dev/null | tr -d '\r' | grep -qi 'screenshot-ready' \
-    || adb shell dumpsys window windows 2>/dev/null | tr -d '\r' | grep -qi 'screenshot-ready'
-}
-
-wait_for_app_ready() {
-  local max_seconds="$1"
-  adb logcat -c >/dev/null 2>&1 || true
-  local elapsed=0
-  while [ "${elapsed}" -lt "${max_seconds}" ]; do
-    recover_from_crash
-    if app_ready_signal; then
-      return 0
-    fi
-    sleep 5
-    elapsed=$((elapsed + 5))
-  done
-  return 1
-}
-
 try_capture_pass() {
-  local ready_timeout="$1"
+  local wait_seconds="$1"
   adb shell am force-stop "${PACKAGE}" >/dev/null 2>&1 || true
+  adb logcat -c >/dev/null 2>&1 || true
   adb shell am start -n "${ACTIVITY}" >/dev/null 2>&1 || true
-  sleep 3
-  if ! adb shell pidof "${PACKAGE}" >/dev/null 2>&1; then
-    echo "Screenshot app process is not running after launch" >&2
-    return 1
-  fi
-  if ! wait_for_app_ready "${ready_timeout}"; then
-    echo "App did not log NATIVE_NAV_SCREENSHOT_READY within ${ready_timeout}s" >&2
-    sleep 25
-  fi
-  recover_from_crash
+  sleep "${wait_seconds}"
   dismiss_blocking_dialogs
   swipe_content_into_view
   sleep 2
@@ -108,7 +70,7 @@ try_capture_pass() {
 
 adb wait-for-device
 adb shell true
-sleep 20
+sleep 15
 dismiss_blocking_dialogs
 adb shell settings put global package_verifier_enable 0
 adb shell settings put global verifier_verify_adb_installs 0
@@ -120,22 +82,20 @@ while [ "${install_attempt}" -lt 6 ]; do
     break
   fi
   install_attempt=$((install_attempt + 1))
-  sleep 20
+  sleep 15
 done
 if [ "${install_attempt}" -ge 6 ]; then
   echo "Failed to install screenshot APK after retries" >&2
   exit 1
 fi
 
-adb logcat -c >/dev/null 2>&1 || true
-
-if try_capture_pass 120; then
+if try_capture_pass 75; then
   rm -f "${WORK_PNG}"
   exit 0
 fi
 
 echo "First capture pass failed; retrying after relaunch" >&2
-if try_capture_pass 90; then
+if try_capture_pass 45; then
   rm -f "${WORK_PNG}"
   exit 0
 fi

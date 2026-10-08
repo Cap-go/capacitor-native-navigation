@@ -769,10 +769,11 @@ window.addEventListener('pageshow', () => {
 void (async () => {
   applyScreenshotMode();
   if (screenshotMode) {
-    await SplashScreen.hide({ fadeOutDuration: 0 });
-    window.setTimeout(() => {
-      void SplashScreen.hide({ fadeOutDuration: 0 });
-    }, 1500);
+    try {
+      await SplashScreen.hide({ fadeOutDuration: 0 });
+    } catch {
+      // SplashScreen plugin may be omitted from screenshot APK builds.
+    }
   }
   render();
   await configureChrome();

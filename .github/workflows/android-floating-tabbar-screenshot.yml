@@ -95,9 +95,10 @@ jobs:
           api-level: 31
           target: google_apis
           arch: x86_64
+          profile: pixel_5
           cores: 2
           ram-size: 3072M
-          emulator-boot-timeout: 960
+          emulator-boot-timeout: 900
           avd-name: tabbar-screenshot-${{ github.run_id }}
           force-avd-creation: true
           disable-animations: true
