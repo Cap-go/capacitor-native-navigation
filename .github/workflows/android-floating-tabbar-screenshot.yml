@@ -90,7 +90,7 @@ jobs:
             ~/.android/avd
           key: android-emulator-api-34-google-apis-x86_64-pixel6-v3
       - name: Download screenshot APK
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: android-floating-tabbar-apk
           path: screenshot-apks
