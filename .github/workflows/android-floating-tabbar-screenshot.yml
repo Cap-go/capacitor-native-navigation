@@ -45,7 +45,7 @@ jobs:
           bun run build
           cd example-app
           VITE_SCREENSHOT_MODE=floating-tabbar bun run build
-          bunx cap sync android
+          VITE_SCREENSHOT_MODE=floating-tabbar bunx cap sync android
       - name: Assemble debug APK
         run: |
           cd example-app/android
@@ -67,7 +67,7 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     # API 34 emulator boot plus install verification can exceed 10 minutes on a cold runner.
-    timeout-minutes: 35
+    timeout-minutes: 50
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -103,7 +103,7 @@ jobs:
           cores: 2
           ram-size: 2048M
           emulator-boot-timeout: 1200
-          force-avd-creation: true
+          force-avd-creation: false
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot-save
           script: bash -lc 'chmod +x .github/scripts/capture-floating-tabbar-screenshot.sh && .github/scripts/capture-floating-tabbar-screenshot.sh screenshot-apks/app-debug.apk "${GITHUB_WORKSPACE}/android-floating-tabbar-after-full.png"'

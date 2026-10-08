@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -eu
 
+export DISPLAY="${DISPLAY:-:99}"
+
 PACKAGE="app.capgo.capacitor.navigation"
 ACTIVITY="${PACKAGE}/.MainActivity"
 APK_PATH="${1:?apk path required}"
@@ -47,7 +49,7 @@ swipe_content_into_view() {
 }
 
 app_is_foreground() {
-  adb shell dumpsys window 2>/dev/null | tr -d '\r' | grep -m1 "mCurrentFocus" | grep -q "${PACKAGE}"
+  adb shell dumpsys window 2>/dev/null | tr -d '\r' | grep "mCurrentFocus" | grep -q "${PACKAGE}"
 }
 
 screenshot_is_valid() {
@@ -57,7 +59,7 @@ screenshot_is_valid() {
 
 wait_for_valid_screenshot() {
   local attempt=0
-  local max_attempts=60
+  local max_attempts=90
   while [ "${attempt}" -lt "${max_attempts}" ]; do
     wake_display
     if ! app_is_foreground; then
@@ -84,7 +86,7 @@ wait_for_valid_screenshot() {
 
 adb wait-for-device
 adb shell true
-sleep 45
+sleep 25
 dismiss_blocking_dialogs
 adb shell settings put global package_verifier_enable 0
 adb shell settings put global verifier_verify_adb_installs 0
