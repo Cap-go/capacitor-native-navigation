@@ -134,6 +134,16 @@ html.screenshot-floating-tabbar .venue-card-bar {
   display: none;
 }
 
+.screenshot-ready-flag {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0.01;
+}
+
 .venue-card strong {
   position: absolute;
   left: 28px;

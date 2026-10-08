@@ -162,6 +162,19 @@ const applyScreenshotMode = () => {
   stack = ['home'];
   document.documentElement.classList.add('screenshot-floating-tabbar');
 };
+
+const markScreenshotReady = () => {
+  if (!screenshotMode) {
+    return;
+  }
+  document.title = 'screenshot-ready';
+  const flag = document.createElement('div');
+  flag.className = 'screenshot-ready-flag';
+  flag.textContent = 'screenshot-ready';
+  flag.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(flag);
+};
+
 const pages = {
   home: {
     title: 'Layouts',
@@ -373,6 +386,7 @@ const configureChrome = async () => {
   chromeConfigured = true;
   await updateNavbar();
   await updateTabbar();
+  markScreenshotReady();
 };
 
 const pageFor = (id) =>
