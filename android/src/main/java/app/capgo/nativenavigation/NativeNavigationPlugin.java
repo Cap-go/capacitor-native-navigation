@@ -81,6 +81,7 @@ public class NativeNavigationPlugin extends Plugin {
     private boolean tabbarVisible = false;
     private String contentInsetMode = "css";
     private GlassOptions defaultGlassOptions = GlassOptions.defaults();
+    private boolean configureSpecifiedGlassEffect = false;
     private GlassOptions navbarGlassOptions = GlassOptions.defaults();
     private GlassOptions tabbarGlassOptions = GlassOptions.defaults();
     private JSObject navbarGlassConfig;
@@ -121,7 +122,9 @@ public class NativeNavigationPlugin extends Plugin {
         runOnUiThread(() -> {
             enabled = call.getBoolean("enabled", true);
             contentInsetMode = call.getString("contentInsetMode", contentInsetMode);
-            defaultGlassOptions = GlassOptions.from(call.getObject("glass", null), defaultGlassOptions);
+            JSObject configureGlass = call.getObject("glass", null);
+            configureSpecifiedGlassEffect = configureGlass != null && configureGlass.has("effect");
+            defaultGlassOptions = GlassOptions.from(configureGlass, defaultGlassOptions);
             navbarGlassOptions = GlassOptions.from(navbarGlassConfig, defaultGlassOptions);
             tabbarGlassOptions = GlassOptions.from(tabbarGlassConfig, defaultGlassOptions);
             Double duration = call.getDouble("animationDuration");
@@ -1672,7 +1675,9 @@ public class NativeNavigationPlugin extends Plugin {
             }
         }
 
-        int tabbarFillColor = resolvedGlassOptions.isLiquidGlass() ? Color.TRANSPARENT : drawColor;
+        boolean glassBlurActive =
+            resolvedGlassOptions.isLiquidGlass() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S;
+        int tabbarFillColor = glassBlurActive ? Color.TRANSPARENT : drawColor;
         tabbar.setTabbarStyle(tabbarStyle, tabbarFillColor, centerIndex);
         applyTabbarContainerOutline();
     }
@@ -1681,7 +1686,11 @@ public class NativeNavigationPlugin extends Plugin {
         if (tabbarGlassConfig != null) {
             return GlassOptions.from(tabbarGlassConfig, defaultGlassOptions);
         }
-        if (!tabbarStyle.isCurve() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        boolean apiAtLeastS = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S;
+        if (
+            TabbarChromeSupport.shouldEnableDefaultLiquidGlass(apiAtLeastS, tabbarStyle.isCurve(), false)
+            && (!configureSpecifiedGlassEffect || defaultGlassOptions.isLiquidGlass())
+        ) {
             return GlassOptions.from(new JSObject().put("effect", "liquidGlass"), defaultGlassOptions);
         }
         return GlassOptions.from(null, defaultGlassOptions);
