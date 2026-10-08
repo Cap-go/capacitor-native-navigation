@@ -1,0 +1,94 @@
+name: Android floating tabbar screenshot
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - 'example-app/**'
+      - '.github/workflows/android-floating-tabbar-screenshot.yml'
+      - '.github/scripts/optimize-tabbar-screenshot.py'
+  push:
+    branches:
+      - cursor/android-floating-tabbar-glass
+
+jobs:
+  build_apks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.x
+      - uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: |
+          bun i
+          cd example-app && bun i
+      - name: Setup Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: zulu
+          java-version: 21
+      - name: Build plugin and screenshot example app
+        run: |
+          bun run build
+          cd example-app
+          VITE_SCREENSHOT_MODE=floating-tabbar bun run build
+          bunx cap sync android
+      - name: Assemble debug APK
+        run: |
+          cd example-app/android
+          chmod +x gradlew
+          ./gradlew :app:assembleDebug --no-daemon
+      - name: Stage APK for capture
+        run: |
+          mkdir -p screenshot-apks
+          cp example-app/android/app/build/outputs/apk/debug/app-debug.apk screenshot-apks/
+      - name: Upload screenshot APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-floating-tabbar-apk
+          path: screenshot-apks/app-debug.apk
+          if-no-files-found: error
+
+  capture_emulator:
+    needs: build_apks
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+      - name: Download screenshot APK
+        uses: actions/download-artifact@v4
+        with:
+          name: android-floating-tabbar-apk
+          path: screenshot-apks
+      - name: Capture floating tabbar on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          disableAnimations: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash -lc 'sleep 15 && adb install -r screenshot-apks/app-debug.apk && adb shell am force-stop app.capgo.capacitor.navigation && adb shell am start -W -n app.capgo.capacitor.navigation/.MainActivity && sleep 35 && adb exec-out screencap -p > "${GITHUB_WORKSPACE}/android-floating-tabbar-after-full.png" && test -s "${GITHUB_WORKSPACE}/android-floating-tabbar-after-full.png"'
+      - name: Resize and optimize screenshot
+        run: |
+          python3 -m pip install --user pillow
+          python3 .github/scripts/optimize-tabbar-screenshot.py
+          cp android-floating-tabbar-after-full.png docs/android-floating-tabbar-after-full.png
+      - name: Upload screenshot artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-floating-tabbar-screenshot
+          path: |
+            android-floating-tabbar-after-full.png
+            docs/android-floating-tabbar-after-300.png
+            docs/android-floating-tabbar-after-full.png
+          if-no-files-found: error

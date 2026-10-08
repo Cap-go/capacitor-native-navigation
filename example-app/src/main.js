@@ -5,6 +5,7 @@ import { NativeNavigation } from '@capgo/capacitor-native-navigation';
 
 const app = document.getElementById('app');
 const isWebPreview = Capacitor.getPlatform() === 'web';
+const screenshotMode = import.meta.env.VITE_SCREENSHOT_MODE === 'floating-tabbar';
 const topButtonStorageKey = 'native-navigation-top-button-visible';
 
 const readTopButtonPreference = () => {
@@ -149,6 +150,18 @@ const currentTabs = () => {
 };
 let topButtonVisible = readTopButtonPreference();
 let chromeConfigured = false;
+
+const applyScreenshotMode = () => {
+  if (!screenshotMode) {
+    return;
+  }
+  tabbarPreset = 'system';
+  shapeOverride = null;
+  route = 'home';
+  activeTab = 'home';
+  stack = ['home'];
+  document.documentElement.classList.add('screenshot-floating-tabbar');
+};
 const pages = {
   home: {
     title: 'Layouts',
@@ -720,5 +733,6 @@ window.addEventListener('pageshow', () => {
   void restoreChrome();
 });
 
+applyScreenshotMode();
 render();
 void configureChrome();
