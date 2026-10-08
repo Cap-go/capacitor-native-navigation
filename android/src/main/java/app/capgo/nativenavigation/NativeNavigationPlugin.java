@@ -36,6 +36,7 @@ import androidx.annotation.RequiresApi;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.graphics.PathParser;
+import androidx.core.widget.TextViewCompat;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -61,6 +62,11 @@ public class NativeNavigationPlugin extends Plugin {
 
     private static final int DEFAULT_NAVBAR_DP = 56;
     private static final int DEFAULT_TABBAR_DP = 64;
+    private static final int TAB_LABEL_TEXT_SP = 12;
+    private static final int TAB_CONTENT_PADDING_DP = 4;
+    private static final int INDICATOR_HORIZONTAL_PADDING_DP = 12;
+    private static final int INDICATOR_VERTICAL_PADDING_DP = 6;
+    private static final int INDICATOR_SLOT_INSET_DP = 2;
     private static final int DEFAULT_TRANSITION_MS = 350;
     private static final int MENU_ITEM_BASE = 10_000;
     private static final int DEFAULT_TABBAR_BACKGROUND_COLOR = Color.WHITE;
@@ -843,7 +849,7 @@ public class NativeNavigationPlugin extends Plugin {
     }
 
     private FrameLayout makeTabButton(NativeTabItem item, boolean selected, boolean showLabel, boolean icons, boolean center) {
-        FrameLayout button = new FrameLayout(getContext());
+        TabButton button = new TabButton(getContext());
         button.setClipChildren(false);
         button.setClipToPadding(false);
         button.setForeground(selectableItemBackground());
@@ -857,25 +863,33 @@ public class NativeNavigationPlugin extends Plugin {
             button.addView(centerFill, new FrameLayout.LayoutParams(centerFillDiameter, centerFillDiameter, Gravity.CENTER));
         }
 
+        Drawable currentIcon = selected && item.selectedIcon != null ? item.selectedIcon : item.icon;
+        boolean labelVisible = center ? showLabel && (currentIcon == null || !icons) : showLabel;
+        boolean iconVisible = icons && currentIcon != null;
+        // Measured with the bold selected style for every tab so the slots don't shift when the selection changes.
+        int contentWidth = indicatorContentWidth(item.title, labelVisible, iconVisible);
+        button.preferredWidth = contentWidth + dp(INDICATOR_HORIZONTAL_PADDING_DP + INDICATOR_SLOT_INSET_DP) * 2;
+
         if (!center && selected && !tabbarDisableIndicator) {
             GradientDrawable selectedBackground = new GradientDrawable();
-            selectedBackground.setShape(GradientDrawable.OVAL);
+            selectedBackground.setShape(GradientDrawable.RECTANGLE);
             selectedBackground.setColor(TabbarChromeSupport.resolveSelectedIndicatorColor(tabbarIndicatorColor, tintColor));
-            View selectedCircle = new View(getContext());
-            selectedCircle.setBackground(selectedBackground);
-            button.addView(selectedCircle, new FrameLayout.LayoutParams(dp(58), dp(58), Gravity.CENTER));
+            TabIndicatorView indicator = new TabIndicatorView(getContext(), contentWidth, indicatorContentHeight(labelVisible, iconVisible));
+            indicator.setBackground(selectedBackground);
+            button.addView(
+                indicator,
+                new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER)
+            );
         }
 
         LinearLayout content = new LinearLayout(getContext());
         content.setOrientation(LinearLayout.VERTICAL);
         content.setGravity(Gravity.CENTER);
-        content.setPadding(dp(4), dp(4), dp(4), dp(4));
+        content.setPadding(dp(TAB_CONTENT_PADDING_DP), dp(TAB_CONTENT_PADDING_DP), dp(TAB_CONTENT_PADDING_DP), dp(TAB_CONTENT_PADDING_DP));
         button.addView(content, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        Drawable currentIcon = selected && item.selectedIcon != null ? item.selectedIcon : item.icon;
-        boolean labelVisible = center ? showLabel && (currentIcon == null || !icons) : showLabel;
         int itemColor = center ? tabbarStyle.centerButtonIconColor : (selected ? tintColor : inactiveTintColor);
-        if (icons && currentIcon != null) {
+        if (iconVisible) {
             Drawable icon = currentIcon.mutate();
             icon.setTint(itemColor);
             ImageView image = new ImageView(getContext());
@@ -891,10 +905,13 @@ public class NativeNavigationPlugin extends Plugin {
             TextView label = new TextView(getContext());
             label.setText(item.title);
             label.setTextColor(itemColor);
-            label.setTextSize(12);
+            label.setTextSize(TAB_LABEL_TEXT_SP);
             label.setTypeface(Typeface.DEFAULT, selected ? Typeface.BOLD : Typeface.NORMAL);
             label.setGravity(Gravity.CENTER);
-            label.setSingleLine(true);
+            // maxLines rather than singleLine: autosize is ignored on a single-line (horizontally scrolling) TextView.
+            label.setMaxLines(1);
+            // Shrink long titles to fit the tab instead of cutting them off.
+            TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(label, 9, TAB_LABEL_TEXT_SP, 1, TypedValue.COMPLEX_UNIT_SP);
             content.addView(label, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(18)));
         }
 
@@ -922,6 +939,75 @@ public class NativeNavigationPlugin extends Plugin {
 
         button.setContentDescription(item.title);
         return button;
+    }
+
+    /** Width of the selected item's icon or label (whichever is wider), before the indicator padding. */
+    private int indicatorContentWidth(String title, boolean labelVisible, boolean iconVisible) {
+        int width = iconVisible ? dp(24) : 0;
+        if (labelVisible && title != null) {
+            Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            paint.setTypeface(Typeface.DEFAULT_BOLD);
+            paint.setTextSize(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, TAB_LABEL_TEXT_SP, getContext().getResources().getDisplayMetrics()));
+            width = Math.max(width, (int) Math.ceil(paint.measureText(title)));
+        }
+        return width;
+    }
+
+    private int indicatorContentHeight(boolean labelVisible, boolean iconVisible) {
+        int height = 0;
+        if (iconVisible) {
+            height += dp(24);
+        }
+        if (labelVisible) {
+            height += dp(18) + (iconVisible ? dp(2) : 0);
+        }
+        return height;
+    }
+
+    /** Tab item that reports how wide it wants to be, so the tabbar can size slots to their content. */
+    private static final class TabButton extends FrameLayout {
+
+        int preferredWidth = 0;
+
+        TabButton(Context context) {
+            super(context);
+        }
+    }
+
+    /** Selected-tab capsule that wraps the item's icon and label with padding, kept inside its tab slot. */
+    private static final class TabIndicatorView extends View {
+
+        private final int contentWidth;
+        private final int contentHeight;
+
+        TabIndicatorView(Context context, int contentWidth, int contentHeight) {
+            super(context);
+            this.contentWidth = contentWidth;
+            this.contentHeight = contentHeight;
+        }
+
+        @Override
+        protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+            int slotWidth = MeasureSpec.getSize(widthMeasureSpec);
+            int slotHeight = MeasureSpec.getSize(heightMeasureSpec);
+            int height = contentHeight + dp(INDICATOR_VERTICAL_PADDING_DP) * 2;
+            if (slotHeight > 0) {
+                height = Math.min(height, slotHeight);
+            }
+            int width = Math.max(height, contentWidth + dp(INDICATOR_HORIZONTAL_PADDING_DP) * 2);
+            if (slotWidth > 0) {
+                width = Math.min(width, slotWidth - dp(INDICATOR_SLOT_INSET_DP) * 2);
+            }
+            setMeasuredDimension(width, height);
+            Drawable background = getBackground();
+            if (background instanceof GradientDrawable) {
+                ((GradientDrawable) background).setCornerRadius(height / 2f);
+            }
+        }
+
+        private int dp(int value) {
+            return Math.round(value * getResources().getDisplayMetrics().density);
+        }
     }
 
     private Drawable iconFrom(JSONObject descriptor) {
@@ -1218,11 +1304,7 @@ public class NativeNavigationPlugin extends Plugin {
                 return;
             }
 
-            int count = Math.max(getChildCount(), 1);
-            int childWidth = width / count;
-            for (int index = 0; index < getChildCount(); index++) {
-                measureChildExact(getChildAt(index), childWidth, height);
-            }
+            measureRange(0, getChildCount(), width, height);
             setMeasuredDimension(width, height);
         }
 
@@ -1285,26 +1367,54 @@ public class NativeNavigationPlugin extends Plugin {
         }
 
         private void measureRange(int start, int end, int width, int height) {
-            int count = Math.max(0, end - start);
-            if (count == 0) {
-                return;
-            }
-            int childWidth = Math.max(0, width / count);
+            int[] widths = slotWidths(start, end, width);
             for (int index = start; index < end; index++) {
-                measureChildExact(getChildAt(index), childWidth, height);
+                measureChildExact(getChildAt(index), widths[index - start], height);
             }
         }
 
         private void layoutRange(int start, int end, int left, int top, int width, int height) {
-            int count = Math.max(0, end - start);
-            if (count == 0) {
-                return;
-            }
-            int childWidth = Math.max(0, width / count);
+            int[] widths = slotWidths(start, end, width);
+            int childLeft = left;
             for (int index = start; index < end; index++) {
-                int childLeft = left + (index - start) * childWidth;
+                int childWidth = widths[index - start];
                 getChildAt(index).layout(childLeft, top, childLeft + childWidth, top + height);
+                childLeft += childWidth;
             }
+        }
+
+        /**
+         * Each tab gets the width its content needs; leftover space is shared equally so the gaps stay even. When the
+         * bar is too narrow, slots shrink in proportion and long labels autosize down.
+         */
+        private int[] slotWidths(int start, int end, int width) {
+            int count = Math.max(0, end - start);
+            int[] widths = new int[count];
+            if (count == 0) {
+                return widths;
+            }
+            int total = 0;
+            for (int index = 0; index < count; index++) {
+                View child = getChildAt(start + index);
+                int preferred = child instanceof TabButton ? ((TabButton) child).preferredWidth : 0;
+                widths[index] = Math.max(preferred, 0);
+                total += widths[index];
+            }
+            if (total <= 0) {
+                for (int index = 0; index < count; index++) {
+                    widths[index] = width / count;
+                }
+            } else if (total <= width) {
+                int extra = (width - total) / count;
+                for (int index = 0; index < count; index++) {
+                    widths[index] += extra;
+                }
+            } else {
+                for (int index = 0; index < count; index++) {
+                    widths[index] = (int) ((long) widths[index] * width / total);
+                }
+            }
+            return widths;
         }
 
         private void measureChildExact(View child, int width, int height) {
@@ -2079,24 +2189,35 @@ public class NativeNavigationPlugin extends Plugin {
         return Math.max(0, rawNavigationBarInset() - contentRootBottomOffset());
     }
 
+    // API 30+ reads the currently visible bars so a hidden navigation bar (immersive mode) gives the space back.
     private int rawStatusBarInset() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            WindowInsets insets = getActivity().getWindow().getDecorView().getRootWindowInsets();
-            if (insets != null) {
-                return insets.getStableInsetTop();
+        WindowInsets insets = rootWindowInsets();
+        if (insets != null) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                return insets.getInsets(WindowInsets.Type.statusBars() | WindowInsets.Type.displayCutout()).top;
             }
+            return insets.getStableInsetTop();
         }
         return systemDimension("status_bar_height");
     }
 
     private int rawNavigationBarInset() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            WindowInsets insets = getActivity().getWindow().getDecorView().getRootWindowInsets();
-            if (insets != null) {
-                return insets.getStableInsetBottom();
+        WindowInsets insets = rootWindowInsets();
+        if (insets != null) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                return insets.getInsets(WindowInsets.Type.navigationBars()).bottom;
             }
+            return insets.getStableInsetBottom();
         }
         return systemDimension("navigation_bar_height");
+    }
+
+    private WindowInsets rootWindowInsets() {
+        Activity activity = getActivity();
+        if (activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return null;
+        }
+        return activity.getWindow().getDecorView().getRootWindowInsets();
     }
 
     private int contentRootTopOffset() {
@@ -2136,6 +2257,16 @@ public class NativeNavigationPlugin extends Plugin {
                 view.post(this::updateInsetsAndNotify);
             }
         });
+        // Showing or hiding a system bar changes the insets without necessarily moving the content root
+        // (edge-to-edge apps). A zero-size probe hears every inset dispatch without replacing anyone's listener.
+        View insetsProbe = new View(getContext());
+        insetsProbe.setOnApplyWindowInsetsListener((view, insets) -> {
+            if (navbarVisible || tabbarVisible) {
+                view.post(this::updateInsetsAndNotify);
+            }
+            return insets;
+        });
+        root.addView(insetsProbe, new FrameLayout.LayoutParams(0, 0));
     }
 
     private int systemDimension(String name) {
