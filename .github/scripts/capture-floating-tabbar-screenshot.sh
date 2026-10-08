@@ -6,20 +6,6 @@ ACTIVITY="${PACKAGE}/.MainActivity"
 APK_PATH="${1:?apk path required}"
 OUTPUT="${2:?output png path required}"
 
-wait_for_boot() {
-  local attempt=0
-  local max_attempts=120
-  while [ "${attempt}" -lt "${max_attempts}" ]; do
-    if adb shell getprop sys.boot_completed 2>/dev/null | grep -q '^1$'; then
-      return 0
-    fi
-    attempt=$((attempt + 1))
-    sleep 2
-  done
-  echo "Timed out waiting for emulator boot" >&2
-  return 1
-}
-
 wait_for_screenshot_ready() {
   if timeout 240 adb logcat -v brief | grep -m1 -q "NATIVE_NAV_SCREENSHOT_READY"; then
     return 0
@@ -35,8 +21,6 @@ wait_for_screenshot_ready() {
   adb shell dumpsys window windows 2>/dev/null | tail -60 >&2 || true
   return 1
 }
-
-wait_for_boot
 
 adb install -r "${APK_PATH}"
 adb shell am force-stop "${PACKAGE}"
