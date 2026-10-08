@@ -46,6 +46,10 @@ swipe_content_into_view() {
   adb shell input swipe "$((width * 3 / 4))" "$((height * 2 / 3))" "$((width / 8))" "$((height * 2 / 3))" 400
 }
 
+app_is_foreground() {
+  adb shell dumpsys window 2>/dev/null | tr -d '\r' | grep -m1 "mCurrentFocus" | grep -q "${PACKAGE}"
+}
+
 screenshot_is_valid() {
   local path="$1"
   [ -s "${path}" ] && python3 "${VERIFY_SCRIPT}" --relaxed "${path}" >/dev/null 2>&1
@@ -56,8 +60,11 @@ wait_for_valid_screenshot() {
   local max_attempts=60
   while [ "${attempt}" -lt "${max_attempts}" ]; do
     wake_display
+    if ! app_is_foreground; then
+      adb shell am start -W -n "${ACTIVITY}" >/dev/null 2>&1 || true
+    fi
     adb exec-out screencap -p > "${WORK_PNG}" || true
-    if screenshot_is_valid "${WORK_PNG}"; then
+    if app_is_foreground && screenshot_is_valid "${WORK_PNG}"; then
       return 0
     fi
     if [ $((attempt % 8)) -eq 7 ]; then
@@ -83,6 +90,7 @@ adb shell settings put global package_verifier_enable 0
 adb shell settings put global verifier_verify_adb_installs 0
 
 install_apk() {
+  adb uninstall "${PACKAGE}" >/dev/null 2>&1 || true
   local attempt=0
   while [ "${attempt}" -lt 6 ]; do
     if adb install -r "${APK_PATH}"; then
@@ -97,7 +105,7 @@ install_apk() {
 
 install_apk
 adb shell am force-stop "${PACKAGE}"
-adb logcat -c
+adb logcat -c >/dev/null 2>&1 || true
 adb shell am start -W -n "${ACTIVITY}"
 
 wait_for_valid_screenshot

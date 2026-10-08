@@ -1,5 +1,6 @@
 import './style.css';
 import { Capacitor } from '@capacitor/core';
+import { SplashScreen } from '@capacitor/splash-screen';
 import { CapacitorUpdater } from '@capgo/capacitor-updater';
 import { NativeNavigation } from '@capgo/capacitor-native-navigation';
 
@@ -767,6 +768,7 @@ window.addEventListener('pageshow', () => {
 applyScreenshotMode();
 render();
 if (screenshotMode) {
+  void SplashScreen.hide({ fadeOutDuration: 0 });
   markScreenshotReady();
 }
 void configureChrome();

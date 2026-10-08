@@ -16,11 +16,12 @@
     "cap:android": "cd .. && bun run example:android"
   },
   "dependencies": {
-    "@capacitor/core": "^8.5.2",
     "@capacitor/android": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
     "@capacitor/ios": "^8.5.2",
-    "@capgo/capacitor-updater": "^8.51.21",
-    "@capgo/capacitor-native-navigation": "file:.."
+    "@capacitor/splash-screen": "8.0.0",
+    "@capgo/capacitor-native-navigation": "file:..",
+    "@capgo/capacitor-updater": "^8.51.21"
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",

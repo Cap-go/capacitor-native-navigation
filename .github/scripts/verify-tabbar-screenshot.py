@@ -22,11 +22,18 @@ def main() -> None:
         raise SystemExit("Screenshot looks blank (display off or failed screencap).")
 
     orange_samples = 0
-    for y in range(int(height * 0.1), int(height * 0.72)):
+    for y in range(int(height * 0.12), int(height * 0.55)):
         for x in range(0, width, 3):
             red, green, blue = image.getpixel((x, y))
             if red > 175 and green > 65 and blue < 140 and red > green + 20:
                 orange_samples += 1
+
+    tab_tint_samples = 0
+    for y in range(height - 140, height - 20):
+        for x in range(0, width, 4):
+            red, green, blue = image.getpixel((x, y))
+            if blue > 170 and red < 120 and green < 170 and blue > red + 40:
+                tab_tint_samples += 1
 
     if orange_samples < 250:
         raise SystemExit(
@@ -34,8 +41,15 @@ def main() -> None:
             "Likely still on splash or home without content."
         )
 
+    if tab_tint_samples < 25:
+        raise SystemExit(
+            f"Screenshot missing native tabbar tint (only {tab_tint_samples} blue-ish samples near bottom)."
+        )
+
     if relaxed:
-        print(f"Verified relaxed screenshot content: orange_samples={orange_samples}")
+        print(
+            f"Verified relaxed screenshot content: orange_samples={orange_samples}, tab_tint_samples={tab_tint_samples}"
+        )
         return
 
     bottom_colors = {image.getpixel((x, height - 72)) for x in range(0, width, 12)}

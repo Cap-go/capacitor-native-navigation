@@ -85,7 +85,15 @@ jobs:
         with:
           name: android-floating-tabbar-apk
           path: screenshot-apks
+      - name: Start virtual display for screencap
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb
+          Xvfb :99 -screen 0 1280x720x24 &
+          sleep 2
       - name: Capture floating tabbar on emulator
+        env:
+          DISPLAY: :99
         id: emulator_capture
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
