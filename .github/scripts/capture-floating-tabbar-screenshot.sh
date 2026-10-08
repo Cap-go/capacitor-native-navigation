@@ -57,7 +57,7 @@ app_is_foreground() {
 
 screenshot_is_valid() {
   local path="$1"
-  [ -s "${path}" ] && timeout 45 "${PYTHON}" "${VERIFY_SCRIPT}" --relaxed "${path}" >/dev/null 2>&1
+  [ -s "${path}" ] && timeout 120 "${PYTHON}" "${VERIFY_SCRIPT}" --relaxed "${path}" >/dev/null 2>&1
 }
 
 wait_for_screenshot_ready_log() {

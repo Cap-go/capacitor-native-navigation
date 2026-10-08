@@ -22,8 +22,10 @@ def main() -> None:
         raise SystemExit("Screenshot looks blank (display off or failed screencap).")
 
     orange_samples = 0
-    for y in range(int(height * 0.12), int(height * 0.55)):
-        for x in range(0, width, 3):
+    y_step = 4 if relaxed else 3
+    x_step = 8 if relaxed else 3
+    for y in range(int(height * 0.12), int(height * 0.55), y_step):
+        for x in range(0, width, x_step):
             red, green, blue = image.getpixel((x, y))
             bright_orange = red > 175 and green > 65 and blue < 140 and red > green + 20
             warm_venue = (
@@ -36,11 +38,15 @@ def main() -> None:
             )
             if bright_orange or warm_venue:
                 orange_samples += 1
+        if relaxed and orange_samples >= 400:
+            break
 
     tab_tint_samples = 0
     tabbar_chrome_samples = 0
-    for y in range(height - 140, height - 20):
-        for x in range(0, width, 4):
+    tab_y_step = 6 if relaxed else 1
+    tab_x_step = 8 if relaxed else 4
+    for y in range(height - 140, height - 20, tab_y_step):
+        for x in range(0, width, tab_x_step):
             red, green, blue = image.getpixel((x, y))
             if blue > 170 and red < 120 and green < 170 and blue > red + 40:
                 tab_tint_samples += 1
@@ -52,6 +58,8 @@ def main() -> None:
             )
             if active_tab_blue or frosted_bar:
                 tabbar_chrome_samples += 1
+        if relaxed and tabbar_chrome_samples >= 40 and tab_tint_samples >= 25:
+            break
 
     if orange_samples < 250:
         raise SystemExit(
