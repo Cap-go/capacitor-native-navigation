@@ -65,7 +65,7 @@ jobs:
   capture_emulator:
     needs: build_apks
     if: github.event_name != 'pull_request'
-    runs-on: macos-14
+    runs-on: ubuntu-latest
     # API 34 emulator boot plus install verification can exceed 10 minutes on a cold runner.
     timeout-minutes: 35
     steps:
@@ -92,15 +92,15 @@ jobs:
           api-level: 34
           target: google_apis
           arch: x86_64
-          cores: 1
-          ram-size: 4096M
+          cores: 2
+          ram-size: 2048M
           emulator-boot-timeout: 1200
-          force-avd-creation: false
+          force-avd-creation: true
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot-save
           script: bash -lc 'chmod +x .github/scripts/capture-floating-tabbar-screenshot.sh && .github/scripts/capture-floating-tabbar-screenshot.sh screenshot-apks/app-debug.apk "${GITHUB_WORKSPACE}/android-floating-tabbar-after-full.png"'
       - name: Save Android emulator cache
-        if: steps.emulator_capture.outcome == 'success' && steps.emulator-cache.outputs.cache-hit != 'true'
+        if: runner.os == 'Linux' && steps.emulator_capture.outcome == 'success' && steps.emulator-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
           path: |
