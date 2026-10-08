@@ -6,12 +6,21 @@ import android.os.Build;
 
 public final class TabbarChromeSupport {
 
+    public static final int TABBAR_VISIBILITY_ANIMATION_MS = 200;
+
     public enum TabbarOutlineMode {
         FLOATING_SHAPE,
         CURVE_DEFAULT
     }
 
     private TabbarChromeSupport() {}
+
+    public static float tabbarSlideDistancePx(int containerHeight, int bottomMargin, int fallbackDistance) {
+        if (containerHeight > 0) {
+            return (float) containerHeight + (float) bottomMargin;
+        }
+        return (float) fallbackDistance;
+    }
 
     public static int resolveSelectedIndicatorColor(Integer explicitColor, int tintColor) {
         if (explicitColor != null) {

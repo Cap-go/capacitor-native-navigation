@@ -97,4 +97,28 @@ class NativeNavigationTests: XCTestCase {
         XCTAssertFalse(nativeNavigationUsesStationaryTransitionCrossfade(direction: "forward"))
         XCTAssertFalse(nativeNavigationUsesStationaryTransitionCrossfade(direction: "back"))
     }
+
+    func testAnimatedSystemTabbarVisibilityUsesSoftHide() {
+        XCTAssertTrue(
+            nativeNavigationPrefersAnimatedSystemTabbarVisibility(
+                animated: true,
+                usesSystemLiquidGlass: true,
+                shape: "floating"
+            )
+        )
+        XCTAssertFalse(
+            nativeNavigationPrefersAnimatedSystemTabbarVisibility(
+                animated: false,
+                usesSystemLiquidGlass: true,
+                shape: "floating"
+            )
+        )
+        XCTAssertFalse(
+            nativeNavigationPrefersAnimatedSystemTabbarVisibility(
+                animated: true,
+                usesSystemLiquidGlass: true,
+                shape: "curve"
+            )
+        )
+    }
 }
