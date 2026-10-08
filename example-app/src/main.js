@@ -24,9 +24,11 @@ const writeTopButtonPreference = (visible) => {
   }
 };
 
-void CapacitorUpdater.notifyAppReady().catch((error) => {
-  console.warn('Capgo updater notifyAppReady failed', error);
-});
+if (!screenshotMode) {
+  void CapacitorUpdater.notifyAppReady().catch((error) => {
+    console.warn('Capgo updater notifyAppReady failed', error);
+  });
+}
 
 const icons = {
   home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></svg>',

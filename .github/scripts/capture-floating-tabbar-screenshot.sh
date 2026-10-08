@@ -35,7 +35,7 @@ screenshot_is_valid() {
 
 wait_for_valid_screenshot() {
   local attempt=0
-  local max_attempts=100
+  local max_attempts=60
   while [ "${attempt}" -lt "${max_attempts}" ]; do
     adb exec-out screencap -p > "${WORK_PNG}" || true
     if screenshot_is_valid "${WORK_PNG}"; then

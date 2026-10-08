@@ -50,7 +50,7 @@ jobs:
         run: |
           cd example-app/android
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --no-daemon
+          VITE_SCREENSHOT_MODE=floating-tabbar ./gradlew :app:assembleDebug --no-daemon
       - name: Stage APK for capture
         run: |
           mkdir -p screenshot-apks
@@ -67,7 +67,7 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     # API 34 system image install plus boot can exceed 10 minutes on a cold runner.
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

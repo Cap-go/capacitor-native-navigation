@@ -3,12 +3,17 @@ apply plugin: 'com.android.application'
 android {
     namespace = "app.capgo.capacitor.navigation"
     compileSdk = rootProject.ext.compileSdkVersion
+    buildFeatures {
+        buildConfig = true
+    }
     defaultConfig {
         applicationId "app.capgo.capacitor.navigation"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+        def screenshotMode = System.getenv("VITE_SCREENSHOT_MODE") ?: ""
+        buildConfigField "String", "SCREENSHOT_MODE", "\"${screenshotMode}\""
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
