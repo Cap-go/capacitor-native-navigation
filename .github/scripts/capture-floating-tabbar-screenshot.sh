@@ -16,6 +16,19 @@ screen_size() {
   adb shell wm size 2>/dev/null | tr -d '\r' | awk '/Physical size/ {print $3; exit}'
 }
 
+dismiss_blocking_dialogs() {
+  local size width height
+  size="$(screen_size)"
+  if [ -z "${size}" ]; then
+    adb shell input keyevent 66 >/dev/null 2>&1 || true
+    return
+  fi
+  width="${size%x*}"
+  height="${size#*x}"
+  adb shell input tap "$((width / 2))" "$((height * 2 / 3))" >/dev/null 2>&1 || true
+  adb shell input keyevent 3 >/dev/null 2>&1 || true
+}
+
 swipe_content_into_view() {
   local size width height
   size="$(screen_size)"
@@ -41,6 +54,9 @@ wait_for_valid_screenshot() {
     if screenshot_is_valid "${WORK_PNG}"; then
       return 0
     fi
+    if [ $((attempt % 8)) -eq 7 ]; then
+      dismiss_blocking_dialogs
+    fi
     attempt=$((attempt + 1))
     sleep 3
   done
@@ -55,6 +71,8 @@ wait_for_valid_screenshot() {
 
 adb wait-for-device
 adb shell true
+sleep 45
+dismiss_blocking_dialogs
 adb shell settings put global package_verifier_enable 0
 adb shell settings put global verifier_verify_adb_installs 0
 
