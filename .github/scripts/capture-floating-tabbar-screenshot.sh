@@ -9,8 +9,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 VERIFY_SCRIPT="${REPO_ROOT}/.github/scripts/verify-tabbar-screenshot.py"
 WORK_PNG="${OUTPUT%.png}.work.png"
+VENV_DIR="${REPO_ROOT}/.github/.venv-tabbar-screenshot"
 
-python3 -m pip install --user pillow >/dev/null
+if [ ! -x "${VENV_DIR}/bin/python" ]; then
+  python3 -m venv "${VENV_DIR}"
+  "${VENV_DIR}/bin/pip" install -q pillow
+fi
+PYTHON="${VENV_DIR}/bin/python"
 
 screen_size() {
   adb shell wm size 2>/dev/null | tr -d '\r' | awk '/Physical size/ {print $3; exit}'
@@ -52,18 +57,32 @@ app_is_foreground() {
 
 screenshot_is_valid() {
   local path="$1"
-  [ -s "${path}" ] && python3 "${VERIFY_SCRIPT}" --relaxed "${path}" >/dev/null 2>&1
+  [ -s "${path}" ] && timeout 45 "${PYTHON}" "${VERIFY_SCRIPT}" --relaxed "${path}" >/dev/null 2>&1
+}
+
+wait_for_screenshot_ready_log() {
+  local attempt=0
+  local max_attempts=45
+  while [ "${attempt}" -lt "${max_attempts}" ]; do
+    if adb logcat -d -t 40 2>/dev/null | tr -d '\r' | grep -q 'NATIVE_NAV_SCREENSHOT_READY'; then
+      return 0
+    fi
+    attempt=$((attempt + 1))
+    sleep 2
+  done
+  echo "Screenshot readiness log not observed; continuing with pixel validation" >&2
+  return 0
 }
 
 wait_for_valid_screenshot() {
   local attempt=0
-  local max_attempts=60
+  local max_attempts=25
   while [ "${attempt}" -lt "${max_attempts}" ]; do
     wake_display
     if ! app_is_foreground; then
       adb shell am start -W -n "${ACTIVITY}" >/dev/null 2>&1 || true
     fi
-    adb exec-out screencap -p > "${WORK_PNG}" || true
+    timeout 30 adb exec-out screencap -p > "${WORK_PNG}" || true
     if app_is_foreground && screenshot_is_valid "${WORK_PNG}"; then
       return 0
     fi
@@ -84,7 +103,7 @@ wait_for_valid_screenshot() {
 
 adb wait-for-device
 adb shell true
-sleep 45
+sleep 20
 dismiss_blocking_dialogs
 adb shell settings put global package_verifier_enable 0
 adb shell settings put global verifier_verify_adb_installs 0
@@ -106,8 +125,9 @@ install_apk() {
 install_apk
 adb shell am force-stop "${PACKAGE}"
 adb logcat -c >/dev/null 2>&1 || true
-adb shell am start -W -n "${ACTIVITY}"
+adb shell am start -n "${ACTIVITY}"
 
+wait_for_screenshot_ready_log
 wait_for_valid_screenshot
 
 swipe_content_into_view
@@ -116,5 +136,5 @@ sleep 2
 wake_display
 adb exec-out screencap -p > "${OUTPUT}"
 test -s "${OUTPUT}"
-python3 "${VERIFY_SCRIPT}" "${OUTPUT}"
+"${PYTHON}" "${VERIFY_SCRIPT}" "${OUTPUT}"
 rm -f "${WORK_PNG}"

@@ -25,11 +25,9 @@ const writeTopButtonPreference = (visible) => {
   }
 };
 
-if (!screenshotMode) {
-  void CapacitorUpdater.notifyAppReady().catch((error) => {
-    console.warn('Capgo updater notifyAppReady failed', error);
-  });
-}
+void CapacitorUpdater.notifyAppReady().catch((error) => {
+  console.warn('Capgo updater notifyAppReady failed', error);
+});
 
 const icons = {
   home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></svg>',
@@ -396,8 +394,8 @@ const configureChrome = async () => {
   if (screenshotMode) {
     await Promise.race([
       applyNativeChrome(),
-      new Promise((resolve) => {
-        window.setTimeout(resolve, 45000);
+      new Promise((_, reject) => {
+        window.setTimeout(() => reject(new Error('Timed out waiting for native chrome')), 120000);
       }),
     ]);
     markScreenshotReady();
@@ -769,6 +767,7 @@ applyScreenshotMode();
 render();
 if (screenshotMode) {
   void SplashScreen.hide({ fadeOutDuration: 0 });
-  markScreenshotReady();
 }
-void configureChrome();
+void configureChrome().catch((error) => {
+  console.error('configureChrome failed', error);
+});
