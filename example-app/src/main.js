@@ -397,7 +397,7 @@ const configureChrome = async () => {
     await Promise.race([
       applyNativeChrome(),
       new Promise((_, reject) => {
-        window.setTimeout(() => reject(new Error('Timed out waiting for native chrome')), 45000);
+        window.setTimeout(() => reject(new Error('Timed out waiting for native chrome')), 120000);
       }),
     ]);
     markScreenshotReady();
@@ -770,4 +770,6 @@ render();
 if (screenshotMode) {
   void SplashScreen.hide({ fadeOutDuration: 0 });
 }
-void configureChrome();
+void configureChrome().catch((error) => {
+  console.error('configureChrome failed', error);
+});

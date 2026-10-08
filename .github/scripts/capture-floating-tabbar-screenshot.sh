@@ -57,7 +57,21 @@ app_is_foreground() {
 
 screenshot_is_valid() {
   local path="$1"
-  [ -s "${path}" ] && "${PYTHON}" "${VERIFY_SCRIPT}" --relaxed "${path}" >/dev/null 2>&1
+  [ -s "${path}" ] && timeout 45 "${PYTHON}" "${VERIFY_SCRIPT}" --relaxed "${path}" >/dev/null 2>&1
+}
+
+wait_for_screenshot_ready_log() {
+  local attempt=0
+  local max_attempts=90
+  while [ "${attempt}" -lt "${max_attempts}" ]; do
+    if adb logcat -d 2>/dev/null | tr -d '\r' | grep -q 'NATIVE_NAV_SCREENSHOT_READY'; then
+      return 0
+    fi
+    attempt=$((attempt + 1))
+    sleep 2
+  done
+  echo "Timed out waiting for NATIVE_NAV_SCREENSHOT_READY in logcat" >&2
+  return 1
 }
 
 wait_for_valid_screenshot() {
@@ -68,7 +82,7 @@ wait_for_valid_screenshot() {
     if ! app_is_foreground; then
       adb shell am start -W -n "${ACTIVITY}" >/dev/null 2>&1 || true
     fi
-    adb exec-out screencap -p > "${WORK_PNG}" || true
+    timeout 30 adb exec-out screencap -p > "${WORK_PNG}" || true
     if app_is_foreground && screenshot_is_valid "${WORK_PNG}"; then
       return 0
     fi
@@ -89,7 +103,7 @@ wait_for_valid_screenshot() {
 
 adb wait-for-device
 adb shell true
-sleep 45
+sleep 20
 dismiss_blocking_dialogs
 adb shell settings put global package_verifier_enable 0
 adb shell settings put global verifier_verify_adb_installs 0
@@ -111,8 +125,9 @@ install_apk() {
 install_apk
 adb shell am force-stop "${PACKAGE}"
 adb logcat -c >/dev/null 2>&1 || true
-adb shell am start -W -n "${ACTIVITY}"
+adb shell am start -n "${ACTIVITY}"
 
+wait_for_screenshot_ready_log
 wait_for_valid_screenshot
 
 swipe_content_into_view
