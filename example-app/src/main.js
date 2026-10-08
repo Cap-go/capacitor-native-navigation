@@ -173,6 +173,7 @@ const markScreenshotReady = () => {
   flag.textContent = 'screenshot-ready';
   flag.setAttribute('aria-hidden', 'true');
   document.body.appendChild(flag);
+  console.log('NATIVE_NAV_SCREENSHOT_READY');
 };
 
 const pages = {
