@@ -106,12 +106,17 @@ public class NativeNavigationPlugin extends Plugin {
     private final List<NativeTabItem> tabItems = new ArrayList<>();
     private int selectedTabIndex = 0;
     private boolean tabbarChromeHideAnimating = false;
+    private boolean tabbarDisableIndicator = false;
+    private Integer tabbarIndicatorColor = null;
 
     @Override
     public void load() {
         Activity activity = getActivity();
         if (activity != null) {
-            activity.runOnUiThread(this::enableEdgeToEdge);
+            activity.runOnUiThread(() -> {
+                enableEdgeToEdge();
+                watchContentRootBounds();
+            });
         }
     }
 
@@ -238,6 +243,8 @@ public class NativeNavigationPlugin extends Plugin {
             tabbarGlassOptions = GlassOptions.from(tabbarGlassConfig, defaultGlassOptions);
             badgeBackgroundColor = colorOption(call, colors, "badgeBackgroundColor", "badgeBackground", Color.rgb(255, 59, 48));
             badgeTextColor = colorOption(call, colors, "badgeTextColor", "badgeText", Color.WHITE);
+            tabbarDisableIndicator = call.getBoolean("disableIndicator", false);
+            tabbarIndicatorColor = colorOption(call, colors, "indicatorColor", "indicator", null);
 
             for (int sourceIndex = 0; sourceIndex < tabs.length(); sourceIndex++) {
                 JSONObject tab = tabs.optJSONObject(sourceIndex);
@@ -632,6 +639,68 @@ public class NativeNavigationPlugin extends Plugin {
         };
     }
 
+    private void applyTabbarContainerOutline() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP || tabbarContainer == null) {
+            return;
+        }
+
+        if (tabbarStyle.isCurve()) {
+            tabbarContainer.setClipToOutline(false);
+            tabbarContainer.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
+            if (tabbarGlassBackdrop != null) {
+                tabbarGlassBackdrop.setClipToOutline(false);
+                tabbarGlassBackdrop.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
+            }
+            if (tabbarGlassSurface != null) {
+                tabbarGlassSurface.setClipToOutline(false);
+                tabbarGlassSurface.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
+            }
+            return;
+        }
+
+        ViewOutlineProvider floatingOutlineProvider = floatingTabbarOutlineProvider();
+        tabbarContainer.setClipToOutline(false);
+        tabbarContainer.setOutlineProvider(floatingOutlineProvider);
+        if (tabbarGlassBackdrop != null) {
+            tabbarGlassBackdrop.setClipToOutline(true);
+            tabbarGlassBackdrop.setOutlineProvider(floatingOutlineProvider);
+        }
+        if (tabbarGlassSurface != null) {
+            tabbarGlassSurface.setClipToOutline(true);
+            tabbarGlassSurface.setOutlineProvider(floatingOutlineProvider);
+        }
+    }
+
+    private ViewOutlineProvider floatingTabbarOutlineProvider() {
+        return new ViewOutlineProvider() {
+            @Override
+            public void getOutline(View view, Outline outline) {
+                int width = view.getWidth();
+                int height = view.getHeight();
+                if (width <= 0 || height <= 0 || tabbar == null) {
+                    outline.setEmpty();
+                    return;
+                }
+
+                Path path = tabbar.chromeBackgroundPath(width, height);
+                if (TabbarChromeSupport.canApplyPathOutline()) {
+                    outline.setPath(path);
+                    return;
+                }
+
+                boolean hasDetachedTrailing = tabItems.stream().anyMatch((item) -> item.detachedTrailing);
+                int capsuleWidth = TabbarChromeSupport.floatingCapsuleWidth(
+                    width,
+                    dp(tabbarStyle.height),
+                    dp(10),
+                    hasDetachedTrailing
+                );
+                float radius = Math.min(dp(tabbarStyle.cornerRadius), height / 2f);
+                outline.setRoundRect(0, 0, capsuleWidth, height, radius);
+            }
+        };
+    }
+
     private Toolbar ensureToolbar() {
         if (toolbar != null) {
             return toolbar;
@@ -686,7 +755,6 @@ public class NativeNavigationPlugin extends Plugin {
         tabbarGlassSurface = new View(getContext());
         tabbarGlassBackdrop.setVisibility(View.GONE);
         tabbarGlassSurface.setVisibility(View.GONE);
-
         tabbar = new NativeTabbarLayout(getContext());
         tabbar.setClipChildren(false);
         tabbar.setClipToPadding(false);
@@ -710,6 +778,7 @@ public class NativeNavigationPlugin extends Plugin {
                 new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(DEFAULT_TABBAR_DP))
             );
         }
+        applyTabbarContainerOutline();
         return tabbar;
     }
 
@@ -776,10 +845,10 @@ public class NativeNavigationPlugin extends Plugin {
             button.addView(centerFill, new FrameLayout.LayoutParams(centerFillDiameter, centerFillDiameter, Gravity.CENTER));
         }
 
-        if (!center && selected) {
+        if (!center && selected && !tabbarDisableIndicator) {
             GradientDrawable selectedBackground = new GradientDrawable();
             selectedBackground.setShape(GradientDrawable.OVAL);
-            selectedBackground.setColor(withAlpha(tintColor, 34));
+            selectedBackground.setColor(TabbarChromeSupport.resolveSelectedIndicatorColor(tabbarIndicatorColor, tintColor));
             View selectedCircle = new View(getContext());
             selectedCircle.setBackground(selectedBackground);
             button.addView(selectedCircle, new FrameLayout.LayoutParams(dp(58), dp(58), Gravity.CENTER));
@@ -1233,25 +1302,21 @@ public class NativeNavigationPlugin extends Plugin {
             );
         }
 
+        Path chromeBackgroundPath(int width, int height) {
+            return backgroundPath(width, height);
+        }
+
         private Path backgroundPath(int width, int height) {
             Path path = new Path();
             if (!style.isCurve()) {
-                float radius = dp(style.cornerRadius);
-                int capsuleWidth = capsuleWidth(width);
-                path.addRoundRect(new RectF(0, 0, capsuleWidth, height), radius, radius, Path.Direction.CW);
-                int trailingIndex = detachedTrailingIndex();
-                if (trailingIndex >= 0) {
-                    float diameter = dp(style.height);
-                    float left = width - diameter;
-                    float top = (height - diameter) / 2f;
-                    path.addRoundRect(
-                        new RectF(left, top, left + diameter, top + diameter),
-                        diameter / 2f,
-                        diameter / 2f,
-                        Path.Direction.CW
-                    );
-                }
-                return path;
+                return TabbarChromeSupport.buildFloatingTabbarPath(
+                    width,
+                    height,
+                    dp(style.cornerRadius),
+                    dp(style.height),
+                    dp(10),
+                    detachedTrailingIndex() >= 0
+                );
             }
             float barTop = dp(style.barTop());
             float barHeight = dp(style.height);
@@ -1595,6 +1660,7 @@ public class NativeNavigationPlugin extends Plugin {
         }
 
         tabbar.setTabbarStyle(tabbarStyle, drawColor, centerIndex);
+        applyTabbarContainerOutline();
     }
 
     private int resolvedTabbarSurfaceColor() {
@@ -1778,7 +1844,9 @@ public class NativeNavigationPlugin extends Plugin {
         }
 
         if (tabbarBackdrop != null) {
-            int backdropHeight = tabbarLayoutVisible ? bottom + dp(tabbarStyle.bottomGap) : 0;
+            // Only the edge-to-edge curve bar extends its surface under the gesture area. A floating
+            // tabbar must leave the page visible below it, or it sits on a solid band.
+            int backdropHeight = tabbarLayoutVisible && tabbarStyle.isCurve() ? bottom + dp(tabbarStyle.bottomGap) : 0;
             FrameLayout.LayoutParams backdropParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 backdropHeight,
@@ -1804,6 +1872,15 @@ public class NativeNavigationPlugin extends Plugin {
             tabbarContainer.setLayoutParams(tabbarContainerParams);
             fillContainer(tabbarGlassBackdrop);
             fillContainer(tabbarGlassSurface);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                tabbarContainer.invalidateOutline();
+                if (tabbarGlassBackdrop != null) {
+                    tabbarGlassBackdrop.invalidateOutline();
+                }
+                if (tabbarGlassSurface != null) {
+                    tabbarGlassSurface.invalidateOutline();
+                }
+            }
         }
 
         if (tabbar != null) {
@@ -2068,7 +2145,21 @@ public class NativeNavigationPlugin extends Plugin {
         }
     }
 
+    /**
+     * The chrome is laid out inside {@code android.R.id.content}, so it only needs to clear the part of a
+     * system bar that actually overlaps that view. Capacitor's SystemBars plugin (default
+     * {@code insetsHandling: 'css'} without {@code viewport-fit=cover}) pads the decor view by the system bars,
+     * which already moves the content root clear of them; adding the full inset again doubled the gap.
+     */
     private int statusBarInset() {
+        return Math.max(0, rawStatusBarInset() - contentRootTopOffset());
+    }
+
+    private int navigationBarInset() {
+        return Math.max(0, rawNavigationBarInset() - contentRootBottomOffset());
+    }
+
+    private int rawStatusBarInset() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             WindowInsets insets = getActivity().getWindow().getDecorView().getRootWindowInsets();
             if (insets != null) {
@@ -2078,7 +2169,7 @@ public class NativeNavigationPlugin extends Plugin {
         return systemDimension("status_bar_height");
     }
 
-    private int navigationBarInset() {
+    private int rawNavigationBarInset() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             WindowInsets insets = getActivity().getWindow().getDecorView().getRootWindowInsets();
             if (insets != null) {
@@ -2086,6 +2177,45 @@ public class NativeNavigationPlugin extends Plugin {
             }
         }
         return systemDimension("navigation_bar_height");
+    }
+
+    private int contentRootTopOffset() {
+        FrameLayout root = contentRoot();
+        if (root == null || !root.isLaidOut()) {
+            return 0;
+        }
+        int[] location = new int[2];
+        root.getLocationInWindow(location);
+        return Math.max(0, location[1]);
+    }
+
+    private int contentRootBottomOffset() {
+        FrameLayout root = contentRoot();
+        Activity activity = getActivity();
+        if (root == null || activity == null || !root.isLaidOut()) {
+            return 0;
+        }
+        View decor = activity.getWindow().getDecorView();
+        int[] location = new int[2];
+        root.getLocationInWindow(location);
+        return Math.max(0, decor.getHeight() - (location[1] + root.getHeight()));
+    }
+
+    private void watchContentRootBounds() {
+        FrameLayout root = contentRoot();
+        if (root == null) {
+            return;
+        }
+        // SystemBars can add or drop its decor padding after load (for example once viewport-fit=cover is
+        // detected), which moves the content root without a call into this plugin. Re-run layout when it moves.
+        root.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+            if (top == oldTop && bottom == oldBottom && left == oldLeft && right == oldRight) {
+                return;
+            }
+            if (navbarVisible || tabbarVisible) {
+                view.post(this::updateInsetsAndNotify);
+            }
+        });
     }
 
     private int systemDimension(String name) {
