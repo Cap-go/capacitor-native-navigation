@@ -37,6 +37,10 @@ public final class TabbarChromeSupport {
         return mode == TabbarOutlineMode.FLOATING_SHAPE;
     }
 
+    public static boolean shouldEnableDefaultLiquidGlass(boolean apiAtLeastS, boolean isCurve, boolean glassSpecified) {
+        return !glassSpecified && !isCurve && apiAtLeastS;
+    }
+
     public static int floatingCapsuleWidth(int totalWidth, int barHeightPx, int trailingGapPx, boolean hasDetachedTrailing) {
         if (!hasDetachedTrailing) {
             return totalWidth;

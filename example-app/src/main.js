@@ -1,10 +1,12 @@
 import './style.css';
 import { Capacitor } from '@capacitor/core';
+import { SplashScreen } from '@capacitor/splash-screen';
 import { CapacitorUpdater } from '@capgo/capacitor-updater';
 import { NativeNavigation } from '@capgo/capacitor-native-navigation';
 
 const app = document.getElementById('app');
 const isWebPreview = Capacitor.getPlatform() === 'web';
+const screenshotMode = import.meta.env.VITE_SCREENSHOT_MODE === 'floating-tabbar';
 const topButtonStorageKey = 'native-navigation-top-button-visible';
 
 const readTopButtonPreference = () => {
@@ -23,9 +25,11 @@ const writeTopButtonPreference = (visible) => {
   }
 };
 
-void CapacitorUpdater.notifyAppReady().catch((error) => {
-  console.warn('Capgo updater notifyAppReady failed', error);
-});
+if (!screenshotMode) {
+  void CapacitorUpdater.notifyAppReady().catch((error) => {
+    console.warn('Capgo updater notifyAppReady failed', error);
+  });
+}
 
 const icons = {
   home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></svg>',
@@ -149,6 +153,32 @@ const currentTabs = () => {
 };
 let topButtonVisible = readTopButtonPreference();
 let chromeConfigured = false;
+
+const applyScreenshotMode = () => {
+  if (!screenshotMode) {
+    return;
+  }
+  tabbarPreset = 'system';
+  shapeOverride = null;
+  route = 'home';
+  activeTab = 'home';
+  stack = ['home'];
+  document.documentElement.classList.add('screenshot-floating-tabbar');
+};
+
+const markScreenshotReady = () => {
+  if (!screenshotMode) {
+    return;
+  }
+  document.title = 'screenshot-ready';
+  const flag = document.createElement('div');
+  flag.className = 'screenshot-ready-flag';
+  flag.textContent = 'screenshot-ready';
+  flag.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(flag);
+  console.log('NATIVE_NAV_SCREENSHOT_READY');
+};
+
 const pages = {
   home: {
     title: 'Layouts',
@@ -344,22 +374,37 @@ const setTopButtonVisible = (visible) => {
 };
 
 const configureChrome = async () => {
-  await NativeNavigation.configure({
-    contentInsetMode: 'css',
-    animationDuration: 360,
-    colors: {
-      tint: '#0a84ff',
-      inactiveTint: '#6b7280',
-    },
-    glass: {
-      effect: 'liquidGlass',
-      blurRadius: 18,
-      surfaceAlpha: 0.62,
-    },
-  });
-  chromeConfigured = true;
-  await updateNavbar();
-  await updateTabbar();
+  const applyNativeChrome = async () => {
+    await NativeNavigation.configure({
+      contentInsetMode: 'css',
+      animationDuration: 360,
+      colors: {
+        tint: '#0a84ff',
+        inactiveTint: '#6b7280',
+      },
+      glass: {
+        effect: 'liquidGlass',
+        blurRadius: 18,
+        surfaceAlpha: 0.62,
+      },
+    });
+    chromeConfigured = true;
+    await updateNavbar();
+    await updateTabbar();
+  };
+
+  if (screenshotMode) {
+    await Promise.race([
+      applyNativeChrome(),
+      new Promise((resolve) => {
+        window.setTimeout(resolve, 45000);
+      }),
+    ]);
+    markScreenshotReady();
+    return;
+  }
+
+  await applyNativeChrome();
 };
 
 const pageFor = (id) =>
@@ -720,5 +765,10 @@ window.addEventListener('pageshow', () => {
   void restoreChrome();
 });
 
+applyScreenshotMode();
 render();
+if (screenshotMode) {
+  void SplashScreen.hide({ fadeOutDuration: 0 });
+  markScreenshotReady();
+}
 void configureChrome();

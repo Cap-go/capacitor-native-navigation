@@ -116,6 +116,34 @@ body {
   background: #ff5b45;
 }
 
+html.screenshot-floating-tabbar .layout-presets,
+html.screenshot-floating-tabbar .demo-actions {
+  display: none;
+}
+
+html.screenshot-floating-tabbar .venue-strip {
+  min-height: calc(100dvh - var(--cap-native-navigation-top));
+  padding-top: 12px;
+}
+
+html.screenshot-floating-tabbar .venue-card-food {
+  background-image: linear-gradient(165deg, #ffb347 0%, #ff7a45 42%, #ff5b45 100%);
+}
+
+html.screenshot-floating-tabbar .venue-card-bar {
+  display: none;
+}
+
+.screenshot-ready-flag {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0.01;
+}
+
 .venue-card strong {
   position: absolute;
   left: 28px;

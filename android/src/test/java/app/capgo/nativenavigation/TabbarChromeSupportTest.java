@@ -74,4 +74,12 @@ public class TabbarChromeSupportTest {
         int gap = 10;
         assertEquals(254, TabbarChromeSupport.floatingCapsuleWidth(width, barHeight, gap, true));
     }
+
+    @Test
+    public void defaultLiquidGlassAppliesForFloatingOnApi31WithoutExplicitGlass() {
+        assertTrue(TabbarChromeSupport.shouldEnableDefaultLiquidGlass(true, false, false));
+        assertFalse(TabbarChromeSupport.shouldEnableDefaultLiquidGlass(true, true, false));
+        assertFalse(TabbarChromeSupport.shouldEnableDefaultLiquidGlass(true, false, true));
+        assertFalse(TabbarChromeSupport.shouldEnableDefaultLiquidGlass(false, false, false));
+    }
 }

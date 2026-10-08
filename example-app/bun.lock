@@ -8,6 +8,7 @@
         "@capacitor/android": "^8.5.2",
         "@capacitor/core": "^8.5.2",
         "@capacitor/ios": "^8.5.2",
+        "@capacitor/splash-screen": "8.0.0",
         "@capgo/capacitor-native-navigation": "file:..",
         "@capgo/capacitor-updater": "^8.51.21",
       },
@@ -39,6 +40,8 @@
     "@capacitor/docgen": ["@capacitor/docgen@0.3.1", "", { "dependencies": { "colorette": "^2.0.20", "github-slugger": "^1.5.0", "minimist": "^1.2.8", "typescript": "~4.2.4" }, "bin": { "docgen": "bin/docgen" } }, "sha512-WBdAUquQC4hiZOVk1YbY5Rs3vlDrNdCGt3KGnMa2dc2UBa91Q7PQ/jLW/oZyfVIfiXWu7t1KUhhM3MyiZepUrQ=="],
 
     "@capacitor/ios": ["@capacitor/ios@8.5.2", "", { "peerDependencies": { "@capacitor/core": "^8.5.0" } }, "sha512-eOT2S67AfTFG7KN0T3oxwAajrJz4rSye+ODfvChiwrk0F/+kWufFM1qU6cDjGJUOfwdAoeuEpZyWHSwZlu4GFg=="],
+
+    "@capacitor/splash-screen": ["@capacitor/splash-screen@8.0.0", "", { "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-zkFdUSd6C6gd3s3bIEgtO3DVjfwpaX5mmWU9er8xYTg47zr2toEkGtfyE6CPhhErG09fl4rCqrK5DfnGrXLh9w=="],
 
     "@capgo/capacitor-native-navigation": ["@capgo/capacitor-native-navigation@file:..", { "devDependencies": { "@capacitor/android": "^8.5.2", "@capacitor/cli": "^8.5.2", "@capacitor/core": "^8.5.2", "@capacitor/docgen": "^0.3.1", "@capacitor/ios": "^8.5.2", "@ionic/eslint-config": "^0.5.0", "@ionic/prettier-config": "^4.0.0", "@ionic/swiftlint-config": "^2.0.0", "@types/node": "^24.13.6", "eslint": "^10.11.0", "eslint-plugin-import": "^2.31.0", "husky": "^9.1.7", "prettier": "^3.9.8", "prettier-plugin-java": "^2.10.4", "prettier-pretty-check": "^0.2.0", "rimraf": "^6.1.0", "rollup": "^4.63.4", "swiftlint": "^2.0.0", "typescript": "6" }, "peerDependencies": { "@capacitor/core": ">=8.0.0" } }],
 
