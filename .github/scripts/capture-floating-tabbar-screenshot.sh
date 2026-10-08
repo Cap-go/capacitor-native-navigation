@@ -55,8 +55,23 @@ wait_for_valid_screenshot() {
 
 adb wait-for-device
 adb shell true
+adb shell settings put global package_verifier_enable 0
+adb shell settings put global verifier_verify_adb_installs 0
 
-adb install -r "${APK_PATH}"
+install_apk() {
+  local attempt=0
+  while [ "${attempt}" -lt 6 ]; do
+    if adb install -r "${APK_PATH}"; then
+      return 0
+    fi
+    attempt=$((attempt + 1))
+    sleep 20
+  done
+  echo "Failed to install screenshot APK after retries" >&2
+  return 1
+}
+
+install_apk
 adb shell am force-stop "${PACKAGE}"
 adb logcat -c
 adb shell am start -W -n "${ACTIVITY}"
