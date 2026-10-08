@@ -199,7 +199,9 @@ export interface NativeNavigationColors {
 
   /**
    * Optional background tint. Ignored on iOS 26+ so UIKit can preserve the
-   * system Liquid Glass navigation appearance.
+   * system Liquid Glass navigation appearance. On Android, alpha is honored.
+   * When `glass.effect` is not `liquidGlass`, floating tabbars still apply
+   * `glass.surfaceAlpha` (from `configure` / `setTabbar`) to the fill tint.
    */
   background?: string;
 
@@ -545,7 +547,9 @@ export interface NativeNavigationTabbarOptions {
 
   /**
    * Optional glass background behavior. Overrides `configure({ glass })` for
-   * this tabbar update.
+   * this tabbar update. On Android 12+, floating tabbars default to
+   * `liquidGlass` (live blur plus tint) when this field is omitted. Pass
+   * `effect: 'none'` for a flat translucent fill without blur.
    */
   glass?: NativeNavigationGlassOptions;
 
