@@ -42,7 +42,7 @@ jobs:
             /usr/local/lib/android/sdk/system-images/android-34
           key: android-34-google-apis-x86_64-v1
       - name: Install Android 34 emulator system image
-        if: steps.emulator-sysimage-cache.outputs.cache-hit != 'true'
+        if: github.event_name != 'pull_request' && steps.emulator-sysimage-cache.outputs.cache-hit != 'true'
         run: |
           yes | sdkmanager "system-images;android-34;google_apis;x86_64"
       - name: Build plugin and screenshot example app
