@@ -36,7 +36,7 @@ dismiss_blocking_dialogs() {
   width="${size%x*}"
   height="${size#*x}"
   adb shell input tap "$((width / 2))" "$((height * 2 / 3))" >/dev/null 2>&1 || true
-  adb shell input keyevent 3 >/dev/null 2>&1 || true
+  adb shell input keyevent 66 >/dev/null 2>&1 || true
 }
 
 swipe_content_into_view() {
@@ -57,12 +57,12 @@ app_is_foreground() {
 
 screenshot_is_valid() {
   local path="$1"
-  [ -s "${path}" ] && timeout 45 "${PYTHON}" "${VERIFY_SCRIPT}" --relaxed "${path}" >/dev/null 2>&1
+  [ -s "${path}" ] && timeout 120 "${PYTHON}" "${VERIFY_SCRIPT}" --relaxed "${path}" >/dev/null 2>&1
 }
 
 wait_for_screenshot_ready_log() {
   local attempt=0
-  local max_attempts=45
+  local max_attempts=90
   while [ "${attempt}" -lt "${max_attempts}" ]; do
     if adb logcat -d -t 40 2>/dev/null | tr -d '\r' | grep -q 'NATIVE_NAV_SCREENSHOT_READY'; then
       return 0
@@ -76,11 +76,13 @@ wait_for_screenshot_ready_log() {
 
 wait_for_valid_screenshot() {
   local attempt=0
-  local max_attempts=25
+  local max_attempts=40
   while [ "${attempt}" -lt "${max_attempts}" ]; do
     wake_display
     if ! app_is_foreground; then
-      adb shell am start -W -n "${ACTIVITY}" >/dev/null 2>&1 || true
+      dismiss_blocking_dialogs
+      launch_app 0
+      sleep 6
     fi
     timeout 30 adb exec-out screencap -p > "${WORK_PNG}" || true
     if app_is_foreground && screenshot_is_valid "${WORK_PNG}"; then
@@ -96,14 +98,45 @@ wait_for_valid_screenshot() {
   if [ -s "${WORK_PNG}" ]; then
     cp "${WORK_PNG}" "${REPO_ROOT}/android-floating-tabbar-capture-debug.png" || true
   fi
+  adb logcat -d | grep -Ei "AndroidRuntime|FATAL|capacitor.navigation|NATIVE_NAV" | tail -80 >&2 || true
   adb logcat -d | tail -120 >&2 || true
   adb shell dumpsys window windows 2>/dev/null | tail -60 >&2 || true
   return 1
 }
 
-adb wait-for-device
+wait_for_boot_completed() {
+  adb wait-for-device
+  local attempt=0
+  local max_attempts=180
+  while [ "${attempt}" -lt "${max_attempts}" ]; do
+    boot="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n' || true)"
+    if [ "${boot}" = "1" ]; then
+      return 0
+    fi
+    attempt=$((attempt + 1))
+    sleep 2
+  done
+  echo "Timed out waiting for sys.boot_completed" >&2
+  return 1
+}
+
+wait_for_boot_completed
 adb shell true
-sleep 20
+
+set_emulator_display_size() {
+  adb shell wm size 1080x1920 >/dev/null 2>&1 || true
+  adb shell wm density 420 >/dev/null 2>&1 || true
+}
+
+launch_app() {
+  local force_stop="${1:-0}"
+  if [ "${force_stop}" = "1" ]; then
+    adb shell am force-stop "${PACKAGE}" >/dev/null 2>&1 || true
+  fi
+  adb shell am start -W -n "${ACTIVITY}" >/dev/null 2>&1 || adb shell am start -n "${ACTIVITY}"
+}
+
+set_emulator_display_size
 dismiss_blocking_dialogs
 adb shell settings put global package_verifier_enable 0
 adb shell settings put global verifier_verify_adb_installs 0
@@ -123,9 +156,9 @@ install_apk() {
 }
 
 install_apk
-adb shell am force-stop "${PACKAGE}"
 adb logcat -c >/dev/null 2>&1 || true
-adb shell am start -n "${ACTIVITY}"
+launch_app 1
+sleep 12
 
 wait_for_screenshot_ready_log
 wait_for_valid_screenshot

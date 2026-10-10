@@ -1,5 +1,9 @@
 name: Android floating tabbar screenshot
 
+concurrency:
+  group: android-floating-tabbar-screenshot-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   workflow_dispatch:
   pull_request:
@@ -14,8 +18,6 @@ on:
   push:
     branches:
       - cursor/android-floating-tabbar-glass
-      - cursor/screenshot-tabbar-followup-be59
-      - cursor/android-translucent-tabbar-shadow-4485
 
 permissions:
   contents: read
@@ -66,7 +68,7 @@ jobs:
 
   capture_emulator:
     needs: build_apks
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.head_ref == 'cursor/screenshot-tabbar-followup-be59')
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -86,12 +88,23 @@ jobs:
           path: |
             /usr/local/lib/android/sdk/system-images
             ~/.android/avd
-          key: android-emulator-api-30-google-apis-x86_64-v1
+          key: android-emulator-api-34-google-apis-x86_64-pixel6-v3
       - name: Download screenshot APK
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: android-floating-tabbar-apk
           path: screenshot-apks
+      - name: Enable KVM for Android emulator
+        run: |
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+            sudo chmod 666 /dev/kvm || true
+            ls -l /dev/kvm
+          else
+            echo "No /dev/kvm on this runner; emulator will use software rendering."
+          fi
       - name: Start virtual display for screencap
         run: |
           sudo apt-get update -qq
@@ -107,13 +120,14 @@ jobs:
           api-level: 34
           target: google_apis
           arch: x86_64
-          cores: 2
-          ram-size: 2048M
+          cores: 4
+          ram-size: 4096M
+          profile: pixel_6
           emulator-boot-timeout: 1200
           force-avd-creation: ${{ steps.emulator-cache.outputs.cache-hit != 'true' }}
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot-save
-          script: bash -lc 'chmod +x .github/scripts/capture-floating-tabbar-screenshot.sh && timeout 900 .github/scripts/capture-floating-tabbar-screenshot.sh screenshot-apks/app-debug.apk "${GITHUB_WORKSPACE}/android-floating-tabbar-after-full.png"'
+          emulator-options: -no-window -gpu auto -noaudio -no-boot-anim -camera-back none
+          script: bash -lc 'chmod +x .github/scripts/capture-floating-tabbar-screenshot.sh && timeout 1500 .github/scripts/capture-floating-tabbar-screenshot.sh screenshot-apks/app-debug.apk "${GITHUB_WORKSPACE}/android-floating-tabbar-after-full.png"'
       - name: Save Android emulator cache
         if: runner.os == 'Linux' && steps.emulator-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v5
@@ -121,7 +135,7 @@ jobs:
           path: |
             /usr/local/lib/android/sdk/system-images
             ~/.android/avd
-          key: android-emulator-api-30-google-apis-x86_64-v1
+          key: android-emulator-api-34-google-apis-x86_64-pixel6-v3
       - name: Verify screenshot content
         if: steps.emulator_capture.outcome == 'success'
         run: |

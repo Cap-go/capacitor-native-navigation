@@ -380,11 +380,16 @@ const configureChrome = async () => {
         tint: '#0a84ff',
         inactiveTint: '#6b7280',
       },
-      glass: {
-        effect: 'liquidGlass',
-        blurRadius: 18,
-        surfaceAlpha: 0.62,
-      },
+      glass: screenshotMode
+        ? {
+            effect: 'none',
+            surfaceAlpha: 0.72,
+          }
+        : {
+            effect: 'liquidGlass',
+            blurRadius: 18,
+            surfaceAlpha: 0.62,
+          },
     });
     chromeConfigured = true;
     await updateNavbar();
