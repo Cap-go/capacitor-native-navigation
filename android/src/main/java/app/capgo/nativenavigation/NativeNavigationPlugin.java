@@ -133,7 +133,9 @@ public class NativeNavigationPlugin extends Plugin {
             enabled = call.getBoolean("enabled", true);
             contentInsetMode = call.getString("contentInsetMode", contentInsetMode);
             JSObject configureGlass = call.getObject("glass", null);
-            configureSpecifiedGlassEffect = configureGlass != null && configureGlass.has("effect");
+            if (configureGlass != null && configureGlass.has("effect")) {
+                configureSpecifiedGlassEffect = true;
+            }
             defaultGlassOptions = GlassOptions.from(configureGlass, defaultGlassOptions);
             navbarGlassOptions = GlassOptions.from(navbarGlassConfig, defaultGlassOptions);
             tabbarGlassOptions = resolveTabbarGlassOptions(call);
@@ -1751,13 +1753,20 @@ public class NativeNavigationPlugin extends Plugin {
         }
 
         GlassOptions resolvedGlassOptions = tabbarGlassOptions == null ? GlassOptions.defaults() : tabbarGlassOptions;
+        boolean glassBlurActive =
+            resolvedGlassOptions.isLiquidGlass() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S;
         if (resolvedGlassOptions.isLiquidGlass()) {
             if (tabbarContainer != null) {
                 tabbarContainer.setBackgroundColor(Color.TRANSPARENT);
             }
             if (tabbarGlassSurface != null) {
-                tabbarGlassSurface.setBackground(chromeBackgroundDrawable(drawColor, 0f));
-                tabbarGlassSurface.setVisibility(View.VISIBLE);
+                if (glassBlurActive) {
+                    tabbarGlassSurface.setBackground(chromeBackgroundDrawable(drawColor, 0f));
+                    tabbarGlassSurface.setVisibility(View.VISIBLE);
+                } else {
+                    tabbarGlassSurface.setBackground(null);
+                    tabbarGlassSurface.setVisibility(View.GONE);
+                }
             }
             if (tabbarGlassBackdrop != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 View webView = getBridge() == null ? null : getBridge().getWebView();
@@ -1779,8 +1788,6 @@ public class NativeNavigationPlugin extends Plugin {
             }
         }
 
-        boolean glassBlurActive =
-            resolvedGlassOptions.isLiquidGlass() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S;
         int tabbarFillColor = glassBlurActive ? Color.TRANSPARENT : drawColor;
         tabbar.setTabbarStyle(tabbarStyle, tabbarFillColor, centerIndex);
         applyTabbarContainerOutline();
