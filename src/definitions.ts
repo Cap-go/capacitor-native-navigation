@@ -307,6 +307,13 @@ export interface NativeNavigationBackButton {
 }
 
 /**
+ * How the native navbar reacts to WebView scroll direction.
+ *
+ * Defaults to `none` (current static navbar behavior).
+ */
+export type NativeNavigationNavbarScrollBehavior = 'none' | 'hideOnScrollDown' | 'revealOnScrollUp' | 'both';
+
+/**
  * Native navbar state.
  */
 export interface NativeNavigationNavbarOptions {
@@ -371,6 +378,44 @@ export interface NativeNavigationNavbarOptions {
    * Animate native navbar changes.
    */
   animated?: boolean;
+
+  /**
+   * Hide or reveal the navbar while web content scrolls. Native layers install
+   * scroll listeners on `window` and `#app` once, then rescan
+   * `[data-cap-native-navigation-scroll]` on each `setNavbar` call that enables
+   * scrolling. The web fallback listens on `window` and `#app` only; use
+   * `reportNavbarScroll()` for other roots.
+   *
+   * Defaults to `none`.
+   */
+  scrollBehavior?: NativeNavigationNavbarScrollBehavior;
+
+  /**
+   * Minimum vertical scroll delta (CSS px) before `scrollBehavior` reacts.
+   * Defaults to `8`.
+   */
+  scrollThreshold?: number;
+
+  /**
+   * When `true`, clears any scroll-collapsed navbar state before applying this
+   * update. Use on route changes; omit for same-screen chrome tweaks.
+   */
+  resetScrollCollapsed?: boolean;
+}
+
+/**
+ * Scroll sample reported from web content while `scrollBehavior` is active.
+ */
+export interface NativeNavigationNavbarScrollEvent {
+  /**
+   * Current vertical scroll offset in CSS pixels.
+   */
+  offsetY: number;
+
+  /**
+   * Change since the previous sample in CSS pixels.
+   */
+  deltaY: number;
 }
 
 /**
@@ -724,6 +769,13 @@ export interface NativeNavigationPlugin {
    * Render or update the native navbar.
    */
   setNavbar(options: NativeNavigationNavbarOptions): Promise<NativeNavigationInsetsResult>;
+
+  /**
+   * Report scroll samples for `scrollBehavior`. The native layer installs
+   * listeners on `window`, `#app`, and `[data-cap-native-navigation-scroll]`
+   * automatically; call this yourself only for other scroll roots.
+   */
+  reportNavbarScroll(options: NativeNavigationNavbarScrollEvent): Promise<void>;
 
   /**
    * Render or update the native tabbar.

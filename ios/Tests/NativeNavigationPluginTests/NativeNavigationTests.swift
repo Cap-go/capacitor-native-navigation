@@ -98,6 +98,42 @@ class NativeNavigationTests: XCTestCase {
         XCTAssertFalse(nativeNavigationUsesStationaryTransitionCrossfade(direction: "back"))
     }
 
+    func testNavbarScrollBehaviorBothHidesAndReveals() {
+        XCTAssertEqual(
+            nativeNavigationNavbarScrollAction(
+                behavior: .both,
+                offsetY: 120,
+                deltaY: 20,
+                threshold: 8,
+                isCollapsed: false
+            ),
+            .hide
+        )
+        XCTAssertEqual(
+            nativeNavigationNavbarScrollAction(
+                behavior: .both,
+                offsetY: 120,
+                deltaY: -20,
+                threshold: 8,
+                isCollapsed: true
+            ),
+            .reveal
+        )
+    }
+
+    func testNavbarScrollHideOnScrollDownRevealsAtTop() {
+        XCTAssertEqual(
+            nativeNavigationNavbarScrollAction(
+                behavior: .hideOnScrollDown,
+                offsetY: 0,
+                deltaY: 0,
+                threshold: 8,
+                isCollapsed: true
+            ),
+            .reveal
+        )
+    }
+
     func testAnimatedSystemTabbarVisibilityUsesSoftHide() {
         XCTAssertTrue(
             nativeNavigationPrefersAnimatedSystemTabbarVisibility(
