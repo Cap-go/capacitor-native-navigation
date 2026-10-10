@@ -89,6 +89,8 @@ await NativeNavigation.setNavbar({
   title: 'Home',
   subtitle: 'Native chrome',
   transparent: true,
+  scrollBehavior: 'both',
+  scrollThreshold: 8,
   backButton: { visible: false },
   rightItems: [
     {
@@ -271,6 +273,18 @@ await NativeNavigation.addListener('tabSelect', ({ id }) => {
 
 Pick one animation layer per navigation. For normal route pushes, let `@capgo/capacitor-transitions` animate the WebView pages and update native bars with `setNavbar` / `setTabbar`. For shared-element or zoom routes, use `beginZoomTransition` / `finishZoomTransition` from this plugin and skip the web page transition for that navigation.
 
+## Scroll-driven navbar
+
+Opt in per screen with `setNavbar({ scrollBehavior: 'both' })`. Defaults stay `none`, so existing apps keep static chrome. Native iOS and Android listen to scroll on `window`, `#app`, and any element marked with `data-cap-native-navigation-scroll`. Use `reportNavbarScroll()` only for custom scroll roots.
+
+The example app route **Scroll header demo** (home tile) shows a long list with `scrollBehavior: 'both'`.
+
+<!-- MARTIN_MEDIA: scroll-header.webp -->
+![Scroll-driven native navbar (screenshot placeholder)](docs/media/scroll-header.webp)
+
+<!-- MARTIN_MEDIA: scroll-header-demo.webp -->
+![Scroll-driven native navbar (animated demo placeholder)](docs/media/scroll-header-demo.webp)
+
 ## Zoom Transition
 
 ```typescript
@@ -392,6 +406,7 @@ npx cap sync
 
 * [`configure(...)`](#configure)
 * [`setNavbar(...)`](#setnavbar)
+* [`reportNavbarScroll(...)`](#reportnavbarscroll)
 * [`setTabbar(...)`](#settabbar)
 * [`beginTransition(...)`](#begintransition)
 * [`finishTransition(...)`](#finishtransition)
@@ -442,6 +457,23 @@ Render or update the native navbar.
 | **`options`** | <code><a href="#nativenavigationnavbaroptions">NativeNavigationNavbarOptions</a></code> |
 
 **Returns:** <code>Promise&lt;<a href="#nativenavigationinsetsresult">NativeNavigationInsetsResult</a>&gt;</code>
+
+--------------------
+
+
+### reportNavbarScroll(...)
+
+```typescript
+reportNavbarScroll(options: NativeNavigationNavbarScrollEvent) => Promise<void>
+```
+
+Report scroll samples for `scrollBehavior`. The native layer installs
+listeners on `window`, `#app`, and `[data-cap-native-navigation-scroll]`
+automatically; call this yourself only for other scroll roots.
+
+| Param         | Type                                                                                            |
+| ------------- | ----------------------------------------------------------------------------------------------- |
+| **`options`** | <code><a href="#nativenavigationnavbarscrollevent">NativeNavigationNavbarScrollEvent</a></code> |
 
 --------------------
 
@@ -678,20 +710,22 @@ Native glass background configuration.
 
 Native navbar state.
 
-| Prop              | Type                                                                                  | Description                                                                                                                              |
-| ----------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| **`hidden`**      | <code>boolean</code>                                                                  | Hide the native navbar.                                                                                                                  |
-| **`title`**       | <code>string</code>                                                                   | Main title.                                                                                                                              |
-| **`subtitle`**    | <code>string</code>                                                                   | Secondary title where supported by the platform.                                                                                         |
-| **`large`**       | <code>boolean</code>                                                                  | Prefer a large iOS title style.                                                                                                          |
-| **`transparent`** | <code>boolean</code>                                                                  | Prefer transparent/scroll-edge style.                                                                                                    |
-| **`blurEffect`**  | <code><a href="#nativenavigationblureffect">NativeNavigationBlurEffect</a></code>     | iOS blur/material effect for the navbar background when glass is not available. Defaults to `systemChromeMaterial` for transparent bars. |
-| **`glass`**       | <code><a href="#nativenavigationglassoptions">NativeNavigationGlassOptions</a></code> | Optional glass background behavior. Overrides `configure({ glass })` for this navbar update.                                             |
-| **`backButton`**  | <code><a href="#nativenavigationbackbutton">NativeNavigationBackButton</a></code>     | Back button state.                                                                                                                       |
-| **`leftItems`**   | <code>NativeNavigationBarButton[]</code>                                              | Left-side action buttons.                                                                                                                |
-| **`rightItems`**  | <code>NativeNavigationBarButton[]</code>                                              | Right-side action buttons.                                                                                                               |
-| **`colors`**      | <code><a href="#nativenavigationcolors">NativeNavigationColors</a></code>             | Navbar color hints.                                                                                                                      |
-| **`animated`**    | <code>boolean</code>                                                                  | Animate native navbar changes.                                                                                                           |
+| Prop                  | Type                                                                                                  | Description                                                                                                                                                                     |
+| --------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`hidden`**          | <code>boolean</code>                                                                                  | Hide the native navbar.                                                                                                                                                         |
+| **`title`**           | <code>string</code>                                                                                   | Main title.                                                                                                                                                                     |
+| **`subtitle`**        | <code>string</code>                                                                                   | Secondary title where supported by the platform.                                                                                                                                |
+| **`large`**           | <code>boolean</code>                                                                                  | Prefer a large iOS title style.                                                                                                                                                 |
+| **`transparent`**     | <code>boolean</code>                                                                                  | Prefer transparent/scroll-edge style.                                                                                                                                           |
+| **`blurEffect`**      | <code><a href="#nativenavigationblureffect">NativeNavigationBlurEffect</a></code>                     | iOS blur/material effect for the navbar background when glass is not available. Defaults to `systemChromeMaterial` for transparent bars.                                        |
+| **`glass`**           | <code><a href="#nativenavigationglassoptions">NativeNavigationGlassOptions</a></code>                 | Optional glass background behavior. Overrides `configure({ glass })` for this navbar update.                                                                                    |
+| **`backButton`**      | <code><a href="#nativenavigationbackbutton">NativeNavigationBackButton</a></code>                     | Back button state.                                                                                                                                                              |
+| **`leftItems`**       | <code>NativeNavigationBarButton[]</code>                                                              | Left-side action buttons.                                                                                                                                                       |
+| **`rightItems`**      | <code>NativeNavigationBarButton[]</code>                                                              | Right-side action buttons.                                                                                                                                                      |
+| **`colors`**          | <code><a href="#nativenavigationcolors">NativeNavigationColors</a></code>                             | Navbar color hints.                                                                                                                                                             |
+| **`animated`**        | <code>boolean</code>                                                                                  | Animate native navbar changes.                                                                                                                                                  |
+| **`scrollBehavior`**  | <code><a href="#nativenavigationnavbarscrollbehavior">NativeNavigationNavbarScrollBehavior</a></code> | Hide or reveal the navbar while web content scrolls. Native layers install scroll listeners on `window`, `#app`, and `[data-cap-native-navigation-scroll]`. Defaults to `none`. |
+| **`scrollThreshold`** | <code>number</code>                                                                                   | Minimum vertical scroll delta (CSS px) before `scrollBehavior` reacts. Defaults to `8`.                                                                                         |
 
 
 #### NativeNavigationBackButton
@@ -730,6 +764,16 @@ because icons are rendered by native UI.
 | **`template`** | <code>boolean</code>                                              | When `true`, native tint colors are applied to the rendered SVG/image. Defaults to `true`.                                                                                                                                         |
 | **`ios`**      | <code>{ sfSymbol?: string; image?: string; svg?: string; }</code> | iOS-specific SF Symbol, bundled image name, or inline SVG.                                                                                                                                                                         |
 | **`android`**  | <code>{ resource?: string; image?: string; svg?: string; }</code> | Android-specific drawable resource, asset name, or inline SVG.                                                                                                                                                                     |
+
+
+#### NativeNavigationNavbarScrollEvent
+
+Scroll sample reported from web content while `scrollBehavior` is active.
+
+| Prop          | Type                | Description                                     |
+| ------------- | ------------------- | ----------------------------------------------- |
+| **`offsetY`** | <code>number</code> | Current vertical scroll offset in CSS pixels.   |
+| **`deltaY`**  | <code>number</code> | Change since the previous sample in CSS pixels. |
 
 
 #### NativeNavigationTabbarOptions
@@ -930,6 +974,15 @@ Native glass background rendering preference.
 Native material/blur effect preference.
 
 <code>'none' | 'systemDefault' | 'extraLight' | 'light' | 'dark' | 'regular' | 'prominent' | 'systemUltraThinMaterial' | 'systemThinMaterial' | 'systemMaterial' | 'systemThickMaterial' | 'systemChromeMaterial' | 'systemUltraThinMaterialLight' | 'systemThinMaterialLight' | 'systemMaterialLight' | 'systemThickMaterialLight' | 'systemChromeMaterialLight' | 'systemUltraThinMaterialDark' | 'systemThinMaterialDark' | 'systemMaterialDark' | 'systemThickMaterialDark' | 'systemChromeMaterialDark'</code>
+
+
+#### NativeNavigationNavbarScrollBehavior
+
+How the native navbar reacts to WebView scroll direction.
+
+Defaults to `none` (current static navbar behavior).
+
+<code>'none' | 'hideOnScrollDown' | 'revealOnScrollUp' | 'both'</code>
 
 
 #### NativeNavigationTabRole

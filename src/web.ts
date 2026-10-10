@@ -7,6 +7,7 @@ import type {
   NativeNavigationInsets,
   NativeNavigationInsetsResult,
   NativeNavigationNavbarOptions,
+  NativeNavigationNavbarScrollEvent,
   NativeNavigationPlugin,
   NativeNavigationTabbarOptions,
   NativeNavigationTransitionDirection,
@@ -27,6 +28,9 @@ export class NativeNavigationWeb extends WebPlugin implements NativeNavigationPl
   private navbar: NativeNavigationNavbarOptions = { hidden: true };
   private tabbar: NativeNavigationTabbarOptions = { hidden: true };
   private activeTransition: NativeNavigationTransitionResult | null = null;
+  private navbarScrollCollapsed = false;
+  private navbarScrollSamples = new Map<string, number>();
+  private navbarScrollListeners: { target: EventTarget; listener: () => void }[] = [];
 
   async configure(options: NativeNavigationConfigureOptions = {}): Promise<NativeNavigationInsetsResult> {
     this.config = {
@@ -57,7 +61,13 @@ export class NativeNavigationWeb extends WebPlugin implements NativeNavigationPl
         ...options.glass,
       },
     };
+    this.configureNavbarScrollListener();
     return this.applyInsets();
+  }
+
+  async reportNavbarScroll(options: NativeNavigationNavbarScrollEvent): Promise<void> {
+    this.applyNavbarScrollSample(options.offsetY, options.deltaY);
+    await this.applyInsets();
   }
 
   async setTabbar(options: NativeNavigationTabbarOptions): Promise<NativeNavigationInsetsResult> {
@@ -136,17 +146,81 @@ export class NativeNavigationWeb extends WebPlugin implements NativeNavigationPl
     return Math.ceil(height + bottomGap + centerButtonLift);
   }
 
+  private configureNavbarScrollListener(): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    for (const binding of this.navbarScrollListeners) {
+      binding.target.removeEventListener('scroll', binding.listener);
+    }
+    this.navbarScrollListeners = [];
+    this.navbarScrollSamples.clear();
+
+    const behavior = this.navbar.scrollBehavior ?? 'none';
+    if (behavior === 'none' || this.navbar.hidden === true) {
+      this.navbarScrollCollapsed = false;
+      return;
+    }
+
+    const bind = (key: string, target: EventTarget, readOffset: () => number) => {
+      const listener = () => {
+        const offsetY = readOffset();
+        const previous = this.navbarScrollSamples.get(key) ?? offsetY;
+        const deltaY = offsetY - previous;
+        this.navbarScrollSamples.set(key, offsetY);
+        this.applyNavbarScrollSample(offsetY, deltaY);
+        void this.applyInsets();
+      };
+      target.addEventListener('scroll', listener, { passive: true });
+      this.navbarScrollListeners.push({ target, listener });
+    };
+
+    bind('window', window, () => window.scrollY);
+    const app = document.getElementById('app');
+    if (app) {
+      bind('app', app, () => app.scrollTop);
+    }
+  }
+
+  private applyNavbarScrollSample(offsetY: number, deltaY: number): void {
+    const behavior = this.navbar.scrollBehavior ?? 'none';
+    if (behavior === 'none') {
+      return;
+    }
+
+    const threshold = this.navbar.scrollThreshold ?? 8;
+    const atTop = offsetY <= threshold;
+    let nextCollapsed = this.navbarScrollCollapsed;
+
+    if (atTop && nextCollapsed) {
+      nextCollapsed = false;
+    } else if (deltaY > threshold) {
+      if (behavior === 'hideOnScrollDown' || behavior === 'both') {
+        nextCollapsed = true;
+      }
+    } else if (deltaY < -threshold) {
+      if (behavior === 'revealOnScrollUp' || behavior === 'both') {
+        nextCollapsed = false;
+      }
+    }
+
+    this.navbarScrollCollapsed = nextCollapsed;
+  }
+
   private applyInsets(): NativeNavigationInsetsResult {
     const enabled = this.config.enabled !== false;
     const navbarVisible = enabled && this.navbar.hidden !== true;
     const tabbarVisible = enabled && this.tabbar.hidden !== true;
     const tabbarHeight = tabbarVisible ? this.currentTabbarHeight() : 0;
+    const navbarChromeHeight =
+      navbarVisible && !this.navbarScrollCollapsed ? DEFAULT_NAVBAR_HEIGHT : navbarVisible ? 0 : 0;
     const insets: NativeNavigationInsets = {
-      top: navbarVisible ? DEFAULT_NAVBAR_HEIGHT : 0,
+      top: navbarVisible ? (this.navbarScrollCollapsed ? 0 : DEFAULT_NAVBAR_HEIGHT) : 0,
       right: 0,
       bottom: tabbarHeight,
       left: 0,
-      navbarHeight: navbarVisible ? DEFAULT_NAVBAR_HEIGHT : 0,
+      navbarHeight: navbarChromeHeight,
       tabbarHeight,
     };
 
@@ -158,6 +232,11 @@ export class NativeNavigationWeb extends WebPlugin implements NativeNavigationPl
       root.style.setProperty('--cap-native-navigation-left', `${insets.left}px`);
       root.style.setProperty('--cap-native-navbar-height', `${insets.navbarHeight}px`);
       root.style.setProperty('--cap-native-tabbar-height', `${insets.tabbarHeight}px`);
+      if (this.navbar.scrollBehavior && this.navbar.scrollBehavior !== 'none') {
+        root.classList.toggle('cap-native-navbar-scroll-collapsed', this.navbarScrollCollapsed);
+      } else {
+        root.classList.remove('cap-native-navbar-scroll-collapsed');
+      }
     }
 
     const event = { insets };

@@ -92,6 +92,8 @@ export function defineNativeNavigationElements(): void {
         'colors',
         'glass',
         'animated',
+        'scroll-behavior',
+        'scroll-threshold',
       ];
     }
 
@@ -122,6 +124,11 @@ export function defineNativeNavigationElements(): void {
         colors: parseJsonAttribute(this, 'colors', undefined as NativeNavigationNavbarOptions['colors']),
         glass: parseJsonAttribute(this, 'glass', undefined as NativeNavigationNavbarOptions['glass']),
         animated: parseBoolean(this.getAttribute('animated')),
+        scrollBehavior: typedAttribute<NonNullable<NativeNavigationNavbarOptions['scrollBehavior']>>(
+          this,
+          'scroll-behavior',
+        ),
+        scrollThreshold: Number(this.getAttribute('scroll-threshold')) || undefined,
       };
 
       const NativeNavigation = await getNativeNavigation();

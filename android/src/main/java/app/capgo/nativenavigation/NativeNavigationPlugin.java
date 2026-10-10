@@ -84,6 +84,9 @@ public class NativeNavigationPlugin extends Plugin {
     private ImageView transitionSnapshot;
     private boolean enabled = true;
     private boolean navbarVisible = false;
+    private NavbarScrollSupport.ScrollBehavior navbarScrollBehavior = NavbarScrollSupport.ScrollBehavior.NONE;
+    private float navbarScrollThreshold = 8f;
+    private boolean navbarScrollCollapsed = false;
     private boolean tabbarVisible = false;
     private String contentInsetMode = "css";
     private GlassOptions defaultGlassOptions = GlassOptions.defaults();
@@ -170,6 +173,7 @@ public class NativeNavigationPlugin extends Plugin {
         runOnUiThread(() -> {
             if (!enabled) {
                 navbarVisible = false;
+                stopNavbarScrollObservation(true);
                 updateInsetsAndNotify();
                 call.resolve(insetsResult());
                 return;
@@ -181,6 +185,7 @@ public class NativeNavigationPlugin extends Plugin {
                 if (navbarContainer != null) {
                     navbarContainer.setVisibility(View.GONE);
                 }
+                stopNavbarScrollObservation(true);
                 updateInsetsAndNotify();
                 call.resolve(insetsResult());
                 return;
@@ -211,9 +216,24 @@ public class NativeNavigationPlugin extends Plugin {
             navbarGlassOptions = GlassOptions.from(navbarGlassConfig, defaultGlassOptions);
             applyToolbarColors(nativeToolbar, colors);
             navbarContainer.setVisibility(View.VISIBLE);
+            configureNavbarScrollBehavior(call);
             layoutChrome();
             updateInsetsAndNotify();
             call.resolve(insetsResult());
+        });
+    }
+
+    @PluginMethod
+    public void reportNavbarScroll(PluginCall call) {
+        runOnUiThread(() -> {
+            if (navbarScrollBehavior == NavbarScrollSupport.ScrollBehavior.NONE || !navbarVisible) {
+                call.resolve();
+                return;
+            }
+            float offsetY = call.getFloat("offsetY", 0f);
+            float deltaY = call.getFloat("deltaY", 0f);
+            handleNavbarScroll(offsetY, deltaY);
+            call.resolve();
         });
     }
 
@@ -1961,7 +1981,8 @@ public class NativeNavigationPlugin extends Plugin {
         }
         int status = statusBarInset();
         int bottom = navigationBarInset();
-        int navbarHeight = navbarVisible ? status + dp(DEFAULT_NAVBAR_DP) : 0;
+        int navbarToolbar = navbarScrollCollapsed ? 0 : dp(DEFAULT_NAVBAR_DP);
+        int navbarHeight = navbarVisible ? status + navbarToolbar : 0;
         int tabbarHeight = dp(tabbarStyle.totalHeight());
         boolean tabbarLayoutVisible = tabbarVisible || tabbarChromeHideAnimating;
         int tabbarBottomMargin = tabbarLayoutVisible ? bottom + dp(tabbarStyle.bottomGap) : bottom;
@@ -2180,10 +2201,103 @@ public class NativeNavigationPlugin extends Plugin {
         getBridge().getWebView().evaluateJavascript(script, null);
     }
 
+    private void configureNavbarScrollBehavior(PluginCall call) {
+        navbarScrollBehavior = NavbarScrollSupport.parseBehavior(call.getString("scrollBehavior"));
+        Double threshold = call.getDouble("scrollThreshold");
+        if (threshold != null) {
+            navbarScrollThreshold = threshold.floatValue();
+        }
+
+        if (navbarScrollBehavior == NavbarScrollSupport.ScrollBehavior.NONE || !navbarVisible) {
+            stopNavbarScrollObservation(true);
+            return;
+        }
+
+        startNavbarScrollObservation();
+    }
+
+    private void startNavbarScrollObservation() {
+        if (getBridge() == null || getBridge().getWebView() == null) {
+            return;
+        }
+        String script =
+            "(function(){" +
+            "if(window.__capNativeNavigationScrollBound){return;}" +
+            "window.__capNativeNavigationScrollBound=true;" +
+            "const plugin=window.Capacitor?.Plugins?.NativeNavigation;" +
+            "if(!plugin?.reportNavbarScroll){return;}" +
+            "const samples=new WeakMap();" +
+            "const bind=(target)=>{" +
+            "if(!target||target.__capNativeNavigationScrollListener){return;}" +
+            "target.__capNativeNavigationScrollListener=true;" +
+            "target.addEventListener('scroll',()=>{" +
+            "const offsetY=target===window?window.scrollY:target.scrollTop;" +
+            "const previous=samples.get(target)??offsetY;" +
+            "const deltaY=offsetY-previous;" +
+            "samples.set(target,offsetY);" +
+            "plugin.reportNavbarScroll({offsetY,deltaY});" +
+            "},{passive:true});" +
+            "};" +
+            "bind(window);" +
+            "bind(document.getElementById('app'));" +
+            "document.querySelectorAll('[data-cap-native-navigation-scroll]').forEach((node)=>bind(node));" +
+            "})();";
+        getBridge().getWebView().evaluateJavascript(script, null);
+    }
+
+    private void stopNavbarScrollObservation(boolean resetCollapsed) {
+        if (resetCollapsed) {
+            setNavbarScrollCollapsed(false, false);
+        }
+    }
+
+    private void handleNavbarScroll(float offsetY, float deltaY) {
+        NavbarScrollSupport.ScrollAction action = NavbarScrollSupport.scrollAction(
+            navbarScrollBehavior,
+            offsetY,
+            deltaY,
+            navbarScrollThreshold,
+            navbarScrollCollapsed
+        );
+        if (action == NavbarScrollSupport.ScrollAction.HIDE) {
+            setNavbarScrollCollapsed(true, true);
+        } else if (action == NavbarScrollSupport.ScrollAction.REVEAL) {
+            setNavbarScrollCollapsed(false, true);
+        }
+    }
+
+    private void setNavbarScrollCollapsed(boolean collapsed, boolean animated) {
+        if (navbarScrollCollapsed == collapsed) {
+            return;
+        }
+        navbarScrollCollapsed = collapsed;
+        applyNavbarScrollCollapsedAppearance(animated);
+        updateInsetsAndNotify();
+    }
+
+    private void applyNavbarScrollCollapsedAppearance(boolean animated) {
+        if (navbarContainer == null) {
+            return;
+        }
+        float hideDistance = dp(DEFAULT_NAVBAR_DP);
+        if (animated) {
+            navbarContainer
+                .animate()
+                .translationY(navbarScrollCollapsed ? -hideDistance : 0f)
+                .alpha(navbarScrollCollapsed ? 0f : 1f)
+                .setDuration(220)
+                .start();
+        } else {
+            navbarContainer.setTranslationY(navbarScrollCollapsed ? -hideDistance : 0f);
+            navbarContainer.setAlpha(navbarScrollCollapsed ? 0f : 1f);
+        }
+    }
+
     private JSObject currentInsets() {
         // View layout uses device pixels; CSS variables must be density-independent
         // or a 3x screen writes `192px` which CSS treats as 192 CSS px.
-        int top = navbarVisible ? statusBarInset() + dp(DEFAULT_NAVBAR_DP) : 0;
+        int navbarToolbar = navbarScrollCollapsed ? 0 : dp(DEFAULT_NAVBAR_DP);
+        int top = navbarVisible ? statusBarInset() + navbarToolbar : 0;
         int bottom = tabbarVisible ? navigationBarInset() + dp(tabbarStyle.totalHeight()) + dp(tabbarStyle.bottomGap) : 0;
         JSObject insets = new JSObject();
         insets.put("top", cssPx(top));

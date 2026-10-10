@@ -29,6 +29,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "configure", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setNavbar", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "reportNavbarScroll", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setTabbar", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "beginTransition", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "finishTransition", returnType: CAPPluginReturnPromise),
@@ -65,6 +66,9 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var defaultTransitionDuration: TimeInterval = 0.35
     private var navbarItemPlacement: [String: String] = [:]
     private var navbarItemTitle: [String: String] = [:]
+    private var navbarScrollBehavior: NativeNavigationNavbarScrollBehavior = .none
+    private var navbarScrollThreshold: CGFloat = 8
+    private var navbarScrollCollapsed = false
     private var tabIds: [String] = []
     private var tabTitles: [String] = []
     private var tabDisplayTitles: [String?] = []
@@ -147,6 +151,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         DispatchQueue.main.async {
             guard self.isEnabled else {
                 self.navbarVisible = false
+                self.stopNavbarScrollObservation(resetCollapsed: true)
                 self.updateInsetsAndNotify()
                 call.resolve(self.insetsResult())
                 return
@@ -160,6 +165,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
             guard !hidden else {
                 self.navContainer?.isHidden = true
+                self.stopNavbarScrollObservation(resetCollapsed: true)
                 self.updateInsetsAndNotify()
                 call.resolve(self.insetsResult())
                 return
@@ -189,9 +195,24 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             navBar.setItems([navItem], animated: animated)
             self.applyNavBarAppearance(navBar: navBar, options: call)
             self.navContainer?.isHidden = false
+            self.configureNavbarScrollBehavior(from: call)
             self.layoutChrome()
             self.updateInsetsAndNotify()
             call.resolve(self.insetsResult())
+        }
+    }
+
+    @objc func reportNavbarScroll(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            guard self.navbarScrollBehavior != .none, self.navbarVisible else {
+                call.resolve()
+                return
+            }
+
+            let offsetY = CGFloat(call.getDouble("offsetY") ?? 0)
+            let deltaY = CGFloat(call.getDouble("deltaY") ?? 0)
+            self.handleNavbarScroll(offsetY: offsetY, deltaY: deltaY)
+            call.resolve()
         }
     }
 
@@ -1899,6 +1920,109 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         safeInsets.top > 0 ? safeInsets.top : 8
     }
 
+    private func configureNavbarScrollBehavior(from call: CAPPluginCall) {
+        navbarScrollBehavior = nativeNavigationNavbarScrollBehavior(from: call.getString("scrollBehavior"))
+        if let threshold = call.getDouble("scrollThreshold") {
+            navbarScrollThreshold = CGFloat(threshold)
+        }
+
+        guard navbarScrollBehavior != .none, navbarVisible else {
+            stopNavbarScrollObservation(resetCollapsed: true)
+            return
+        }
+
+        startNavbarScrollObservation()
+    }
+
+    private func startNavbarScrollObservation() {
+        installNavbarScrollBridge()
+    }
+
+    private func stopNavbarScrollObservation(resetCollapsed: Bool) {
+        if resetCollapsed {
+            setNavbarScrollCollapsed(false, animated: false)
+        }
+    }
+
+    private func installNavbarScrollBridge() {
+        let threshold = navbarScrollThreshold
+        let script = """
+        (function(){
+          if (window.__capNativeNavigationScrollBound) { return; }
+          window.__capNativeNavigationScrollBound = true;
+          const plugin = window.Capacitor?.Plugins?.NativeNavigation;
+          if (!plugin?.reportNavbarScroll) { return; }
+          const samples = new WeakMap();
+          const bind = (target) => {
+            if (!target || target.__capNativeNavigationScrollListener) { return; }
+            target.__capNativeNavigationScrollListener = true;
+            target.addEventListener('scroll', () => {
+              const offsetY = target === window ? window.scrollY : target.scrollTop;
+              const previous = samples.get(target) ?? offsetY;
+              const deltaY = offsetY - previous;
+              samples.set(target, offsetY);
+              plugin.reportNavbarScroll({ offsetY, deltaY });
+            }, { passive: true });
+          };
+          bind(window);
+          bind(document.getElementById('app'));
+          document.querySelectorAll('[data-cap-native-navigation-scroll]').forEach((node) => bind(node));
+        })();
+        """
+        bridge?.webView?.evaluateJavaScript(script)
+    }
+
+    private func handleNavbarScroll(offsetY: CGFloat, deltaY: CGFloat) {
+        let action = nativeNavigationNavbarScrollAction(
+            behavior: navbarScrollBehavior,
+            offsetY: offsetY,
+            deltaY: deltaY,
+            threshold: navbarScrollThreshold,
+            isCollapsed: navbarScrollCollapsed
+        )
+
+        switch action {
+        case .hide:
+            setNavbarScrollCollapsed(true, animated: true)
+        case .reveal:
+            setNavbarScrollCollapsed(false, animated: true)
+        case .none:
+            break
+        }
+    }
+
+    private func setNavbarScrollCollapsed(_ collapsed: Bool, animated: Bool) {
+        guard navbarScrollCollapsed != collapsed else {
+            return
+        }
+        navbarScrollCollapsed = collapsed
+        applyNavbarScrollCollapsedAppearance(animated: animated)
+        updateInsetsAndNotify()
+    }
+
+    private func applyNavbarScrollCollapsedAppearance(animated: Bool) {
+        guard let container = navContainer else {
+            return
+        }
+
+        let hideDistance = navbarHeight
+        let updates = {
+            if self.navbarScrollCollapsed {
+                container.transform = CGAffineTransform(translationX: 0, y: -hideDistance)
+                container.alpha = 0
+            } else {
+                container.transform = .identity
+                container.alpha = 1
+            }
+        }
+
+        if animated {
+            UIView.animate(withDuration: 0.22, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction], animations: updates)
+        } else {
+            updates()
+        }
+    }
+
     private func layoutChrome() {
         guard let rootView = bridge?.viewController?.view else {
             return
@@ -2081,7 +2205,9 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
     private func currentInsets() -> [String: Any] {
         let safeInsets = bridge?.viewController?.view.safeAreaInsets ?? .zero
-        let navHeight = isEnabled && navbarVisible ? navbarHeight + navbarTopInset(safeInsets) : 0
+        let topInset = navbarTopInset(safeInsets)
+        let barHeight = navbarScrollCollapsed ? 0 : navbarHeight
+        let navHeight = isEnabled && navbarVisible ? barHeight + topInset : 0
         let usesSystemTabbar = usesSystemLiquidGlass && tabbarStyle.shape != .curve
         let nativeTabHeight = max(tabBar?.frame.height ?? 0, 49 + safeInsets.bottom)
         let customTabHeight = tabbarHeight + safeInsets.bottom + tabbarStyle.bottomGap
