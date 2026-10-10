@@ -1893,6 +1893,12 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         update(appearance.compactInlineLayoutAppearance)
     }
 
+    // iPhone Duo's closed display moves the status bar to a side rail, so the top inset is zero
+    // and the bar buttons would touch the rounded top edge. Keep a small gap there.
+    private func navbarTopInset(_ safeInsets: UIEdgeInsets) -> CGFloat {
+        safeInsets.top > 0 ? safeInsets.top : 8
+    }
+
     private func layoutChrome() {
         guard let rootView = bridge?.viewController?.view else {
             return
@@ -1914,9 +1920,10 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         }
 
         if let container = navContainer {
-            container.frame = CGRect(x: 0, y: 0, width: width, height: safeInsets.top + navbarHeight)
+            let topInset = navbarTopInset(safeInsets)
+            container.frame = CGRect(x: 0, y: 0, width: width, height: topInset + navbarHeight)
             navBlurView?.frame = container.bounds
-            navBar?.frame = CGRect(x: 0, y: safeInsets.top, width: width, height: navbarHeight)
+            navBar?.frame = CGRect(x: 0, y: topInset, width: width, height: navbarHeight)
         }
 
         if let container = tabContainer {
@@ -2074,7 +2081,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
     private func currentInsets() -> [String: Any] {
         let safeInsets = bridge?.viewController?.view.safeAreaInsets ?? .zero
-        let navHeight = isEnabled && navbarVisible ? navbarHeight + safeInsets.top : 0
+        let navHeight = isEnabled && navbarVisible ? navbarHeight + navbarTopInset(safeInsets) : 0
         let usesSystemTabbar = usesSystemLiquidGlass && tabbarStyle.shape != .curve
         let nativeTabHeight = max(tabBar?.frame.height ?? 0, 49 + safeInsets.bottom)
         let customTabHeight = tabbarHeight + safeInsets.bottom + tabbarStyle.bottomGap
