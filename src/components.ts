@@ -128,7 +128,11 @@ export function defineNativeNavigationElements(): void {
           this,
           'scroll-behavior',
         ),
-        scrollThreshold: Number(this.getAttribute('scroll-threshold')) || undefined,
+        scrollThreshold:
+          this.getAttribute('scroll-threshold') !== null &&
+          Number.isFinite(Number(this.getAttribute('scroll-threshold')))
+            ? Number(this.getAttribute('scroll-threshold'))
+            : undefined,
       };
 
       const NativeNavigation = await getNativeNavigation();

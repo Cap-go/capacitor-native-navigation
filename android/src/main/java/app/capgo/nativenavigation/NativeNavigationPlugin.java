@@ -2202,6 +2202,10 @@ public class NativeNavigationPlugin extends Plugin {
     }
 
     private void configureNavbarScrollBehavior(PluginCall call) {
+        if (Boolean.TRUE.equals(call.getBoolean("resetScrollCollapsed", false))) {
+            setNavbarScrollCollapsed(false, false);
+        }
+
         navbarScrollBehavior = NavbarScrollSupport.parseBehavior(call.getString("scrollBehavior"));
         Double threshold = call.getDouble("scrollThreshold");
         if (threshold != null) {
@@ -2222,19 +2226,22 @@ public class NativeNavigationPlugin extends Plugin {
         }
         String script =
             "(function(){" +
-            "if(window.__capNativeNavigationScrollBound){return;}" +
-            "window.__capNativeNavigationScrollBound=true;" +
             "const plugin=window.Capacitor?.Plugins?.NativeNavigation;" +
             "if(!plugin?.reportNavbarScroll){return;}" +
-            "const samples=new WeakMap();" +
+            "const core=window.__capNativeNavigationScrollCore||(window.__capNativeNavigationScrollCore={samples:new WeakMap(),bound:new WeakSet()});" +
+            "const readOffset=(target)=>{" +
+            "const raw=target===window?window.scrollY:target.scrollTop;" +
+            "const max=target===window?Math.max(0,document.documentElement.scrollHeight-window.innerHeight):Math.max(0,target.scrollHeight-target.clientHeight);" +
+            "return Math.min(Math.max(0,raw),max);" +
+            "};" +
             "const bind=(target)=>{" +
-            "if(!target||target.__capNativeNavigationScrollListener){return;}" +
-            "target.__capNativeNavigationScrollListener=true;" +
+            "if(!target||core.bound.has(target)){return;}" +
+            "core.bound.add(target);" +
             "target.addEventListener('scroll',()=>{" +
-            "const offsetY=target===window?window.scrollY:target.scrollTop;" +
-            "const previous=samples.get(target)??offsetY;" +
+            "const offsetY=readOffset(target);" +
+            "const previous=core.samples.get(target)??offsetY;" +
             "const deltaY=offsetY-previous;" +
-            "samples.set(target,offsetY);" +
+            "core.samples.set(target,offsetY);" +
             "plugin.reportNavbarScroll({offsetY,deltaY});" +
             "},{passive:true});" +
             "};" +
@@ -2272,7 +2279,11 @@ public class NativeNavigationPlugin extends Plugin {
         }
         navbarScrollCollapsed = collapsed;
         applyNavbarScrollCollapsedAppearance(animated);
-        updateInsetsAndNotify();
+        if (animated && !collapsed && navbarContainer != null) {
+            navbarContainer.postDelayed(this::updateInsetsAndNotify, 220);
+        } else {
+            updateInsetsAndNotify();
+        }
     }
 
     private void applyNavbarScrollCollapsedAppearance(boolean animated) {

@@ -1921,6 +1921,10 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
 
     private func configureNavbarScrollBehavior(from call: CAPPluginCall) {
+        if call.getBool("resetScrollCollapsed", false) {
+            setNavbarScrollCollapsed(false, animated: false)
+        }
+
         navbarScrollBehavior = nativeNavigationNavbarScrollBehavior(from: call.getString("scrollBehavior"))
         if let threshold = call.getDouble("scrollThreshold") {
             navbarScrollThreshold = CGFloat(threshold)
@@ -1948,19 +1952,24 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         let threshold = navbarScrollThreshold
         let script = """
         (function(){
-          if (window.__capNativeNavigationScrollBound) { return; }
-          window.__capNativeNavigationScrollBound = true;
           const plugin = window.Capacitor?.Plugins?.NativeNavigation;
           if (!plugin?.reportNavbarScroll) { return; }
-          const samples = new WeakMap();
+          const core = window.__capNativeNavigationScrollCore ||= { samples: new WeakMap(), bound: new WeakSet() };
+          const readOffset = (target) => {
+            const raw = target === window ? window.scrollY : target.scrollTop;
+            const max = target === window
+              ? Math.max(0, document.documentElement.scrollHeight - window.innerHeight)
+              : Math.max(0, target.scrollHeight - target.clientHeight);
+            return Math.min(Math.max(0, raw), max);
+          };
           const bind = (target) => {
-            if (!target || target.__capNativeNavigationScrollListener) { return; }
-            target.__capNativeNavigationScrollListener = true;
+            if (!target || core.bound.has(target)) { return; }
+            core.bound.add(target);
             target.addEventListener('scroll', () => {
-              const offsetY = target === window ? window.scrollY : target.scrollTop;
-              const previous = samples.get(target) ?? offsetY;
+              const offsetY = readOffset(target);
+              const previous = core.samples.get(target) ?? offsetY;
               const deltaY = offsetY - previous;
-              samples.set(target, offsetY);
+              core.samples.set(target, offsetY);
               plugin.reportNavbarScroll({ offsetY, deltaY });
             }, { passive: true });
           };
@@ -1997,7 +2006,13 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         }
         navbarScrollCollapsed = collapsed
         applyNavbarScrollCollapsedAppearance(animated: animated)
-        updateInsetsAndNotify()
+        if animated && !collapsed {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                self.updateInsetsAndNotify()
+            }
+        } else {
+            updateInsetsAndNotify()
+        }
     }
 
     private func applyNavbarScrollCollapsedAppearance(animated: Bool) {

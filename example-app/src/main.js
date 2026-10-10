@@ -434,7 +434,7 @@ const pageFor = (id) =>
     `,
   };
 
-const updateNavbar = async () => {
+const updateNavbar = async (resetScrollCollapsed = false) => {
   const page = pageFor(route);
   const scrollHeaderDemo = route === 'scrollHeader';
   await NativeNavigation.setNavbar({
@@ -445,6 +445,7 @@ const updateNavbar = async () => {
     transparent: true,
     scrollBehavior: scrollHeaderDemo ? 'both' : 'none',
     scrollThreshold: 8,
+    resetScrollCollapsed,
     backButton: {
       visible: stack.length > 1,
       title: 'Back',
@@ -604,7 +605,7 @@ const navigate = async (nextRoute, direction = 'forward') => {
     stack = [nextRoute];
   }
   render();
-  await updateNavbar();
+  await updateNavbar(true);
   await updateTabbar();
   await NativeNavigation.finishTransition({ id: transition.id, direction });
 };

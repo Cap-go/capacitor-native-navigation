@@ -381,7 +381,10 @@ export interface NativeNavigationNavbarOptions {
 
   /**
    * Hide or reveal the navbar while web content scrolls. Native layers install
-   * scroll listeners on `window`, `#app`, and `[data-cap-native-navigation-scroll]`.
+   * scroll listeners on `window` and `#app` once, then rescan
+   * `[data-cap-native-navigation-scroll]` on each `setNavbar` call that enables
+   * scrolling. The web fallback listens on `window` and `#app` only; use
+   * `reportNavbarScroll()` for other roots.
    *
    * Defaults to `none`.
    */
@@ -392,6 +395,12 @@ export interface NativeNavigationNavbarOptions {
    * Defaults to `8`.
    */
   scrollThreshold?: number;
+
+  /**
+   * When `true`, clears any scroll-collapsed navbar state before applying this
+   * update. Use on route changes; omit for same-screen chrome tweaks.
+   */
+  resetScrollCollapsed?: boolean;
 }
 
 /**

@@ -49,6 +49,10 @@ export class NativeNavigationWeb extends WebPlugin implements NativeNavigationPl
   }
 
   async setNavbar(options: NativeNavigationNavbarOptions): Promise<NativeNavigationInsetsResult> {
+    if (options.resetScrollCollapsed) {
+      this.navbarScrollCollapsed = false;
+    }
+
     this.navbar = {
       ...this.navbar,
       ...options,
@@ -176,11 +180,28 @@ export class NativeNavigationWeb extends WebPlugin implements NativeNavigationPl
       this.navbarScrollListeners.push({ target, listener });
     };
 
-    bind('window', window, () => window.scrollY);
+    const readOffset = (target: Window | HTMLElement) => {
+      if (target === window) {
+        const raw = window.scrollY;
+        const max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+        return Math.min(Math.max(0, raw), max);
+      }
+      const element = target as HTMLElement;
+      const raw = element.scrollTop;
+      const max = Math.max(0, element.scrollHeight - element.clientHeight);
+      return Math.min(Math.max(0, raw), max);
+    };
+
+    bind('window', window, () => readOffset(window));
     const app = document.getElementById('app');
     if (app) {
-      bind('app', app, () => app.scrollTop);
+      bind('app', app, () => readOffset(app));
     }
+    document.querySelectorAll('[data-cap-native-navigation-scroll]').forEach((node, index) => {
+      if (node instanceof HTMLElement) {
+        bind(`scroll-root-${index}`, node, () => readOffset(node));
+      }
+    });
   }
 
   private applyNavbarScrollSample(offsetY: number, deltaY: number): void {
