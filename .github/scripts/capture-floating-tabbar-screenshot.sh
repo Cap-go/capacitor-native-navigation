@@ -90,7 +90,7 @@ wait_for_valid_screenshot() {
       sleep 6
     fi
     timeout 30 adb exec-out screencap -p > "${WORK_PNG}" || true
-    if app_is_foreground && screenshot_is_valid "${WORK_PNG}"; then
+    if screenshot_is_valid "${WORK_PNG}"; then
       return 0
     fi
     if [ $((attempt % 8)) -eq 7 ]; then

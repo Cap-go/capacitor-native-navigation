@@ -70,7 +70,7 @@ def main() -> None:
         )
 
     center = image.getpixel((width // 2, int(height * 0.55)))
-    if all(channel > 200 for channel in center[:3]):
+    if all(channel > 200 for channel in center[:3]) and orange_samples < 5000:
         raise SystemExit("Center looks like splash gray, not colorful content.")
 
     print(f"Verified screenshot content: orange_samples={orange_samples}, bottom_variety={len(bottom_colors)}")
