@@ -380,11 +380,12 @@ export interface NativeNavigationNavbarOptions {
   animated?: boolean;
 
   /**
-   * Hide or reveal the navbar while web content scrolls. Native layers install
-   * scroll listeners on `window` and `#app` once, then rescan
-   * `[data-cap-native-navigation-scroll]` on each `setNavbar` call that enables
-   * scrolling. The web fallback listens on `window` and `#app` only; use
-   * `reportNavbarScroll()` for other roots.
+   * Hide or reveal the navbar while web content scrolls. When enabled, iOS and
+   * Android inject scroll listeners on `window`, `#app`, and any existing
+   * `[data-cap-native-navigation-scroll]` elements, and rescan marked elements
+   * on each `setNavbar` call. The web fallback binds the same roots when
+   * `setNavbar` runs (`window`, `#app`, and matching marked elements). Do not
+   * call `reportNavbarScroll()` for a root that is already bound.
    *
    * Defaults to `none`.
    */
@@ -771,9 +772,10 @@ export interface NativeNavigationPlugin {
   setNavbar(options: NativeNavigationNavbarOptions): Promise<NativeNavigationInsetsResult>;
 
   /**
-   * Report scroll samples for `scrollBehavior`. The native layer installs
-   * listeners on `window`, `#app`, and `[data-cap-native-navigation-scroll]`
-   * automatically; call this yourself only for other scroll roots.
+   * Report scroll samples for `scrollBehavior`. Use only for scroll roots that
+   * are not already wired by `setNavbar` (`window`, `#app`, or
+   * `[data-cap-native-navigation-scroll]`). iOS, Android, and the web fallback
+   * install those listeners automatically when scrolling is enabled.
    */
   reportNavbarScroll(options: NativeNavigationNavbarScrollEvent): Promise<void>;
 
