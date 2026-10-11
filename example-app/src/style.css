@@ -515,3 +515,38 @@ pre {
     background: #141821;
   }
 }
+
+.scroll-header-demo {
+  display: grid;
+  gap: 16px;
+}
+
+.scroll-header-demo .eyebrow {
+  margin: 0;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+.scroll-header-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.scroll-header-list li {
+  display: grid;
+  gap: 4px;
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+.scroll-header-list span {
+  color: #6b7280;
+  font-size: 0.92rem;
+}

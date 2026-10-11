@@ -194,6 +194,10 @@ const pages = {
         </article>
       </section>
       <section class="demo-actions" aria-label="Navigation demo actions">
+        <button class="tile" data-push="scrollHeader">
+          <span>Scroll header demo</span>
+          <small>Native navbar hides on scroll down and returns on scroll up</small>
+        </button>
         <button class="tile" data-push="detail">
           <span>Open detail</span>
           <small>Push transition and native back button</small>
@@ -300,6 +304,19 @@ const pages = {
         <p class="eyebrow">Hidden native tab</p>
         <h1>Visible only while active.</h1>
         <p>The Draft tab is configured with hidden: true. The native tabbar shows it when selected, then removes it after another tab is chosen.</p>
+      </section>
+    `,
+  },
+  scrollHeader: {
+    title: 'Scroll header',
+    subtitle: 'Hide on scroll',
+    body: `
+      <section class="scroll-header-demo">
+        <p class="eyebrow">Scroll this list</p>
+        <p>The native navbar uses <code>scrollBehavior: 'both'</code>. Scroll down to hide it, then scroll up to bring it back.</p>
+        <ul class="scroll-header-list">
+          ${Array.from({ length: 40 }, (_, index) => `<li><strong>Row ${index + 1}</strong><span>Sample content for scroll-driven navbar chrome.</span></li>`).join('')}
+        </ul>
       </section>
     `,
   },
@@ -417,14 +434,18 @@ const pageFor = (id) =>
     `,
   };
 
-const updateNavbar = async () => {
+const updateNavbar = async (resetScrollCollapsed = false) => {
   const page = pageFor(route);
+  const scrollHeaderDemo = route === 'scrollHeader';
   await NativeNavigation.setNavbar({
-    hidden: route === 'home' && tabbarShape() === 'curve',
+    hidden: !scrollHeaderDemo && route === 'home' && tabbarShape() === 'curve',
     title: page.title,
-    subtitle: route === 'home' ? tabbarPresets[tabbarPreset].detail : page.subtitle,
-    large: route === 'home' && tabbarShape() !== 'curve',
+    subtitle: scrollHeaderDemo ? page.subtitle : route === 'home' ? tabbarPresets[tabbarPreset].detail : page.subtitle,
+    large: !scrollHeaderDemo && route === 'home' && tabbarShape() !== 'curve',
     transparent: true,
+    scrollBehavior: scrollHeaderDemo ? 'both' : 'none',
+    scrollThreshold: 8,
+    resetScrollCollapsed,
     backButton: {
       visible: stack.length > 1,
       title: 'Back',
@@ -584,7 +605,7 @@ const navigate = async (nextRoute, direction = 'forward') => {
     stack = [nextRoute];
   }
   render();
-  await updateNavbar();
+  await updateNavbar(true);
   await updateTabbar();
   await NativeNavigation.finishTransition({ id: transition.id, direction });
 };
