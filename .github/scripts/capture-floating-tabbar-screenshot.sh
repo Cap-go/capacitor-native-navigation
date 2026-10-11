@@ -85,7 +85,8 @@ wait_for_valid_screenshot() {
     wake_display
     if ! app_is_foreground; then
       dismiss_blocking_dialogs
-      launch_app 0
+      adb shell am force-stop com.google.android.apps.nexuslauncher >/dev/null 2>&1 || true
+      launch_app 1
       sleep 6
     fi
     timeout 30 adb exec-out screencap -p > "${WORK_PNG}" || true
