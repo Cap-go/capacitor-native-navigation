@@ -2063,6 +2063,11 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             container.frame = CGRect(x: 0, y: 0, width: width, height: topInset + navbarHeight)
             navBlurView?.frame = container.bounds
             navBar?.frame = CGRect(x: 0, y: topInset, width: width, height: navbarHeight)
+            // The bar isn't hosted by a UINavigationController, so it starts with 8pt margins and the
+            // large title sits off the system content margin. Match the hosting controller's margins.
+            if let margins = bridge?.viewController?.systemMinimumLayoutMargins {
+                navBar?.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 0, leading: margins.leading, bottom: 0, trailing: margins.trailing)
+            }
         }
 
         if let container = tabContainer {
