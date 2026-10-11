@@ -129,7 +129,7 @@ jobs:
           force-avd-creation: ${{ steps.emulator-cache.outputs.cache-hit != 'true' }}
           disable-animations: true
           emulator-options: -no-window -gpu auto -noaudio -no-boot-anim -camera-back none
-          script: bash -lc 'chmod +x .github/scripts/capture-floating-tabbar-screenshot.sh && timeout 1500 .github/scripts/capture-floating-tabbar-screenshot.sh screenshot-apks/app-debug.apk "${GITHUB_WORKSPACE}/android-floating-tabbar-after-full.png"'
+          script: bash -lc 'chmod +x .github/scripts/capture-floating-tabbar-screenshot.sh && timeout 2400 .github/scripts/capture-floating-tabbar-screenshot.sh screenshot-apks/app-debug.apk "${GITHUB_WORKSPACE}/android-floating-tabbar-after-full.png"'
       - name: Save Android emulator cache
         if: runner.os == 'Linux' && steps.emulator-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v5
