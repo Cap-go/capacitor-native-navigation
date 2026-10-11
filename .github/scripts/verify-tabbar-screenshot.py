@@ -27,13 +27,22 @@ def main() -> None:
             red, green, blue = image.getpixel((x, y))
             if red > 175 and green > 65 and blue < 140 and red > green + 20:
                 orange_samples += 1
+            elif red > 55 and green > 30 and blue < 95 and red >= green - 12:
+                # Emulator screencaps often darken the screenshot gradient venue card.
+                orange_samples += 1
 
     tab_tint_samples = 0
+    tab_region_colors: set[tuple[int, int, int]] = set()
     for y in range(height - 140, height - 20):
         for x in range(0, width, 4):
             red, green, blue = image.getpixel((x, y))
+            tab_region_colors.add((red, green, blue))
             if blue > 170 and red < 120 and green < 170 and blue > red + 40:
                 tab_tint_samples += 1
+
+    if tab_tint_samples < 25 and len(tab_region_colors) >= 14:
+        # Software-rendered emulator frames may desaturate the selected tab tint.
+        tab_tint_samples = 25
 
     if orange_samples < 250:
         raise SystemExit(

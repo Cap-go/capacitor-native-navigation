@@ -37,6 +37,10 @@ dismiss_blocking_dialogs() {
   height="${size#*x}"
   adb shell input tap "$((width / 2))" "$((height * 2 / 3))" >/dev/null 2>&1 || true
   adb shell input keyevent 66 >/dev/null 2>&1 || true
+  if adb shell dumpsys window 2>/dev/null | tr -d '\r' | grep -qi "isn't responding"; then
+    adb shell input tap "$((width / 2))" "$((height * 11 / 20))" >/dev/null 2>&1 || true
+    sleep 1
+  fi
 }
 
 swipe_content_into_view() {
