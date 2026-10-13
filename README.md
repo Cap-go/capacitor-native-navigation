@@ -1,6 +1,6 @@
 # @capgo/capacitor-native-navigation
 
-<a href="https://capgo.app/?ref=plugin_native_navigation"><img src="https://capgo.app/readme-banner.svg?repo=Cap-go/capacitor-native-navigation" alt="Capgo - Instant updates for Capacitor" /></a>
+<a href="https://capgo.app/?ref=plugin_native_navigation"><img src="https://capgo.app/readme-banner.svg?repo=Cap-go/capacitor-native-navigation" alt="Capgo - Build Capacitor apps with AI, ship updates instantly" /></a>
 
 <div align="center">
   <p><b>Capgo</b>: push fixes to your Capacitor users in minutes, build signed iOS and Android apps without a Mac, and roll back in one click.</p>
@@ -8,6 +8,8 @@
   <p>14-day unlimited free trial. No credit card required</p>
   <p><a href="https://capgo.app/consulting/?ref=plugin_native_navigation">Missing a feature? We'll build the plugin for you 💪</a></p>
 </div>
+
+> 🤖 **Building with an AI coding agent?** Install [Capgo skills](https://capgo.app/skills/?ref=plugin_native_navigation) so Claude Code, Codex, Cursor, Copilot, or Gemini CLI know how to install and use `@capgo/capacitor-native-navigation` in your Capacitor app: `npx skills add Cap-go/capgo-skills`. Then ask your agent: *"Add @capgo/capacitor-native-navigation to my Capacitor app and wire it up."* [Agent setup guides](https://capgo.app/agents/?ref=plugin_native_navigation) · [Hosted MCP](https://capgo.app/docs/ai/mcp/?ref=plugin_native_navigation)
 
 Native navbar, tabbar, safe-area handling, and WebView snapshot transitions for Capacitor apps. Your web framework keeps routing and page rendering while this plugin owns the platform surfaces users expect to feel native.
 
@@ -89,6 +91,8 @@ await NativeNavigation.setNavbar({
   title: 'Home',
   subtitle: 'Native chrome',
   transparent: true,
+  scrollBehavior: 'both',
+  scrollThreshold: 8,
   backButton: { visible: false },
   rightItems: [
     {
@@ -271,6 +275,20 @@ await NativeNavigation.addListener('tabSelect', ({ id }) => {
 
 Pick one animation layer per navigation. For normal route pushes, let `@capgo/capacitor-transitions` animate the WebView pages and update native bars with `setNavbar` / `setTabbar`. For shared-element or zoom routes, use `beginZoomTransition` / `finishZoomTransition` from this plugin and skip the web page transition for that navigation.
 
+## Scroll-driven navbar
+
+Opt in per screen with `setNavbar({ scrollBehavior: 'both' })`. Defaults stay `none`, so existing apps keep static chrome. Native iOS and Android listen to scroll on `window`, `#app`, and any element marked with `data-cap-native-navigation-scroll`. Use `reportNavbarScroll()` only for custom scroll roots.
+
+The example app route **Scroll header demo** (home tile) shows a long list with `scrollBehavior: 'both'`.
+
+Placeholder media (Martin adds before release):
+
+<!-- MARTIN_MEDIA: scroll-header.webp -->
+![Scroll-driven native navbar (screenshot placeholder)](docs/media/scroll-header.webp)
+
+<!-- MARTIN_MEDIA: scroll-header-demo.webp -->
+![Scroll-driven native navbar (animated demo placeholder)](docs/media/scroll-header-demo.webp)
+
 ## Zoom Transition
 
 ```typescript
@@ -316,6 +334,7 @@ Available variables:
 - `--cap-native-navigation-left`
 - `--cap-native-navbar-height`
 - `--cap-native-tabbar-height`
+- `--cap-native-system-tabbar-height` (nominal tab bar height; use on iOS when `--cap-native-tabbar-height` is `0` for hosted system bars)
 
 ## Web Components
 
@@ -392,6 +411,7 @@ npx cap sync
 
 * [`configure(...)`](#configure)
 * [`setNavbar(...)`](#setnavbar)
+* [`reportNavbarScroll(...)`](#reportnavbarscroll)
 * [`setTabbar(...)`](#settabbar)
 * [`beginTransition(...)`](#begintransition)
 * [`finishTransition(...)`](#finishtransition)
@@ -442,6 +462,24 @@ Render or update the native navbar.
 | **`options`** | <code><a href="#nativenavigationnavbaroptions">NativeNavigationNavbarOptions</a></code> |
 
 **Returns:** <code>Promise&lt;<a href="#nativenavigationinsetsresult">NativeNavigationInsetsResult</a>&gt;</code>
+
+--------------------
+
+
+### reportNavbarScroll(...)
+
+```typescript
+reportNavbarScroll(options: NativeNavigationNavbarScrollEvent) => Promise<void>
+```
+
+Report scroll samples for `scrollBehavior`. Use only for scroll roots that
+are not already wired by `setNavbar` (`window`, `#app`, or
+`[data-cap-native-navigation-scroll]`). iOS, Android, and the web fallback
+install those listeners automatically when scrolling is enabled.
+
+| Param         | Type                                                                                            |
+| ------------- | ----------------------------------------------------------------------------------------------- |
+| **`options`** | <code><a href="#nativenavigationnavbarscrollevent">NativeNavigationNavbarScrollEvent</a></code> |
 
 --------------------
 
@@ -622,14 +660,15 @@ Returned by methods that may change safe content bounds.
 
 Insets exposed to web content.
 
-| Prop               | Type                |
-| ------------------ | ------------------- |
-| **`top`**          | <code>number</code> |
-| **`right`**        | <code>number</code> |
-| **`bottom`**       | <code>number</code> |
-| **`left`**         | <code>number</code> |
-| **`navbarHeight`** | <code>number</code> |
-| **`tabbarHeight`** | <code>number</code> |
+| Prop                     | Type                | Description                                                                                                                                                                                                  |
+| ------------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **`top`**                | <code>number</code> |                                                                                                                                                                                                              |
+| **`right`**              | <code>number</code> |                                                                                                                                                                                                              |
+| **`bottom`**             | <code>number</code> |                                                                                                                                                                                                              |
+| **`left`**               | <code>number</code> |                                                                                                                                                                                                              |
+| **`navbarHeight`**       | <code>number</code> |                                                                                                                                                                                                              |
+| **`tabbarHeight`**       | <code>number</code> | Bottom overlap inset for web layout when the WebView does not already reserve space for the native tab bar. On iOS 26+ with a system-hosted tab bar this stays `0` so content is not lifted twice.           |
+| **`systemTabbarHeight`** | <code>number</code> | Nominal native tab bar height (bar plus home-indicator padding on iOS) even when `tabbarHeight` is `0`. Stays available while the tab bar is soft-hidden with `setTabbar({ hidden: true, animated: true })`. |
 
 
 #### NativeNavigationConfigureOptions
@@ -678,20 +717,23 @@ Native glass background configuration.
 
 Native navbar state.
 
-| Prop              | Type                                                                                  | Description                                                                                                                              |
-| ----------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| **`hidden`**      | <code>boolean</code>                                                                  | Hide the native navbar.                                                                                                                  |
-| **`title`**       | <code>string</code>                                                                   | Main title.                                                                                                                              |
-| **`subtitle`**    | <code>string</code>                                                                   | Secondary title where supported by the platform.                                                                                         |
-| **`large`**       | <code>boolean</code>                                                                  | Prefer a large iOS title style.                                                                                                          |
-| **`transparent`** | <code>boolean</code>                                                                  | Prefer transparent/scroll-edge style.                                                                                                    |
-| **`blurEffect`**  | <code><a href="#nativenavigationblureffect">NativeNavigationBlurEffect</a></code>     | iOS blur/material effect for the navbar background when glass is not available. Defaults to `systemChromeMaterial` for transparent bars. |
-| **`glass`**       | <code><a href="#nativenavigationglassoptions">NativeNavigationGlassOptions</a></code> | Optional glass background behavior. Overrides `configure({ glass })` for this navbar update.                                             |
-| **`backButton`**  | <code><a href="#nativenavigationbackbutton">NativeNavigationBackButton</a></code>     | Back button state.                                                                                                                       |
-| **`leftItems`**   | <code>NativeNavigationBarButton[]</code>                                              | Left-side action buttons.                                                                                                                |
-| **`rightItems`**  | <code>NativeNavigationBarButton[]</code>                                              | Right-side action buttons.                                                                                                               |
-| **`colors`**      | <code><a href="#nativenavigationcolors">NativeNavigationColors</a></code>             | Navbar color hints.                                                                                                                      |
-| **`animated`**    | <code>boolean</code>                                                                  | Animate native navbar changes.                                                                                                           |
+| Prop                       | Type                                                                                                  | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| -------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **`hidden`**               | <code>boolean</code>                                                                                  | Hide the native navbar.                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **`title`**                | <code>string</code>                                                                                   | Main title.                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| **`subtitle`**             | <code>string</code>                                                                                   | Secondary title where supported by the platform.                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **`large`**                | <code>boolean</code>                                                                                  | Prefer a large iOS title style.                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **`transparent`**          | <code>boolean</code>                                                                                  | Prefer transparent/scroll-edge style.                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| **`blurEffect`**           | <code><a href="#nativenavigationblureffect">NativeNavigationBlurEffect</a></code>                     | iOS blur/material effect for the navbar background when glass is not available. Defaults to `systemChromeMaterial` for transparent bars.                                                                                                                                                                                                                                                                                                                     |
+| **`glass`**                | <code><a href="#nativenavigationglassoptions">NativeNavigationGlassOptions</a></code>                 | Optional glass background behavior. Overrides `configure({ glass })` for this navbar update.                                                                                                                                                                                                                                                                                                                                                                 |
+| **`backButton`**           | <code><a href="#nativenavigationbackbutton">NativeNavigationBackButton</a></code>                     | Back button state.                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| **`leftItems`**            | <code>NativeNavigationBarButton[]</code>                                                              | Left-side action buttons.                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| **`rightItems`**           | <code>NativeNavigationBarButton[]</code>                                                              | Right-side action buttons.                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **`colors`**               | <code><a href="#nativenavigationcolors">NativeNavigationColors</a></code>                             | Navbar color hints.                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **`animated`**             | <code>boolean</code>                                                                                  | Animate native navbar changes.                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| **`scrollBehavior`**       | <code><a href="#nativenavigationnavbarscrollbehavior">NativeNavigationNavbarScrollBehavior</a></code> | Hide or reveal the navbar while web content scrolls. When enabled, iOS and Android inject scroll listeners on `window`, `#app`, and any existing `[data-cap-native-navigation-scroll]` elements, and rescan marked elements on each `setNavbar` call. The web fallback binds the same roots when `setNavbar` runs (`window`, `#app`, and matching marked elements). Do not call `reportNavbarScroll()` for a root that is already bound. Defaults to `none`. |
+| **`scrollThreshold`**      | <code>number</code>                                                                                   | Minimum vertical scroll delta (CSS px) before `scrollBehavior` reacts. Defaults to `8`.                                                                                                                                                                                                                                                                                                                                                                      |
+| **`resetScrollCollapsed`** | <code>boolean</code>                                                                                  | When `true`, clears any scroll-collapsed navbar state before applying this update. Use on route changes; omit for same-screen chrome tweaks.                                                                                                                                                                                                                                                                                                                 |
 
 
 #### NativeNavigationBackButton
@@ -730,6 +772,16 @@ because icons are rendered by native UI.
 | **`template`** | <code>boolean</code>                                              | When `true`, native tint colors are applied to the rendered SVG/image. Defaults to `true`.                                                                                                                                         |
 | **`ios`**      | <code>{ sfSymbol?: string; image?: string; svg?: string; }</code> | iOS-specific SF Symbol, bundled image name, or inline SVG.                                                                                                                                                                         |
 | **`android`**  | <code>{ resource?: string; image?: string; svg?: string; }</code> | Android-specific drawable resource, asset name, or inline SVG.                                                                                                                                                                     |
+
+
+#### NativeNavigationNavbarScrollEvent
+
+Scroll sample reported from web content while `scrollBehavior` is active.
+
+| Prop          | Type                | Description                                     |
+| ------------- | ------------------- | ----------------------------------------------- |
+| **`offsetY`** | <code>number</code> | Current vertical scroll offset in CSS pixels.   |
+| **`deltaY`**  | <code>number</code> | Change since the previous sample in CSS pixels. |
 
 
 #### NativeNavigationTabbarOptions
@@ -930,6 +982,15 @@ Native glass background rendering preference.
 Native material/blur effect preference.
 
 <code>'none' | 'systemDefault' | 'extraLight' | 'light' | 'dark' | 'regular' | 'prominent' | 'systemUltraThinMaterial' | 'systemThinMaterial' | 'systemMaterial' | 'systemThickMaterial' | 'systemChromeMaterial' | 'systemUltraThinMaterialLight' | 'systemThinMaterialLight' | 'systemMaterialLight' | 'systemThickMaterialLight' | 'systemChromeMaterialLight' | 'systemUltraThinMaterialDark' | 'systemThinMaterialDark' | 'systemMaterialDark' | 'systemThickMaterialDark' | 'systemChromeMaterialDark'</code>
+
+
+#### NativeNavigationNavbarScrollBehavior
+
+How the native navbar reacts to WebView scroll direction.
+
+Defaults to `none` (current static navbar behavior).
+
+<code>'none' | 'hideOnScrollDown' | 'revealOnScrollUp' | 'both'</code>
 
 
 #### NativeNavigationTabRole
