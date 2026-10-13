@@ -659,7 +659,18 @@ export interface NativeNavigationInsets {
   bottom: number;
   left: number;
   navbarHeight: number;
+  /**
+   * Bottom overlap inset for web layout when the WebView does not already
+   * reserve space for the native tab bar. On iOS 26+ with a system-hosted tab
+   * bar this stays `0` so content is not lifted twice.
+   */
   tabbarHeight: number;
+  /**
+   * Nominal native tab bar height (bar plus home-indicator padding on iOS)
+   * even when `tabbarHeight` is `0`. Stays available while the tab bar is
+   * soft-hidden with `setTabbar({ hidden: true, animated: true })`.
+   */
+  systemTabbarHeight: number;
 }
 
 /**

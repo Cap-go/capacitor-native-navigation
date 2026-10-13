@@ -334,6 +334,7 @@ Available variables:
 - `--cap-native-navigation-left`
 - `--cap-native-navbar-height`
 - `--cap-native-tabbar-height`
+- `--cap-native-system-tabbar-height` (nominal tab bar height; use on iOS when `--cap-native-tabbar-height` is `0` for hosted system bars)
 
 ## Web Components
 
@@ -659,14 +660,15 @@ Returned by methods that may change safe content bounds.
 
 Insets exposed to web content.
 
-| Prop               | Type                |
-| ------------------ | ------------------- |
-| **`top`**          | <code>number</code> |
-| **`right`**        | <code>number</code> |
-| **`bottom`**       | <code>number</code> |
-| **`left`**         | <code>number</code> |
-| **`navbarHeight`** | <code>number</code> |
-| **`tabbarHeight`** | <code>number</code> |
+| Prop                     | Type                | Description                                                                                                                                                                                                  |
+| ------------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **`top`**                | <code>number</code> |                                                                                                                                                                                                              |
+| **`right`**              | <code>number</code> |                                                                                                                                                                                                              |
+| **`bottom`**             | <code>number</code> |                                                                                                                                                                                                              |
+| **`left`**               | <code>number</code> |                                                                                                                                                                                                              |
+| **`navbarHeight`**       | <code>number</code> |                                                                                                                                                                                                              |
+| **`tabbarHeight`**       | <code>number</code> | Bottom overlap inset for web layout when the WebView does not already reserve space for the native tab bar. On iOS 26+ with a system-hosted tab bar this stays `0` so content is not lifted twice.           |
+| **`systemTabbarHeight`** | <code>number</code> | Nominal native tab bar height (bar plus home-indicator padding on iOS) even when `tabbarHeight` is `0`. Stays available while the tab bar is soft-hidden with `setTabbar({ hidden: true, animated: true })`. |
 
 
 #### NativeNavigationConfigureOptions

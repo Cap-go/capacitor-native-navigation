@@ -2194,6 +2194,9 @@ public class NativeNavigationPlugin extends Plugin {
             "root.style.setProperty('--cap-native-tabbar-height','" +
             insets.getInteger("tabbarHeight", 0) +
             "px');" +
+            "root.style.setProperty('--cap-native-system-tabbar-height','" +
+            insets.getInteger("systemTabbarHeight", 0) +
+            "px');" +
             "window.dispatchEvent(new CustomEvent('capNativeNavigation:safeAreaChanged',{detail:{insets:" +
             insets.toString() +
             "}}));" +
@@ -2317,6 +2320,7 @@ public class NativeNavigationPlugin extends Plugin {
         insets.put("left", 0);
         insets.put("navbarHeight", cssPx(top));
         insets.put("tabbarHeight", cssPx(bottom));
+        insets.put("systemTabbarHeight", cssPx(bottom));
         return insets;
     }
 
