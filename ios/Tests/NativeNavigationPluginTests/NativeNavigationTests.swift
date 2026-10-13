@@ -134,6 +134,48 @@ class NativeNavigationTests: XCTestCase {
         )
     }
 
+    func testTabbarInsetHeightsHostedSystemBarReportsSystemHeightOnly() {
+        let insets = nativeNavigationTabbarInsetHeights(
+            isEnabled: true,
+            tabbarVisible: true,
+            tabbarSoftHidden: false,
+            isWebViewHostedInSystemTabController: true,
+            usesSystemTabbar: true,
+            nativeTabHeight: 83,
+            customTabHeight: 74
+        )
+        XCTAssertEqual(insets.tabbarHeight, 0)
+        XCTAssertEqual(insets.systemTabbarHeight, 83)
+    }
+
+    func testTabbarInsetHeightsSoftHiddenKeepsSystemHeight() {
+        let insets = nativeNavigationTabbarInsetHeights(
+            isEnabled: true,
+            tabbarVisible: false,
+            tabbarSoftHidden: true,
+            isWebViewHostedInSystemTabController: true,
+            usesSystemTabbar: true,
+            nativeTabHeight: 83,
+            customTabHeight: 74
+        )
+        XCTAssertEqual(insets.tabbarHeight, 0)
+        XCTAssertEqual(insets.systemTabbarHeight, 83)
+    }
+
+    func testTabbarInsetHeightsNonHostedMatchesOverlap() {
+        let insets = nativeNavigationTabbarInsetHeights(
+            isEnabled: true,
+            tabbarVisible: true,
+            tabbarSoftHidden: false,
+            isWebViewHostedInSystemTabController: false,
+            usesSystemTabbar: true,
+            nativeTabHeight: 83,
+            customTabHeight: 74
+        )
+        XCTAssertEqual(insets.tabbarHeight, 83)
+        XCTAssertEqual(insets.systemTabbarHeight, 83)
+    }
+
     func testAnimatedSystemTabbarVisibilityUsesSoftHide() {
         XCTAssertTrue(
             nativeNavigationPrefersAnimatedSystemTabbarVisibility(

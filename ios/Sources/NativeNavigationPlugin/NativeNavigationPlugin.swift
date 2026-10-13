@@ -2234,16 +2234,23 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         // Hosted in the tab content VC: the WebView already ends above the
         // bar. Reporting the bar height as CSS overlap lifts the FAB by a
         // second bar.
-        let tabHeight = isEnabled && tabbarVisible && !isWebViewHostedInSystemTabController
-            ? (usesSystemTabbar ? nativeTabHeight : customTabHeight)
-            : 0
+        let tabInsets = nativeNavigationTabbarInsetHeights(
+            isEnabled: isEnabled,
+            tabbarVisible: tabbarVisible,
+            tabbarSoftHidden: tabbarSoftHidden,
+            isWebViewHostedInSystemTabController: isWebViewHostedInSystemTabController,
+            usesSystemTabbar: usesSystemTabbar,
+            nativeTabHeight: nativeTabHeight,
+            customTabHeight: customTabHeight
+        )
         return [
             "top": navHeight,
             "right": safeInsets.right,
-            "bottom": tabHeight,
+            "bottom": tabInsets.tabbarHeight,
             "left": safeInsets.left,
             "navbarHeight": navHeight,
-            "tabbarHeight": tabHeight
+            "tabbarHeight": tabInsets.tabbarHeight,
+            "systemTabbarHeight": tabInsets.systemTabbarHeight
         ]
     }
 
@@ -2264,6 +2271,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         let left = insets["left"] as? CGFloat ?? 0
         let navbar = insets["navbarHeight"] as? CGFloat ?? 0
         let tabbar = insets["tabbarHeight"] as? CGFloat ?? 0
+        let systemTabbar = insets["systemTabbarHeight"] as? CGFloat ?? 0
         let detailJson = jsonString(["insets": insets])
         let script = """
         (() => {
@@ -2274,6 +2282,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
           root.style.setProperty('--cap-native-navigation-left', '\(left)px');
           root.style.setProperty('--cap-native-navbar-height', '\(navbar)px');
           root.style.setProperty('--cap-native-tabbar-height', '\(tabbar)px');
+          root.style.setProperty('--cap-native-system-tabbar-height', '\(systemTabbar)px');
           window.dispatchEvent(new CustomEvent('capNativeNavigation:safeAreaChanged', { detail: \(detailJson) }));
         })();
         """
@@ -3004,6 +3013,27 @@ func nativeNavigationPrefersAnimatedSystemTabbarVisibility(
     shape: String
 ) -> Bool {
     animated && usesSystemLiquidGlass && shape != "curve"
+}
+
+struct NativeNavigationTabbarInsetHeights {
+    let tabbarHeight: CGFloat
+    let systemTabbarHeight: CGFloat
+}
+
+func nativeNavigationTabbarInsetHeights(
+    isEnabled: Bool,
+    tabbarVisible: Bool,
+    tabbarSoftHidden: Bool,
+    isWebViewHostedInSystemTabController: Bool,
+    usesSystemTabbar: Bool,
+    nativeTabHeight: CGFloat,
+    customTabHeight: CGFloat
+) -> NativeNavigationTabbarInsetHeights {
+    let tabBarActive = isEnabled && (tabbarVisible || tabbarSoftHidden)
+    let overlapHeight = usesSystemTabbar ? nativeTabHeight : customTabHeight
+    let tabbarHeight = tabBarActive && !isWebViewHostedInSystemTabController ? overlapHeight : 0
+    let systemTabbarHeight = tabBarActive ? overlapHeight : 0
+    return NativeNavigationTabbarInsetHeights(tabbarHeight: tabbarHeight, systemTabbarHeight: systemTabbarHeight)
 }
 
 private func nativeNavigationNeedsTransitionSurface(_ color: UIColor?) -> Bool {

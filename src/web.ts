@@ -234,6 +234,7 @@ export class NativeNavigationWeb extends WebPlugin implements NativeNavigationPl
     const navbarVisible = enabled && this.navbar.hidden !== true;
     const tabbarVisible = enabled && this.tabbar.hidden !== true;
     const tabbarHeight = tabbarVisible ? this.currentTabbarHeight() : 0;
+    const systemTabbarHeight = tabbarHeight;
     const navbarChromeHeight =
       navbarVisible && !this.navbarScrollCollapsed ? DEFAULT_NAVBAR_HEIGHT : navbarVisible ? 0 : 0;
     const insets: NativeNavigationInsets = {
@@ -243,6 +244,7 @@ export class NativeNavigationWeb extends WebPlugin implements NativeNavigationPl
       left: 0,
       navbarHeight: navbarChromeHeight,
       tabbarHeight,
+      systemTabbarHeight,
     };
 
     if (this.config.contentInsetMode !== 'none' && typeof document !== 'undefined') {
@@ -253,6 +255,7 @@ export class NativeNavigationWeb extends WebPlugin implements NativeNavigationPl
       root.style.setProperty('--cap-native-navigation-left', `${insets.left}px`);
       root.style.setProperty('--cap-native-navbar-height', `${insets.navbarHeight}px`);
       root.style.setProperty('--cap-native-tabbar-height', `${insets.tabbarHeight}px`);
+      root.style.setProperty('--cap-native-system-tabbar-height', `${insets.systemTabbarHeight}px`);
       if (this.navbar.scrollBehavior && this.navbar.scrollBehavior !== 'none') {
         root.classList.toggle('cap-native-navbar-scroll-collapsed', this.navbarScrollCollapsed);
       } else {
