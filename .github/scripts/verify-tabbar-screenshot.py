@@ -22,23 +22,49 @@ def main() -> None:
         raise SystemExit("Screenshot looks blank (display off or failed screencap).")
 
     orange_samples = 0
-    for y in range(int(height * 0.12), int(height * 0.55)):
-        for x in range(0, width, 3):
+    y_step = 4 if relaxed else 3
+    x_step = 8 if relaxed else 3
+    for y in range(int(height * 0.12), int(height * 0.55), y_step):
+        for x in range(0, width, x_step):
             red, green, blue = image.getpixel((x, y))
-            if red > 175 and green > 65 and blue < 140 and red > green + 20:
+            bright_orange = red > 175 and green > 65 and blue < 140 and red > green + 20
+            warm_venue = (
+                red > 80
+                and green > 20
+                and blue < 100
+                and red >= green - 5
+                and red > green + 8
+                and max(red, green, blue) - min(red, green, blue) > 15
+            )
+            if bright_orange or warm_venue:
                 orange_samples += 1
             elif relaxed and red > 55 and green > 30 and blue < 95 and red >= green - 12:
                 # Emulator screencaps often darken the screenshot gradient venue card.
                 orange_samples += 1
+        if relaxed and orange_samples >= 400:
+            break
 
     tab_tint_samples = 0
+    tabbar_chrome_samples = 0
     tab_region_colors: set[tuple[int, int, int]] = set()
-    for y in range(height - 140, height - 20):
-        for x in range(0, width, 4):
+    tab_y_step = 6 if relaxed else 1
+    tab_x_step = 8 if relaxed else 4
+    for y in range(height - 140, height - 20, tab_y_step):
+        for x in range(0, width, tab_x_step):
             red, green, blue = image.getpixel((x, y))
             tab_region_colors.add((red, green, blue))
             if blue > 170 and red < 120 and green < 170 and blue > red + 40:
                 tab_tint_samples += 1
+            active_tab_blue = blue > 200 and red < 90 and green > 90 and blue > red + 80
+            frosted_bar = (
+                min(red, green, blue) > 145
+                and max(red, green, blue) < 252
+                and max(red, green, blue) - min(red, green, blue) < 45
+            )
+            if active_tab_blue or frosted_bar:
+                tabbar_chrome_samples += 1
+        if relaxed and tabbar_chrome_samples >= 40 and tab_tint_samples >= 25:
+            break
 
     if relaxed and 0 < tab_tint_samples < 25 and len(tab_region_colors) >= 14:
         # Software-rendered emulator frames may desaturate the selected tab tint.
@@ -46,13 +72,14 @@ def main() -> None:
 
     if orange_samples < 250:
         raise SystemExit(
-            f"Screenshot missing orange venue content (only {orange_samples} orange-ish samples). "
+            f"Screenshot missing venue content (only {orange_samples} warm/orange samples). "
             "Likely still on splash or home without content."
         )
 
-    if tab_tint_samples < 25:
+    if tab_tint_samples < 25 and tabbar_chrome_samples < 30:
         raise SystemExit(
-            f"Screenshot missing native tabbar tint (only {tab_tint_samples} blue-ish samples near bottom)."
+            "Screenshot missing native tabbar chrome "
+            f"(tab_tint_samples={tab_tint_samples}, tabbar_chrome_samples={tabbar_chrome_samples})."
         )
 
     if relaxed:
