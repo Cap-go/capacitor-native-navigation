@@ -52,14 +52,16 @@ export type NativeNavigationGlassEffect = 'none' | 'liquidGlass';
  */
 export interface NativeNavigationGlassOptions {
   /**
-   * `liquidGlass` enables the Android 12+ live blurred WebView backdrop for
-   * native bars. Android 11 and older keep a translucent surface fallback. iOS
-   * uses the platform-owned Liquid Glass behavior.
+   * `liquidGlass` gives native bars a translucent tint surface on Android (no
+   * live blur: sampling the WebView from native code breaks its scrolling, so
+   * put a CSS `backdrop-filter` under the bar when you want blur). iOS uses the
+   * platform-owned Liquid Glass behavior.
    */
   effect?: NativeNavigationGlassEffect;
 
   /**
-   * Android blur radius in native dp for `liquidGlass`. Defaults to `18`.
+   * Blur radius in native dp for `liquidGlass`. Defaults to `18`. Currently
+   * unused: Android draws no live blur.
    */
   blurRadius?: number;
 
@@ -594,8 +596,8 @@ export interface NativeNavigationTabbarOptions {
   /**
    * Optional glass background behavior. Overrides `configure({ glass })` for
    * this tabbar update. On Android 12+, floating tabbars default to
-   * `liquidGlass` (live blur plus tint) when this field is omitted. Pass
-   * `effect: 'none'` for a flat translucent fill without blur.
+   * `liquidGlass` (translucent tint) when this field is omitted. Pass
+   * `effect: 'none'` for a flat fill.
    */
   glass?: NativeNavigationGlassOptions;
 
