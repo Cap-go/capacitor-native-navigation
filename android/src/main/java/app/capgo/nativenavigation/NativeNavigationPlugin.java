@@ -2111,6 +2111,17 @@ public class NativeNavigationPlugin extends Plugin {
             return;
         }
 
+        boolean alreadyShown =
+            tabbarContainer.getVisibility() == View.VISIBLE &&
+            !tabbarChromeHideAnimating &&
+            tabbarContainer.getAlpha() == 1f &&
+            tabbarContainer.getTranslationY() == 0f;
+        if (visible && alreadyShown) {
+            // Updating a visible tab bar (e.g. a new selection) must not replay the slide-in.
+            setTabbarChromeVisible(true, false);
+            return;
+        }
+
         float slideDistance = tabbarSlideDistance();
         tabbarContainer.animate().cancel();
         if (tabbarBackdrop != null) {
