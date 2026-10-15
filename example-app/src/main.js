@@ -471,7 +471,8 @@ const updateTabbar = async () => {
     labels: labelsEnabled,
     icons: iconsEnabled,
     minimizeBehavior: minimizeEnabled ? 'onScrollDown' : 'never',
-    edgeBlur: edgeBlurEnabled,
+    // Leave unset when off so iOS can use its default (on while minimize replaces the system bar).
+    edgeBlur: edgeBlurEnabled ? true : undefined,
     colors: tabbarColors(),
     style: tabbarStyle(),
   });

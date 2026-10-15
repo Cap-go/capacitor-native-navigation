@@ -44,7 +44,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var tabEffectView: UIVisualEffectView?
     private var trailingTabEffectView: UIVisualEffectView?
     private var tabBar: UITabBar?
-    private var tabbarEdgeBlur = false
+    /// `nil` when the app did not set `edgeBlur`.
+    private var tabbarEdgeBlur: Bool?
     private var tabbarMinimizeOnScroll = false
     private var tabbarMinimized = false
     private var floatingTabBar: NativeNavigationFloatingTabBar?
@@ -256,7 +257,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             let hidden = call.getBool("hidden", false)
             let animated = call.getBool("animated", false)
             self.tabbarVisible = !hidden
-            self.tabbarEdgeBlur = call.getBool("edgeBlur", false)
+            self.tabbarEdgeBlur = call.getBool("edgeBlur")
             let minimizeOnScroll = call.getString("minimizeBehavior") == "onScrollDown" && call.getBool("icons", true)
             if !minimizeOnScroll {
                 self.tabbarMinimized = false
@@ -2387,7 +2388,10 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     /// Progressive blur under the tabbar, drawn by the page with CSS backdrop-filter so it follows web
     /// scrolling for free. Stacked layers with growing masks fade the blur out above the bar.
     private func applyTabbarEdgeBlur(tabbarHeight: CGFloat) {
-        let active = isEnabled && tabbarEdgeBlur && tabbarVisible && tabbarHeight > 0
+        // The system tab bar blurs content scrolling under it. The capsule that replaces it for
+        // minimize does the same unless the app turned edgeBlur off.
+        let wantsBlur = tabbarEdgeBlur ?? usesSystemLookCapsule
+        let active = isEnabled && wantsBlur && tabbarVisible && tabbarHeight > 0
         let height = active ? Int(tabbarHeight.rounded()) + 48 : 0
         let script = """
         (function(height){
@@ -2802,8 +2806,30 @@ private final class NativeNavigationFloatingTabBar: UIView {
         layoutButtons(Array(buttons.indices), in: bounds)
     }
 
+    /// iOS 26 tab bar metrics: items sit 4pt inside the capsule and each selection pill is about
+    /// 8pt wider than the item pitch, so neighbouring items overlap slightly.
+    private func layoutSystemLookButtons(_ indices: [Int], in rect: CGRect) {
+        let inset: CGFloat = 4
+        let pillOverlap: CGFloat = 8.25
+        let count = CGFloat(indices.count)
+        let pitch = max(0, (rect.width - inset * 2 - pillOverlap) / count)
+        let itemWidth = pitch + pillOverlap
+        for (position, index) in indices.enumerated() where buttons.indices.contains(index) {
+            buttons[index].frame = CGRect(
+                x: rect.minX + inset + CGFloat(position) * pitch,
+                y: rect.minY,
+                width: itemWidth,
+                height: rect.height
+            )
+        }
+    }
+
     private func layoutButtons(_ indices: [Int], in rect: CGRect) {
         guard !indices.isEmpty else {
+            return
+        }
+        if systemLook && tabbarStyle.shape == .floating {
+            layoutSystemLookButtons(indices, in: rect)
             return
         }
         let itemWidth = rect.width / CGFloat(indices.count)
@@ -3053,7 +3079,7 @@ private final class NativeNavigationFloatingTabButton: UIControl {
         }
         selectedView.layer.cornerRadius = selectedView.bounds.height / 2
 
-        let iconSize: CGFloat = isCenterButton ? 32 : (systemLook ? 24 : 23)
+        let iconSize: CGFloat = isCenterButton ? 32 : (systemLook ? 26 : 23)
         if isCenterButton || (!hasLabel && hasIcon && bounds.width <= bounds.height + 1) {
             if hasIcon {
                 imageView.frame = CGRect(x: (bounds.width - iconSize) / 2, y: (bounds.height - iconSize) / 2, width: iconSize, height: iconSize)

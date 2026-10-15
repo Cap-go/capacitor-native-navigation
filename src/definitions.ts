@@ -683,7 +683,9 @@ export interface NativeNavigationTabbarOptions {
    * always drawn with a solid background instead of a translucent tint,
    * because without blur the page reads through the bar.
    *
-   * Defaults to `false`.
+   * Defaults to `false`, except on iOS 26+ while `minimizeBehavior` replaces
+   * the system tab bar: it then defaults to `true` to match the system bar's
+   * scroll edge blur.
    */
   edgeBlur?: boolean;
 
