@@ -20,9 +20,11 @@ Native navbar, tabbar, safe-area handling, and WebView snapshot transitions for 
 | --- | --- | --- | --- |
 | <img src="./docs/demo.webp" alt="Demo of capacitor-native-navigation in action" width="160" /> | <img src="./docs/demo-navigation.webp" alt="Animated native navigation tap flow showing tab selection, push transition, and native back" width="160" /> | <img src="./docs/demo-svg-icons.webp" alt="Animated native SVG icon demo showing inline SVG icons, native tint, labels, and tab selection" width="160" /> | <img src="./docs/demo-options.webp" alt="Animated native navigation options demo showing dynamic colors, selected labels, custom indicators, badges, system Liquid Glass, and zoom transitions" width="160" /> |
 
-| iOS Liquid Glass | Android Liquid Glass | Curved tabbar |
-| --- | --- | --- |
-| <img src="./docs/native-liquid-glass-ios.webp" alt="iOS native Liquid Glass navbar and tabbar screenshot" width="160" /> | <img src="./docs/native-liquid-glass-android.webp" alt="Android Liquid Glass-style native navbar and tabbar screenshot" width="160" /> | <img src="./docs/native-screenshots/android-curved-tabbar.png" alt="Android native curved tabbar with raised center camera action and side margin" width="160" /> |
+| iOS Liquid Glass | Android blur | Android tap flow | Curved tabbar |
+| --- | --- | --- | --- |
+| <img src="./docs/native-liquid-glass-ios.webp" alt="iOS native Liquid Glass navbar and tabbar screenshot" width="160" /> | <img src="./docs/android-mimesis-blur.webp" alt="Android native navbar and floating tabbar over page content blurred with CSS backdrop-filter, in the Mimesis app" width="160" /> | <img src="./docs/android-mimesis-flow.webp" alt="Android recording of the Mimesis app: scrolling under the native bars, a push transition with native back, and switching between three tabs" width="160" /> | <img src="./docs/native-screenshots/android-curved-tabbar.png" alt="Android native curved tabbar with raised center camera action and side margin" width="160" /> |
+
+The Android captures come from [Mimesis](https://github.com/Cap-go/mimesis) on a Pixel 9a: a translucent native tabbar and a transparent navbar over CSS `backdrop-filter` blur.
 
 ### iPhone Duo
 
