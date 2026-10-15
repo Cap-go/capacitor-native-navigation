@@ -248,8 +248,8 @@ html.screenshot-floating-tabbar .venue-card-bar {
   font-weight: 700;
 }
 
-.settings button,
-.detail button {
+.settings button:not(.tile),
+.detail button:not(.tile) {
   text-align: center;
   color: #ffffff;
   background: #0a84ff;
@@ -489,6 +489,7 @@ pre {
   }
 
   .tile,
+  .settings .tile:not(.is-selected),
   .list article,
   .settings,
   .capture-panel,

@@ -43,6 +43,11 @@ export type NativeNavigationBlurEffect =
   | 'systemChromeMaterialDark';
 
 /**
+ * When the native tabbar minimizes while web content scrolls.
+ */
+export type NativeNavigationTabbarMinimizeBehavior = 'never' | 'onScrollDown';
+
+/**
  * Native glass background rendering preference.
  */
 export type NativeNavigationGlassEffect = 'none' | 'liquidGlass';
@@ -67,7 +72,7 @@ export interface NativeNavigationGlassOptions {
 
   /**
    * Alpha multiplier for the tint surface over the glass backdrop. Defaults to
-   * `0.62`.
+   * `0.62`. Ignored on Android 11 and older, where bars are always solid.
    */
   surfaceAlpha?: number;
 }
@@ -645,6 +650,51 @@ export interface NativeNavigationTabbarOptions {
    * Optional native tabbar layout and shape customization.
    */
   style?: NativeNavigationTabbarStyle;
+
+  /**
+   * Minimize the tabbar while web content scrolls down and expand it again on
+   * scroll up or near the top. Scroll samples come from the same roots as the
+   * navbar `scrollBehavior` (`window`, `#app` and
+   * `[data-cap-native-navigation-scroll]` elements) and use the navbar
+   * `scrollThreshold`.
+   *
+   * Keeps every icon, hides the labels and shrinks the floating capsule.
+   * Tapping a tab (or dragging the bar on Android) expands it again. Ignored
+   * for `curve` shape and when `icons` is `false`.
+   *
+   * On iOS 26+ this replaces the system Liquid Glass tab bar with the
+   * plugin's own glass capsule while enabled, because UIKit's
+   * `tabBarMinimizeBehavior` cannot follow WebView scrolling. That capsule has
+   * no drag-to-select.
+   *
+   * Insets keep reporting the expanded height so the page does not reflow.
+   * Defaults to `never`.
+   */
+  minimizeBehavior?: NativeNavigationTabbarMinimizeBehavior;
+
+  /**
+   * Blur page content behind the tabbar, strongest at the bottom edge and
+   * fading out just above the bar. The page draws it with CSS
+   * `backdrop-filter`: the plugin adds a fixed, non-interactive
+   * `#cap-native-navigation-edge-blur` element and keeps its height in sync
+   * with the tabbar. It is removed when the tabbar hides.
+   *
+   * Android 11 and older skip the blur. On those versions the native bars are
+   * always drawn with a solid background instead of a translucent tint,
+   * because without blur the page reads through the bar.
+   *
+   * Defaults to `false`.
+   */
+  edgeBlur?: boolean;
+
+  /**
+   * Drag a finger along the floating tabbar to move the selection like the
+   * iOS 26 tab bar: the indicator follows the finger, a haptic tick plays on
+   * each tab boundary, and `tabSelect` fires on release. iOS 26+ system tab
+   * bars always support this natively; this option controls the Android
+   * floating tabbar. Ignored for `curve` shape. Defaults to `true`.
+   */
+  dragToSelect?: boolean;
 
   /**
    * Animate native tabbar changes.

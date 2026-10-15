@@ -7,6 +7,7 @@ import android.os.Build;
 public final class TabbarChromeSupport {
 
     public static final int TABBAR_VISIBILITY_ANIMATION_MS = 200;
+    public static final int EDGE_BLUR_BLEED_CSS_PX = 48;
 
     public enum TabbarOutlineMode {
         FLOATING_SHAPE,
@@ -71,6 +72,34 @@ public final class TabbarChromeSupport {
             );
         }
         return path;
+    }
+
+    /**
+     * Adds, resizes or removes the page element that blurs content behind the tabbar. Stacked layers with growing
+     * masks make the blur strongest at the bottom edge and fade it out above the bar. A height of 0 removes it.
+     */
+    public static String edgeBlurScript(int heightCssPx) {
+        return (
+            "(function(height){" +
+            "var id='cap-native-navigation-edge-blur';" +
+            "var root=document.getElementById(id);" +
+            "if(!(height>0)){if(root){root.remove();}return;}" +
+            "if(!root){" +
+            "root=document.createElement('div');root.id=id;root.setAttribute('aria-hidden','true');" +
+            "root.style.cssText='position:fixed;left:0;right:0;bottom:0;pointer-events:none;z-index:2147483646;';" +
+            "[100,84,68,52,36,20].forEach(function(h){" +
+            "var layer=document.createElement('div');" +
+            "var mask='linear-gradient(to top,#000 0%,#000 '+Math.round(h*0.6)+'%,transparent '+h+'%)';" +
+            "layer.style.cssText='position:absolute;left:0;right:0;top:0;bottom:0;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);-webkit-mask-image:'+mask+';mask-image:'+mask+';';" +
+            "root.appendChild(layer);" +
+            "});" +
+            "}" +
+            "if(root.parentNode!==document.body&&document.body){document.body.appendChild(root);}" +
+            "root.style.height=height+'px';" +
+            "})(" +
+            Math.max(0, heightCssPx) +
+            ");"
+        );
     }
 
     public static boolean canApplyPathOutline() {
