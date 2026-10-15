@@ -103,6 +103,20 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         usesSystemLiquidGlass && tabbarStyle.shape != .curve && !tabbarMinimizeOnScroll
     }
 
+    /// The capsule stands in for the iOS 26 system tab bar (minimize on scroll), so it copies the
+    /// system bar's geometry and colors instead of the custom floating style.
+    private var usesSystemLookCapsule: Bool {
+        usesSystemLiquidGlass && tabbarStyle.shape == .floating && tabbarMinimizeOnScroll
+    }
+
+    /// Height of the iOS 26 system tab bar and its distance from the screen edges.
+    private static let systemLookBarHeight: CGFloat = 62
+    private static let systemLookSideMargin: CGFloat = 21
+
+    private func systemLookBottomOffset(_ safeInsets: UIEdgeInsets) -> CGFloat {
+        safeInsets.bottom > 0 ? max(safeInsets.bottom - 13, 8) : 8
+    }
+
     /// Minimize only shrinks the floating capsule, and needs icons to stay recognizable.
     private var tabbarMinimizeActive: Bool {
         tabbarMinimized && tabbarMinimizeOnScroll && tabbarStyle.shape == .floating
@@ -341,6 +355,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                         style: self.tabbarStyle
                     )
                     tabBar.minimized = self.tabbarMinimizeActive
+                    tabBar.systemLook = self.usesSystemLookCapsule
                     if self.tabbarMinimizeOnScroll {
                         self.installNavbarScrollBridge()
                     }
@@ -2139,10 +2154,12 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         }
 
         if let container = tabContainer {
-            let availableWidth = max(0, width - (tabbarStyle.horizontalMargin * 2))
+            let systemLook = usesSystemLookCapsule
+            let horizontalMargin = systemLook ? Self.systemLookSideMargin : tabbarStyle.horizontalMargin
+            let availableWidth = max(0, width - (horizontalMargin * 2))
             let maxWidth = tabbarStyle.maxWidth > 0 ? tabbarStyle.maxWidth : availableWidth
             let hasDetachedTrailing = floatingTabBar?.hasDetachedTrailing == true && tabbarStyle.shape == .floating
-            let trailingDiameter = tabbarStyle.height
+            let trailingDiameter = systemLook ? Self.systemLookBarHeight : tabbarStyle.height
             let trailingGap: CGFloat = 10
             let trailingExtra = hasDetachedTrailing ? trailingDiameter + trailingGap : 0
             let minimizeProgress: CGFloat = tabbarMinimizeActive ? 1 : 0
@@ -2150,13 +2167,15 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             let tabbarWidth = max(0, min(availableWidth, maxWidth + trailingExtra) - minimizedSideInset * 2)
             let curveExtendsToBottom = tabbarStyle.shape == .curve && tabbarStyle.horizontalMargin == 0 && tabbarStyle.bottomGap == 0
             let bottomExtension = curveExtendsToBottom ? safeInsets.bottom : 0
-            let contentHeight = tabbarStyle.height - 16 * minimizeProgress
+            let contentHeight = (systemLook ? Self.systemLookBarHeight : tabbarStyle.height) - 16 * minimizeProgress
             let barTop = tabbarStyle.shape == .curve ? tabbarStyle.centerButtonLift : 0
             let totalHeight = contentHeight + barTop
             let originX = (width - tabbarWidth) / 2
             // Keep the home-indicator fill inside the screen. The previous origin
             // pushed that extension below the bezel and left labels on the edge.
-            let originY = height - tabbarStyle.bottomGap - totalHeight - bottomExtension - (curveExtendsToBottom ? 0 : safeInsets.bottom)
+            let originY = systemLook
+                ? height - systemLookBottomOffset(safeInsets) - totalHeight
+                : height - tabbarStyle.bottomGap - totalHeight - bottomExtension - (curveExtendsToBottom ? 0 : safeInsets.bottom)
             container.frame = CGRect(x: originX, y: originY, width: tabbarWidth, height: totalHeight + bottomExtension)
             floatingTabBar?.curveContentHeightOverride = tabbarStyle.shape == .curve ? contentHeight : nil
             floatingTabBar?.frame = container.bounds
@@ -2164,8 +2183,10 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             floatingTabBar?.layoutIfNeeded()
 
             let capsuleBounds = floatingTabBar?.capsuleBounds(in: container.bounds) ?? container.bounds
-            let floatingCornerRadius = min(tabbarStyle.cornerRadius, capsuleBounds.height / 2)
+            let floatingCornerRadius = systemLook ? capsuleBounds.height / 2 : min(tabbarStyle.cornerRadius, capsuleBounds.height / 2)
             container.layer.cornerRadius = tabbarStyle.shape == .floating ? floatingCornerRadius : 0
+            // Liquid Glass brings its own depth; the custom capsule's drop shadow reads as a second edge.
+            container.layer.shadowOpacity = systemLook ? 0 : 0.14
             container.layer.shadowPath = NativeNavigationTabbarBackgroundPath.path(in: capsuleBounds, style: tabbarStyle).cgPath
             tabEffectView?.frame = capsuleBounds
             tabEffectView?.layer.cornerRadius = tabbarStyle.shape == .floating ? floatingCornerRadius : 0
@@ -2301,7 +2322,9 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         let navHeight = isEnabled && navbarVisible ? barHeight + topInset : 0
         let usesSystemTabbar = usesSystemTabBar
         let nativeTabHeight = max(tabBar?.frame.height ?? 0, 49 + safeInsets.bottom)
-        let customTabHeight = tabbarHeight + safeInsets.bottom + tabbarStyle.bottomGap
+        let customTabHeight = usesSystemLookCapsule
+            ? Self.systemLookBarHeight + systemLookBottomOffset(safeInsets)
+            : tabbarHeight + safeInsets.bottom + tabbarStyle.bottomGap
         // Hosted in the tab content VC: the WebView already ends above the
         // bar. Reporting the bar height as CSS overlap lifts the FAB by a
         // second bar.
@@ -2628,6 +2651,7 @@ private struct NativeNavigationFloatingTabStyle {
     let badgeBackgroundColor: UIColor
     let badgeTextColor: UIColor
     let showsSelectionBackground: Bool
+    let systemLook: Bool
 }
 
 private final class NativeNavigationFloatingTabBar: UIView {
@@ -2645,6 +2669,15 @@ private final class NativeNavigationFloatingTabBar: UIView {
             }
             buttons.forEach { $0.labelsCollapsed = minimized }
             setNeedsLayout()
+        }
+    }
+    /// Copy the iOS 26 system tab bar: label-colored items and a neutral selection pill.
+    var systemLook = false {
+        didSet {
+            guard systemLook != oldValue else {
+                return
+            }
+            updateButtons()
         }
     }
 
@@ -2706,7 +2739,7 @@ private final class NativeNavigationFloatingTabBar: UIView {
             return bounds
         }
         let trailingGap: CGFloat = 10
-        let trailingDiameter = min(tabbarStyle.height, bounds.height)
+        let trailingDiameter = systemLook ? bounds.height : min(tabbarStyle.height, bounds.height)
         let capsuleWidth = max(0, bounds.width - trailingDiameter - trailingGap)
         return CGRect(x: bounds.minX, y: bounds.minY, width: capsuleWidth, height: bounds.height)
     }
@@ -2715,7 +2748,7 @@ private final class NativeNavigationFloatingTabBar: UIView {
         guard hasDetachedTrailing else {
             return nil
         }
-        let trailingDiameter = min(tabbarStyle.height, bounds.height)
+        let trailingDiameter = systemLook ? bounds.height : min(tabbarStyle.height, bounds.height)
         return CGRect(
             x: bounds.maxX - trailingDiameter,
             y: bounds.minY + (bounds.height - trailingDiameter) / 2,
@@ -2848,7 +2881,8 @@ private final class NativeNavigationFloatingTabBar: UIView {
             centerButtonIconColor: tabbarStyle.centerButtonIconColor,
             badgeBackgroundColor: badgeBackgroundColor,
             badgeTextColor: badgeTextColor,
-            showsSelectionBackground: isCenter || tabbarStyle.shape != .curve
+            showsSelectionBackground: isCenter || tabbarStyle.shape != .curve,
+            systemLook: systemLook
         )
     }
 
@@ -2912,6 +2946,7 @@ private final class NativeNavigationFloatingTabButton: UIControl {
     private var hasLabel = true
     private var isCenterButton = false
     private var badgeText: String?
+    private var systemLook = false
     var labelsCollapsed = false {
         didSet {
             guard labelsCollapsed != oldValue else {
@@ -2967,13 +3002,16 @@ private final class NativeNavigationFloatingTabButton: UIControl {
             ? (!hasIcon && style.labels && !item.title.isEmpty)
             : (style.isCenter ? (!hasIcon && !item.title.isEmpty) : (style.labels && !item.title.isEmpty))
         badgeText = item.badge
+        systemLook = style.systemLook
 
+        let inactiveColor = style.systemLook ? UIColor.label : style.inactiveTint
         let color = style.isCenter
             ? style.centerButtonIconColor
-            : (style.selected ? style.selectedTint : style.inactiveTint)
+            : (style.selected ? style.selectedTint : inactiveColor)
+        let selectionColor = style.systemLook ? UIColor.label.withAlphaComponent(0.1) : style.selectedTint.withAlphaComponent(0.16)
         selectedView.backgroundColor = style.isCenter
             ? style.centerButtonColor
-            : style.selectedTint.withAlphaComponent(style.selected && !isDetachedTrailing ? 0.16 : 0)
+            : (style.selected && !isDetachedTrailing ? selectionColor : .clear)
         selectedView.alpha = style.isCenter || (style.selected && style.showsSelectionBackground && !isDetachedTrailing) ? 1 : 0
 
         layer.shadowColor = UIColor.black.cgColor
@@ -2988,7 +3026,9 @@ private final class NativeNavigationFloatingTabButton: UIControl {
 
         titleLabel.text = item.title
         titleLabel.textColor = color
-        titleLabel.font = .systemFont(ofSize: style.isCenter ? 12 : 11, weight: style.selected ? .bold : .semibold)
+        titleLabel.font = style.systemLook
+            ? .systemFont(ofSize: 10, weight: .medium)
+            : .systemFont(ofSize: style.isCenter ? 12 : 11, weight: style.selected ? .bold : .semibold)
         titleLabel.isHidden = !hasLabel
 
         badgeLabel.text = item.badge
@@ -3004,13 +3044,16 @@ private final class NativeNavigationFloatingTabButton: UIControl {
         super.layoutSubviews()
         if isCenterButton {
             selectedView.frame = bounds
+        } else if systemLook {
+            // The system bar's selection pill fills the item with a small inset.
+            selectedView.frame = bounds.insetBy(dx: 0, dy: 4)
         } else {
             let selectedSize = min(58, bounds.height - 6)
             selectedView.frame = CGRect(x: (bounds.width - selectedSize) / 2, y: (bounds.height - selectedSize) / 2, width: selectedSize, height: selectedSize)
         }
         selectedView.layer.cornerRadius = selectedView.bounds.height / 2
 
-        let iconSize: CGFloat = isCenterButton ? 32 : 23
+        let iconSize: CGFloat = isCenterButton ? 32 : (systemLook ? 24 : 23)
         if isCenterButton || (!hasLabel && hasIcon && bounds.width <= bounds.height + 1) {
             if hasIcon {
                 imageView.frame = CGRect(x: (bounds.width - iconSize) / 2, y: (bounds.height - iconSize) / 2, width: iconSize, height: iconSize)
