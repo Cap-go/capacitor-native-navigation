@@ -1,5 +1,8 @@
 package app.capgo.nativenavigation;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.content.Context;
 import android.content.res.Configuration;
@@ -20,13 +23,17 @@ import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.HapticFeedbackConstants;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
 import android.view.Window;
 import android.view.WindowInsets;
+import android.view.animation.PathInterpolator;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -67,6 +74,12 @@ public class NativeNavigationPlugin extends Plugin {
     private static final int INDICATOR_SLOT_INSET_DP = 2;
     private static final int FLOATING_INDICATOR_INSET_DP = 4;
     private static final int DEFAULT_TRANSITION_MS = 350;
+    private static final int TAB_LABEL_HEIGHT_DP = 18;
+    private static final int TAB_ICON_LABEL_GAP_DP = 2;
+    private static final int TABBAR_MINIMIZE_HEIGHT_REDUCTION_DP = 16;
+    private static final int TABBAR_MINIMIZE_SIDE_INSET_DP = 24;
+    private static final int TABBAR_MINIMIZE_ANIMATION_MS = 280;
+    private static final int TAB_INDICATOR_SLIDE_MS = 260;
     private static final int MENU_ITEM_BASE = 10_000;
     private static final int DEFAULT_TABBAR_BACKGROUND_COLOR = Color.WHITE;
 
@@ -115,6 +128,14 @@ public class NativeNavigationPlugin extends Plugin {
     private boolean tabbarChromeHideAnimating = false;
     private boolean tabbarDisableIndicator = false;
     private Integer tabbarIndicatorColor = null;
+    private String tabbarLabelVisibilityMode = "labeled";
+    private boolean tabbarIconsVisible = true;
+    private boolean tabbarMinimizeOnScroll = false;
+    private boolean tabbarDragToSelect = true;
+    private boolean tabbarEdgeBlur = false;
+    private boolean tabbarMinimized = false;
+    private float tabbarMinimizeProgress = 0f;
+    private ValueAnimator tabbarMinimizeAnimator;
 
     @Override
     public void load() {
@@ -225,13 +246,14 @@ public class NativeNavigationPlugin extends Plugin {
     @PluginMethod
     public void reportNavbarScroll(PluginCall call) {
         runOnUiThread(() -> {
-            if (navbarScrollBehavior == NavbarScrollSupport.ScrollBehavior.NONE || !navbarVisible) {
-                call.resolve();
-                return;
-            }
             float offsetY = call.getFloat("offsetY", 0f);
             float deltaY = call.getFloat("deltaY", 0f);
-            handleNavbarScroll(offsetY, deltaY);
+            if (navbarScrollBehavior != NavbarScrollSupport.ScrollBehavior.NONE && navbarVisible) {
+                handleNavbarScroll(offsetY, deltaY);
+            }
+            if (tabbarMinimizeEnabled() && tabbarVisible) {
+                handleTabbarMinimizeScroll(offsetY, deltaY);
+            }
             call.resolve();
         });
     }
@@ -250,6 +272,7 @@ public class NativeNavigationPlugin extends Plugin {
             boolean animated = call.getBoolean("animated", false);
             tabbarVisible = !hidden;
             if (hidden) {
+                setTabbarMinimized(false, false);
                 setTabbarChromeVisible(false, animated);
                 updateInsetsAndNotify();
                 call.resolve(insetsResult());
@@ -264,6 +287,7 @@ public class NativeNavigationPlugin extends Plugin {
             boolean labels = call.getBoolean("labels", true);
             boolean icons = call.getBoolean("icons", true);
             String labelVisibilityMode = call.getString("labelVisibilityMode", labels ? "labeled" : "unlabeled");
+            tabbarIconsVisible = icons;
             JSONArray tabs = call.getArray("tabs", new JSArray());
             String selectedId = call.getString("selectedId", null);
             JSObject colors = call.getObject("colors", new JSObject());
@@ -272,6 +296,9 @@ public class NativeNavigationPlugin extends Plugin {
             badgeTextColor = colorOption(call, colors, "badgeTextColor", "badgeText", Color.WHITE);
             tabbarDisableIndicator = call.getBoolean("disableIndicator", false);
             tabbarIndicatorColor = colorOption(call, colors, "indicatorColor", "indicator", null);
+            tabbarMinimizeOnScroll = "onScrollDown".equals(call.getString("minimizeBehavior", "never"));
+            tabbarDragToSelect = call.getBoolean("dragToSelect", true);
+            tabbarEdgeBlur = call.getBoolean("edgeBlur", false);
 
             for (int sourceIndex = 0; sourceIndex < tabs.length(); sourceIndex++) {
                 JSONObject tab = tabs.optJSONObject(sourceIndex);
@@ -337,6 +364,11 @@ public class NativeNavigationPlugin extends Plugin {
                 selectedTabIndex = 0;
             }
 
+            if (tabbarMinimizeEnabled()) {
+                startNavbarScrollObservation();
+            } else {
+                setTabbarMinimized(false, false);
+            }
             applyTabbarBackground(centerTabIndex());
             renderTabbarItems(labelVisibilityMode, icons);
             layoutChrome();
@@ -711,7 +743,7 @@ public class NativeNavigationPlugin extends Plugin {
                 boolean hasDetachedTrailing = tabItems.stream().anyMatch((item) -> item.detachedTrailing);
                 int capsuleWidth = TabbarChromeSupport.floatingCapsuleWidth(
                     width,
-                    dp(tabbarStyle.height),
+                    Math.min(dp(tabbarStyle.height), height),
                     dp(10),
                     hasDetachedTrailing
                 );
@@ -778,6 +810,29 @@ public class NativeNavigationPlugin extends Plugin {
         tabbar.setClipChildren(false);
         tabbar.setClipToPadding(false);
         tabbar.setBackgroundColor(Color.TRANSPARENT);
+        tabbar.setDragListener(
+            new NativeTabbarLayout.DragListener() {
+                @Override
+                public void onDragStart() {
+                    setTabbarMinimized(false, true);
+                }
+
+                @Override
+                public void onDragHover(int index) {
+                    tintTabButtons(index);
+                }
+
+                @Override
+                public boolean canSelect(int index) {
+                    return index >= 0 && index < tabItems.size() && tabItems.get(index).enabled;
+                }
+
+                @Override
+                public void onDragSelect(int index) {
+                    selectTab(index);
+                }
+            }
+        );
         tabbarContainer.addView(tabbarGlassSurface);
         tabbarContainer.addView(
             tabbar,
@@ -805,6 +860,14 @@ public class NativeNavigationPlugin extends Plugin {
             return;
         }
         tabbar.removeAllViews();
+        tabbarLabelVisibilityMode = labelVisibilityMode;
+        tabbarIconsVisible = icons;
+        tabbar.setSelectionState(
+            selectedTabIndex,
+            !tabbarStyle.isCurve() && tabbarDragToSelect,
+            !tabbarDisableIndicator,
+            TabbarChromeSupport.resolveSelectedIndicatorColor(tabbarIndicatorColor, tintColor)
+        );
         int centerIndex = centerTabIndex();
         applyTabbarBackground(centerIndex);
         for (int index = 0; index < tabItems.size(); index++) {
@@ -826,15 +889,147 @@ public class NativeNavigationPlugin extends Plugin {
                 if (!item.enabled) {
                     return;
                 }
-                selectedTabIndex = itemIndex;
-                renderTabbarItems(labelVisibilityMode, icons);
-                JSObject event = new JSObject();
-                event.put("id", item.id);
-                event.put("index", item.sourceIndex);
-                event.put("title", item.title);
-                notifyListeners("tabSelect", event);
+                setTabbarMinimized(false, true);
+                if (!tabbarStyle.isCurve() && !detachedTrailing) {
+                    tabbar.slideIndicator(selectedTabIndex, itemIndex);
+                }
+                selectTab(itemIndex);
             });
             tabbar.addView(button, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        }
+    }
+
+    private void selectTab(int index) {
+        if (tabbar == null || index < 0 || index >= tabItems.size()) {
+            return;
+        }
+        boolean changed = index != selectedTabIndex;
+        selectedTabIndex = index;
+        renderTabbarItems(tabbarLabelVisibilityMode, tabbarIconsVisible);
+        if (!changed) {
+            return;
+        }
+        NativeTabItem item = tabItems.get(index);
+        JSObject event = new JSObject();
+        event.put("id", item.id);
+        event.put("index", item.sourceIndex);
+        event.put("title", item.title);
+        notifyListeners("tabSelect", event);
+    }
+
+    /** While dragging, the tab under the finger lights up instead of the selected one. */
+    private void tintTabButtons(int highlightedIndex) {
+        if (tabbar == null) {
+            return;
+        }
+        for (int index = 0; index < tabbar.getChildCount(); index++) {
+            View child = tabbar.getChildAt(index);
+            if (!(child instanceof TabButton) || index >= tabItems.size() || "detachedTrailing".equals(child.getTag())) {
+                continue;
+            }
+            TabButton button = (TabButton) child;
+            int color = index == highlightedIndex && tabItems.get(index).enabled ? tintColor : inactiveTintColor;
+            if (button.icon != null) {
+                button.icon.setColorFilter(color);
+            }
+            if (button.label != null) {
+                button.label.setTextColor(color);
+            }
+        }
+    }
+
+    private boolean tabbarMinimizeEnabled() {
+        return tabbarMinimizeOnScroll && !tabbarStyle.isCurve() && tabbarIconsVisible;
+    }
+
+    private void handleTabbarMinimizeScroll(float offsetY, float deltaY) {
+        if (tabbar != null && tabbar.isDragging()) {
+            return;
+        }
+        NavbarScrollSupport.ScrollAction action = NavbarScrollSupport.scrollAction(
+            NavbarScrollSupport.ScrollBehavior.BOTH,
+            offsetY,
+            deltaY,
+            navbarScrollThreshold,
+            tabbarMinimized
+        );
+        if (action == NavbarScrollSupport.ScrollAction.HIDE) {
+            setTabbarMinimized(true, true);
+        } else if (action == NavbarScrollSupport.ScrollAction.REVEAL) {
+            setTabbarMinimized(false, true);
+        }
+    }
+
+    private void setTabbarMinimized(boolean minimized, boolean animated) {
+        if (minimized && !tabbarMinimizeEnabled()) {
+            return;
+        }
+        float target = minimized ? 1f : 0f;
+        if (tabbarMinimized == minimized && (tabbarMinimizeAnimator != null || tabbarMinimizeProgress == target)) {
+            return;
+        }
+        tabbarMinimized = minimized;
+        if (tabbarMinimizeAnimator != null) {
+            tabbarMinimizeAnimator.cancel();
+            tabbarMinimizeAnimator = null;
+        }
+        if (!animated || tabbarContainer == null || tabbarContainer.getVisibility() != View.VISIBLE) {
+            applyTabbarMinimizeProgress(target);
+            return;
+        }
+        ValueAnimator animator = ValueAnimator.ofFloat(tabbarMinimizeProgress, target);
+        animator.setDuration(TABBAR_MINIMIZE_ANIMATION_MS);
+        animator.setInterpolator(new PathInterpolator(0.2f, 0f, 0f, 1f));
+        animator.addUpdateListener((animation) -> applyTabbarMinimizeProgress((float) animation.getAnimatedValue()));
+        animator.addListener(
+            new AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    if (tabbarMinimizeAnimator == animation) {
+                        tabbarMinimizeAnimator = null;
+                    }
+                }
+            }
+        );
+        tabbarMinimizeAnimator = animator;
+        animator.start();
+    }
+
+    /** Revolut-style minimize: every icon stays, labels fold away and the capsule shrinks in both dimensions. */
+    private void applyTabbarMinimizeProgress(float progress) {
+        tabbarMinimizeProgress = Math.max(0f, Math.min(1f, progress));
+        if (tabbar != null) {
+            for (int index = 0; index < tabbar.getChildCount(); index++) {
+                View child = tabbar.getChildAt(index);
+                if (child instanceof TabButton) {
+                    applyTabButtonMinimize((TabButton) child);
+                }
+            }
+        }
+        layoutTabbarContainer();
+    }
+
+    private void applyTabButtonMinimize(TabButton button) {
+        float progress = tabbarMinimizeProgress;
+        if (button.labelClip != null) {
+            int height = Math.round(dp(TAB_LABEL_HEIGHT_DP) * (1f - progress));
+            ViewGroup.LayoutParams params = button.labelClip.getLayoutParams();
+            if (params != null && params.height != height) {
+                params.height = height;
+                button.labelClip.setLayoutParams(params);
+            }
+            button.labelClip.setAlpha(Math.max(0f, 1f - progress / 0.4f));
+        }
+        if (button.icon != null && button.labelClip != null) {
+            ViewGroup.LayoutParams params = button.icon.getLayoutParams();
+            if (params instanceof ViewGroup.MarginLayoutParams) {
+                int margin = Math.round(dp(TAB_ICON_LABEL_GAP_DP) * (1f - progress));
+                ViewGroup.MarginLayoutParams marginParams = (ViewGroup.MarginLayoutParams) params;
+                if (marginParams.bottomMargin != margin) {
+                    marginParams.bottomMargin = margin;
+                    button.icon.setLayoutParams(marginParams);
+                }
+            }
         }
     }
 
@@ -881,6 +1076,11 @@ public class NativeNavigationPlugin extends Plugin {
                 !tabbarStyle.isCurve()
             );
             indicator.setBackground(selectedBackground);
+            if (tabbar != null && tabbar.isIndicatorOverlayActive()) {
+                // The tabbar is drawing the sliding capsule; this one appears when it lands.
+                indicator.setVisibility(View.INVISIBLE);
+            }
+            button.indicator = indicator;
             button.addView(
                 indicator,
                 new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER)
@@ -902,8 +1102,9 @@ public class NativeNavigationPlugin extends Plugin {
             image.setColorFilter(itemColor);
             int imageSize = center ? dp(32) : dp(24);
             LinearLayout.LayoutParams imageParams = new LinearLayout.LayoutParams(imageSize, imageSize);
-            imageParams.bottomMargin = labelVisible ? dp(2) : 0;
+            imageParams.bottomMargin = labelVisible ? dp(TAB_ICON_LABEL_GAP_DP) : 0;
             content.addView(image, imageParams);
+            button.icon = image;
         }
 
         if (labelVisible) {
@@ -917,7 +1118,19 @@ public class NativeNavigationPlugin extends Plugin {
             label.setMaxLines(1);
             // Shrink long titles to fit the tab instead of cutting them off.
             TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(label, 9, TAB_LABEL_TEXT_SP, 1, TypedValue.COMPLEX_UNIT_SP);
-            content.addView(label, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(18)));
+            button.label = label;
+            if (iconVisible && !center) {
+                // The label sits in a clip so minimize can fold it away without autosizing the text.
+                FrameLayout labelClip = new FrameLayout(getContext());
+                labelClip.addView(
+                    label,
+                    new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(TAB_LABEL_HEIGHT_DP), Gravity.TOP)
+                );
+                content.addView(labelClip, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(TAB_LABEL_HEIGHT_DP)));
+                button.labelClip = labelClip;
+            } else {
+                content.addView(label, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(TAB_LABEL_HEIGHT_DP)));
+            }
         }
 
         if (item.badge != null && !item.badge.isEmpty() && !"0".equals(item.badge)) {
@@ -943,6 +1156,7 @@ public class NativeNavigationPlugin extends Plugin {
         }
 
         button.setContentDescription(item.title);
+        applyTabButtonMinimize(button);
         return button;
     }
 
@@ -964,7 +1178,7 @@ public class NativeNavigationPlugin extends Plugin {
             height += dp(24);
         }
         if (labelVisible) {
-            height += dp(18) + (iconVisible ? dp(2) : 0);
+            height += dp(TAB_LABEL_HEIGHT_DP) + (iconVisible ? dp(TAB_ICON_LABEL_GAP_DP) : 0);
         }
         return height;
     }
@@ -973,6 +1187,10 @@ public class NativeNavigationPlugin extends Plugin {
     private static final class TabButton extends FrameLayout {
 
         int preferredWidth = 0;
+        ImageView icon;
+        TextView label;
+        View labelClip;
+        View indicator;
 
         TabButton(Context context) {
             super(context);
@@ -1270,14 +1488,325 @@ public class NativeNavigationPlugin extends Plugin {
 
     private static final class NativeTabbarLayout extends FrameLayout {
 
+        /** Receives drag-to-select events from the floating tabbar. */
+        interface DragListener {
+            void onDragStart();
+
+            void onDragHover(int index);
+
+            boolean canSelect(int index);
+
+            void onDragSelect(int index);
+        }
+
         private final Paint backgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint indicatorPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final RectF indicatorRect = new RectF();
+        private final int touchSlop;
         private TabbarStyle style = TabbarStyle.defaults(Color.rgb(0, 122, 255));
         private int backgroundColor = DEFAULT_TABBAR_BACKGROUND_COLOR;
         private int centerIndex = -1;
+        private DragListener dragListener;
+        private int selectedIndex = -1;
+        private boolean dragEnabled = true;
+        private boolean indicatorEnabled = true;
+        // Slot geometry of the draggable tabs, refreshed on every layout so the sliding capsule
+        // keeps working while the tabs are re-rendered underneath it.
+        private float[] slotCenters = new float[0];
+        private float[] slotWidths = new float[0];
+        private boolean overlayActive = false;
+        private float overlayPosition = 0f;
+        private ValueAnimator overlayAnimator;
+        private boolean tracking = false;
+        private boolean dragging = false;
+        private float downX = 0f;
+        private float downY = 0f;
+        private int hoverIndex = -1;
 
         NativeTabbarLayout(Context context) {
             super(context);
             setWillNotDraw(false);
+            touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
+        }
+
+        void setDragListener(DragListener listener) {
+            this.dragListener = listener;
+        }
+
+        void setSelectionState(int selectedIndex, boolean dragEnabled, boolean indicatorEnabled, int indicatorColor) {
+            this.selectedIndex = selectedIndex;
+            this.dragEnabled = dragEnabled;
+            this.indicatorEnabled = indicatorEnabled;
+            indicatorPaint.setColor(indicatorColor);
+            if (!dragEnabled && dragging) {
+                cancelDrag();
+            }
+        }
+
+        boolean isDragging() {
+            return dragging;
+        }
+
+        boolean isIndicatorOverlayActive() {
+            return overlayActive;
+        }
+
+        /** Slides the capsule from one tab to another, like the iOS tab bar does on tap. */
+        void slideIndicator(int from, int to) {
+            if (style.isCurve() || dragging || from == to || from < 0 || to < 0 || to >= slotCenters.length || from >= slotCenters.length) {
+                return;
+            }
+            float start = overlayActive ? overlayPosition : from;
+            showOverlay(start);
+            animateOverlay(start, to);
+        }
+
+        private void showOverlay(float position) {
+            if (overlayAnimator != null) {
+                overlayAnimator.cancel();
+                overlayAnimator = null;
+            }
+            overlayActive = true;
+            overlayPosition = position;
+            setChildIndicatorsVisible(false);
+            invalidate();
+        }
+
+        private void animateOverlay(float from, int to) {
+            ValueAnimator animator = ValueAnimator.ofFloat(from, to);
+            animator.setDuration(TAB_INDICATOR_SLIDE_MS);
+            animator.setInterpolator(new PathInterpolator(0.2f, 0f, 0f, 1f));
+            animator.addUpdateListener((animation) -> {
+                overlayPosition = (float) animation.getAnimatedValue();
+                invalidate();
+            });
+            animator.addListener(
+                new AnimatorListenerAdapter() {
+                    private boolean cancelled = false;
+
+                    @Override
+                    public void onAnimationCancel(Animator animation) {
+                        cancelled = true;
+                    }
+
+                    @Override
+                    public void onAnimationEnd(Animator animation) {
+                        if (cancelled || overlayAnimator != animation) {
+                            return;
+                        }
+                        overlayAnimator = null;
+                        overlayActive = false;
+                        setChildIndicatorsVisible(true);
+                        invalidate();
+                    }
+                }
+            );
+            overlayAnimator = animator;
+            animator.start();
+        }
+
+        private void setChildIndicatorsVisible(boolean visible) {
+            for (int index = 0; index < getChildCount(); index++) {
+                View child = getChildAt(index);
+                if (child instanceof TabButton && ((TabButton) child).indicator != null) {
+                    ((TabButton) child).indicator.setVisibility(visible ? View.VISIBLE : View.INVISIBLE);
+                }
+            }
+        }
+
+        private boolean canDrag() {
+            return dragEnabled && dragListener != null && !style.isCurve() && slotCenters.length > 1 && isEnabled();
+        }
+
+        private boolean inDragRange(float x) {
+            int count = slotCenters.length;
+            if (count == 0) {
+                return false;
+            }
+            return x <= slotCenters[count - 1] + slotWidths[count - 1] / 2f;
+        }
+
+        /** Fractional tab position under {@code x}: 1.5 is halfway between the second and third tab. */
+        private float positionAt(float x) {
+            int last = slotCenters.length - 1;
+            if (x <= slotCenters[0]) {
+                return 0f;
+            }
+            if (x >= slotCenters[last]) {
+                return last;
+            }
+            for (int index = 0; index < last; index++) {
+                float start = slotCenters[index];
+                float end = slotCenters[index + 1];
+                if (x < end) {
+                    return index + (end > start ? (x - start) / (end - start) : 0f);
+                }
+            }
+            return last;
+        }
+
+        @Override
+        public boolean onInterceptTouchEvent(MotionEvent event) {
+            if (!canDrag()) {
+                return false;
+            }
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    downX = event.getX();
+                    downY = event.getY();
+                    tracking = inDragRange(downX);
+                    dragging = false;
+                    return false;
+                case MotionEvent.ACTION_MOVE:
+                    if (!dragging && shouldStartDrag(event)) {
+                        startDrag(event.getX());
+                    }
+                    return dragging;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    tracking = false;
+                    return false;
+                default:
+                    return false;
+            }
+        }
+
+        @Override
+        public boolean onTouchEvent(MotionEvent event) {
+            if (!canDrag() && !dragging) {
+                return super.onTouchEvent(event);
+            }
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    // The finger landed between tab slots; keep the stream so it can still become a drag.
+                    downX = event.getX();
+                    downY = event.getY();
+                    tracking = inDragRange(downX);
+                    return tracking;
+                case MotionEvent.ACTION_MOVE:
+                    if (!dragging && shouldStartDrag(event)) {
+                        startDrag(event.getX());
+                    }
+                    if (dragging) {
+                        updateDrag(event.getX());
+                    }
+                    return true;
+                case MotionEvent.ACTION_UP:
+                    if (dragging) {
+                        finishDrag(event.getX());
+                    }
+                    tracking = false;
+                    return true;
+                case MotionEvent.ACTION_CANCEL:
+                    cancelDrag();
+                    tracking = false;
+                    return true;
+                default:
+                    return true;
+            }
+        }
+
+        private boolean shouldStartDrag(MotionEvent event) {
+            if (!tracking) {
+                return false;
+            }
+            float dx = Math.abs(event.getX() - downX);
+            float dy = Math.abs(event.getY() - downY);
+            return dx > touchSlop && dx > dy;
+        }
+
+        private void startDrag(float x) {
+            dragging = true;
+            if (getParent() != null) {
+                getParent().requestDisallowInterceptTouchEvent(true);
+            }
+            int start = selectedIndex >= 0 && selectedIndex < slotCenters.length ? selectedIndex : Math.round(positionAt(x));
+            showOverlay(overlayActive ? overlayPosition : start);
+            hoverIndex = -1;
+            dragListener.onDragStart();
+            updateDrag(x);
+        }
+
+        private void updateDrag(float x) {
+            if (slotCenters.length == 0) {
+                return;
+            }
+            // The capsule tracks the finger 1:1; it must feel attached, so no easing here.
+            overlayPosition = positionAt(x);
+            int index = Math.round(overlayPosition);
+            if (index != hoverIndex) {
+                if (hoverIndex >= 0) {
+                    performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+                }
+                hoverIndex = index;
+                dragListener.onDragHover(index);
+            }
+            invalidate();
+        }
+
+        private void finishDrag(float x) {
+            dragging = false;
+            if (slotCenters.length == 0) {
+                overlayActive = false;
+                setChildIndicatorsVisible(true);
+                return;
+            }
+            int target = Math.round(positionAt(x));
+            if (!dragListener.canSelect(target)) {
+                target = Math.max(0, Math.min(selectedIndex, slotCenters.length - 1));
+            }
+            // Select on release only: switching pages mid-drag would make the content jump under the finger.
+            animateOverlay(overlayPosition, target);
+            dragListener.onDragSelect(target);
+        }
+
+        private void cancelDrag() {
+            if (!dragging) {
+                return;
+            }
+            dragging = false;
+            int target = Math.max(0, Math.min(selectedIndex, slotCenters.length - 1));
+            animateOverlay(overlayPosition, target);
+            if (dragListener != null) {
+                dragListener.onDragSelect(target);
+            }
+        }
+
+        private void refreshSlotGeometry() {
+            int end = style.isCurve() ? 0 : detachedTrailingIndex() >= 0 ? detachedTrailingIndex() : getChildCount();
+            float[] centers = new float[end];
+            float[] widths = new float[end];
+            for (int index = 0; index < end; index++) {
+                View child = getChildAt(index);
+                centers[index] = (child.getLeft() + child.getRight()) / 2f;
+                widths[index] = child.getWidth();
+            }
+            slotCenters = centers;
+            slotWidths = widths;
+            if (overlayActive) {
+                overlayPosition = Math.max(0f, Math.min(overlayPosition, Math.max(0, end - 1)));
+                invalidate();
+            }
+        }
+
+        private void drawOverlayIndicator(Canvas canvas) {
+            int count = slotCenters.length;
+            if (!overlayActive || !indicatorEnabled || count == 0) {
+                return;
+            }
+            float position = Math.max(0f, Math.min(overlayPosition, count - 1));
+            int start = (int) Math.floor(position);
+            int end = Math.min(start + 1, count - 1);
+            float fraction = position - start;
+            float centerX = slotCenters[start] + (slotCenters[end] - slotCenters[start]) * fraction;
+            float inset = dp(FLOATING_INDICATOR_INSET_DP);
+            float width = slotWidths[start] + (slotWidths[end] - slotWidths[start]) * fraction - inset * 2f;
+            float height = getHeight() - inset * 2f;
+            if (width <= 0f || height <= 0f) {
+                return;
+            }
+            indicatorRect.set(centerX - width / 2f, inset, centerX + width / 2f, inset + height);
+            canvas.drawRoundRect(indicatorRect, height / 2f, height / 2f, indicatorPaint);
         }
 
         void setTabbarStyle(TabbarStyle style, int backgroundColor, int centerIndex) {
@@ -1293,6 +1822,7 @@ public class NativeNavigationPlugin extends Plugin {
             super.onDraw(canvas);
             backgroundPaint.setColor(backgroundColor);
             canvas.drawPath(backgroundPath(getWidth(), getHeight()), backgroundPaint);
+            drawOverlayIndicator(canvas);
         }
 
         @Override
@@ -1314,7 +1844,7 @@ public class NativeNavigationPlugin extends Plugin {
 
             int trailingIndex = detachedTrailingIndex();
             if (trailingIndex >= 0) {
-                int trailingDiameter = dp(style.height);
+                int trailingDiameter = trailingDiameter(height);
                 int capsuleWidth = Math.max(0, width - trailingDiameter - dp(10));
                 measureRange(0, trailingIndex, capsuleWidth, height);
                 measureChildExact(getChildAt(trailingIndex), trailingDiameter, trailingDiameter);
@@ -1348,16 +1878,23 @@ public class NativeNavigationPlugin extends Plugin {
 
             int trailingIndex = detachedTrailingIndex();
             if (trailingIndex >= 0) {
-                int trailingDiameter = dp(style.height);
+                int trailingDiameter = trailingDiameter(height);
                 int capsuleWidth = Math.max(0, width - trailingDiameter - dp(10));
                 View trailing = getChildAt(trailingIndex);
                 int trailingTop = Math.max(0, (height - trailingDiameter) / 2);
                 trailing.layout(width - trailingDiameter, trailingTop, width, trailingTop + trailingDiameter);
                 layoutRange(0, trailingIndex, 0, 0, capsuleWidth, height);
+                refreshSlotGeometry();
                 return;
             }
 
             layoutRange(0, getChildCount(), 0, 0, width, height);
+            refreshSlotGeometry();
+        }
+
+        /** The detached trailing circle matches the bar height, which shrinks while minimized. */
+        private int trailingDiameter(int height) {
+            return height > 0 ? Math.min(dp(style.height), height) : dp(style.height);
         }
 
         private boolean hasCenterButton() {
@@ -1382,7 +1919,7 @@ public class NativeNavigationPlugin extends Plugin {
             if (trailingIndex < 0) {
                 return width;
             }
-            return Math.max(0, width - dp(style.height) - dp(10));
+            return Math.max(0, width - trailingDiameter(getHeight()) - dp(10));
         }
 
         private void measureRange(int start, int end, int width, int height) {
@@ -1453,8 +1990,8 @@ public class NativeNavigationPlugin extends Plugin {
                 return TabbarChromeSupport.buildFloatingTabbarPath(
                     width,
                     height,
-                    dp(style.cornerRadius),
-                    dp(style.height),
+                    Math.min(dp(style.cornerRadius), height / 2f),
+                    trailingDiameter(height),
                     dp(10),
                     detachedTrailingIndex() >= 0
                 );
@@ -1798,6 +2335,9 @@ public class NativeNavigationPlugin extends Plugin {
     }
 
     private int resolvedTabbarSurfaceColor() {
+        if (!supportsBlur()) {
+            return opaque(tabbarBackgroundColor);
+        }
         GlassOptions resolvedGlassOptions = tabbarGlassOptions == null ? GlassOptions.defaults() : tabbarGlassOptions;
         if (resolvedGlassOptions.isLiquidGlass()) {
             return glassSurfaceColor(tabbarBackgroundColor, resolvedGlassOptions);
@@ -1828,6 +2368,12 @@ public class NativeNavigationPlugin extends Plugin {
             return;
         }
         GlassOptions resolvedGlassOptions = glassOptions == null ? GlassOptions.defaults() : glassOptions;
+        if (!supportsBlur()) {
+            // Without blur a translucent bar lets the page read through, so older Android gets a solid bar.
+            hideGlassSurface(surface);
+            container.setBackground(chromeBackgroundDrawable(opaque(background), cornerRadius));
+            return;
+        }
         if (!resolvedGlassOptions.isLiquidGlass()) {
             hideGlassSurface(surface);
             container.setBackground(chromeBackgroundDrawable(background, cornerRadius));
@@ -1840,6 +2386,15 @@ public class NativeNavigationPlugin extends Plugin {
             surface.setBackground(chromeBackgroundDrawable(surfaceColor, cornerRadius));
             surface.setVisibility(View.VISIBLE);
         }
+    }
+
+    /** The page blur behind the bars needs CSS backdrop-filter and enough GPU, so it starts at Android 12. */
+    private boolean supportsBlur() {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.S;
+    }
+
+    private int opaque(int color) {
+        return color | 0xFF000000;
     }
 
     private void hideGlassSurface(View surface) {
@@ -1946,9 +2501,7 @@ public class NativeNavigationPlugin extends Plugin {
         int bottom = navigationBarInset();
         int navbarToolbar = navbarScrollCollapsed ? 0 : dp(DEFAULT_NAVBAR_DP);
         int navbarHeight = navbarVisible ? status + navbarToolbar : 0;
-        int tabbarHeight = dp(tabbarStyle.totalHeight());
         boolean tabbarLayoutVisible = tabbarVisible || tabbarChromeHideAnimating;
-        int tabbarBottomMargin = tabbarLayoutVisible ? bottom + dp(tabbarStyle.bottomGap) : bottom;
 
         if (navbarContainer != null) {
             FrameLayout.LayoutParams containerParams = new FrameLayout.LayoutParams(
@@ -1980,28 +2533,7 @@ public class NativeNavigationPlugin extends Plugin {
             tabbarBackdrop.setBackgroundColor(resolvedTabbarSurfaceColor());
             tabbarBackdrop.setVisibility(tabbarLayoutVisible && backdropHeight > 0 ? View.VISIBLE : View.GONE);
         }
-        if (tabbarContainer != null) {
-            int rootWidth = root.getWidth() > 0 ? root.getWidth() : Resources.getSystem().getDisplayMetrics().widthPixels;
-            int availableWidth = Math.max(0, rootWidth - dp(tabbarStyle.horizontalMargin) * 2);
-            int maxWidth = tabbarStyle.maxWidth > 0 ? dp(tabbarStyle.maxWidth) : availableWidth;
-            boolean hasDetachedTrailing = !tabbarStyle.isCurve() && tabItems.stream().anyMatch((item) -> item.detachedTrailing);
-            int trailingExtra = hasDetachedTrailing ? dp(tabbarStyle.height) + dp(10) : 0;
-            int tabbarWidth = Math.min(availableWidth, maxWidth + trailingExtra);
-            FrameLayout.LayoutParams tabbarContainerParams = new FrameLayout.LayoutParams(
-                tabbarWidth,
-                tabbarHeight,
-                Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL
-            );
-            tabbarContainerParams.bottomMargin = tabbarBottomMargin;
-            tabbarContainer.setLayoutParams(tabbarContainerParams);
-            fillContainer(tabbarGlassSurface);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                tabbarContainer.invalidateOutline();
-                if (tabbarGlassSurface != null) {
-                    tabbarGlassSurface.invalidateOutline();
-                }
-            }
-        }
+        layoutTabbarContainer();
 
         if (tabbar != null) {
             FrameLayout.LayoutParams tabbarParams = new FrameLayout.LayoutParams(
@@ -2014,6 +2546,49 @@ public class NativeNavigationPlugin extends Plugin {
         }
 
         bringChromeToFront();
+    }
+
+    /** Sizes the tabbar container, including the minimize-on-scroll shrink. */
+    private void layoutTabbarContainer() {
+        FrameLayout root = contentRoot();
+        if (root == null || tabbarContainer == null) {
+            return;
+        }
+        int bottom = navigationBarInset();
+        boolean tabbarLayoutVisible = tabbarVisible || tabbarChromeHideAnimating;
+        int tabbarBottomMargin = tabbarLayoutVisible ? bottom + dp(tabbarStyle.bottomGap) : bottom;
+        float minimize = tabbarStyle.isCurve() ? 0f : tabbarMinimizeProgress;
+        int tabbarHeight = dp(tabbarStyle.totalHeight()) - Math.round(dp(TABBAR_MINIMIZE_HEIGHT_REDUCTION_DP) * minimize);
+        int sideInset = Math.round(dp(TABBAR_MINIMIZE_SIDE_INSET_DP) * minimize);
+        int rootWidth = root.getWidth() > 0 ? root.getWidth() : Resources.getSystem().getDisplayMetrics().widthPixels;
+        int availableWidth = Math.max(0, rootWidth - dp(tabbarStyle.horizontalMargin) * 2);
+        int maxWidth = tabbarStyle.maxWidth > 0 ? dp(tabbarStyle.maxWidth) : availableWidth;
+        boolean hasDetachedTrailing = !tabbarStyle.isCurve() && tabItems.stream().anyMatch((item) -> item.detachedTrailing);
+        int trailingExtra = hasDetachedTrailing ? Math.min(dp(tabbarStyle.height), tabbarHeight) + dp(10) : 0;
+        int tabbarWidth = Math.max(0, Math.min(availableWidth, maxWidth + trailingExtra) - sideInset * 2);
+        ViewGroup.LayoutParams current = tabbarContainer.getLayoutParams();
+        if (
+            current instanceof FrameLayout.LayoutParams &&
+            current.width == tabbarWidth &&
+            current.height == tabbarHeight &&
+            ((FrameLayout.LayoutParams) current).bottomMargin == tabbarBottomMargin &&
+            ((FrameLayout.LayoutParams) current).gravity == (Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL)
+        ) {
+            // Same size: skip the relayout, but the outline still depends on the current tabs.
+        } else {
+            FrameLayout.LayoutParams tabbarContainerParams = new FrameLayout.LayoutParams(
+                tabbarWidth,
+                tabbarHeight,
+                Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL
+            );
+            tabbarContainerParams.bottomMargin = tabbarBottomMargin;
+            tabbarContainer.setLayoutParams(tabbarContainerParams);
+            fillContainer(tabbarGlassSurface);
+        }
+        tabbarContainer.invalidateOutline();
+        if (tabbarGlassSurface != null) {
+            tabbarGlassSurface.invalidateOutline();
+        }
     }
 
     private void setTabbarChromeVisible(boolean visible, boolean animated) {
@@ -2139,6 +2714,7 @@ public class NativeNavigationPlugin extends Plugin {
         JSObject event = new JSObject();
         event.put("insets", insets);
         notifyListeners("safeAreaChanged", event);
+        applyTabbarEdgeBlur(insets);
         if ("none".equals(contentInsetMode) || getBridge() == null || getBridge().getWebView() == null) {
             return;
         }
@@ -2171,6 +2747,19 @@ public class NativeNavigationPlugin extends Plugin {
             "}}));" +
             "})();";
         getBridge().getWebView().evaluateJavascript(script, null);
+    }
+
+    /**
+     * Progressive blur under the tabbar, drawn by the page itself with CSS backdrop-filter. Blurring the WebView
+     * from native code breaks scrolling (see #77), so this stays in the web layer.
+     */
+    private void applyTabbarEdgeBlur(JSObject insets) {
+        if (getBridge() == null || getBridge().getWebView() == null) {
+            return;
+        }
+        boolean active = enabled && tabbarEdgeBlur && tabbarVisible && supportsBlur();
+        int height = active ? insets.getInteger("tabbarHeight", 0) + TabbarChromeSupport.EDGE_BLUR_BLEED_CSS_PX : 0;
+        getBridge().getWebView().evaluateJavascript(TabbarChromeSupport.edgeBlurScript(height), null);
     }
 
     private void configureNavbarScrollBehavior(PluginCall call) {

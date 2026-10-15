@@ -199,4 +199,24 @@ class NativeNavigationTests: XCTestCase {
             )
         )
     }
+
+    func testSVGArcDrawsCurveNotLine() {
+        // Top half of a circle of radius 8 centred on (12, 21), as in a "person" icon.
+        let path = UIBezierPath()
+        path.move(to: CGPoint(x: 20, y: 21))
+        nativeNavigationAddSVGArc(
+            to: path,
+            from: CGPoint(x: 20, y: 21),
+            to: CGPoint(x: 4, y: 21),
+            radii: CGSize(width: 8, height: 8),
+            rotation: 0,
+            largeArc: false,
+            sweep: false
+        )
+
+        XCTAssertEqual(path.currentPoint.x, 4, accuracy: 0.001)
+        XCTAssertEqual(path.currentPoint.y, 21, accuracy: 0.001)
+        XCTAssertEqual(path.bounds.minY, 13, accuracy: 0.05)
+        XCTAssertEqual(path.bounds.width, 16, accuracy: 0.05)
+    }
 }

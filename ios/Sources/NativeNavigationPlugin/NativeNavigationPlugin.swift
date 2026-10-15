@@ -44,6 +44,9 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var tabEffectView: UIVisualEffectView?
     private var trailingTabEffectView: UIVisualEffectView?
     private var tabBar: UITabBar?
+    private var tabbarEdgeBlur = false
+    private var tabbarMinimizeOnScroll = false
+    private var tabbarMinimized = false
     private var floatingTabBar: NativeNavigationFloatingTabBar?
     private var tabbarStyle = NativeNavigationTabbarStyleConfig()
     private var tabBarController: NativeNavigationTabController?
@@ -92,6 +95,17 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             return true
         }
         return false
+    }
+
+    /// The iOS 26 system tab bar, unless the bar is a curve or minimizes on scroll. UIKit's own
+    /// minimize cannot follow WebView scrolling, so minimize uses the plugin's glass capsule.
+    private var usesSystemTabBar: Bool {
+        usesSystemLiquidGlass && tabbarStyle.shape != .curve && !tabbarMinimizeOnScroll
+    }
+
+    /// Minimize only shrinks the floating capsule, and needs icons to stay recognizable.
+    private var tabbarMinimizeActive: Bool {
+        tabbarMinimized && tabbarMinimizeOnScroll && tabbarStyle.shape == .floating
     }
 
     override public func load() {
@@ -204,14 +218,14 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
     @objc func reportNavbarScroll(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
-            guard self.navbarScrollBehavior != .none, self.navbarVisible else {
-                call.resolve()
-                return
-            }
-
             let offsetY = CGFloat(call.getDouble("offsetY") ?? 0)
             let deltaY = CGFloat(call.getDouble("deltaY") ?? 0)
-            self.handleNavbarScroll(offsetY: offsetY, deltaY: deltaY)
+            if self.navbarScrollBehavior != .none, self.navbarVisible {
+                self.handleNavbarScroll(offsetY: offsetY, deltaY: deltaY)
+            }
+            if self.tabbarMinimizeOnScroll, self.tabbarVisible {
+                self.handleTabbarMinimizeScroll(offsetY: offsetY, deltaY: deltaY)
+            }
             call.resolve()
         }
     }
@@ -228,6 +242,12 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             let hidden = call.getBool("hidden", false)
             let animated = call.getBool("animated", false)
             self.tabbarVisible = !hidden
+            self.tabbarEdgeBlur = call.getBool("edgeBlur", false)
+            let minimizeOnScroll = call.getString("minimizeBehavior") == "onScrollDown" && call.getBool("icons", true)
+            if !minimizeOnScroll {
+                self.tabbarMinimized = false
+            }
+            self.tabbarMinimizeOnScroll = minimizeOnScroll
 
             guard !hidden else {
                 self.hideTabBarChrome(animated: animated)
@@ -241,7 +261,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 if animated {
                     if nativeNavigationPrefersAnimatedSystemTabbarVisibility(
                         animated: true,
-                        usesSystemLiquidGlass: self.usesSystemLiquidGlass,
+                        usesSystemLiquidGlass: self.usesSystemTabBar,
                         shape: self.tabbarStyle.shape == .curve ? "curve" : "floating"
                     ) {
                         self.tabbarSkipImmediateSystemReveal = true
@@ -249,7 +269,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                     } else {
                         self.setFloatingTabBarVisibility(hidden: false, animated: true)
                     }
-                } else if self.usesSystemLiquidGlass && self.tabbarStyle.shape != .curve {
+                } else if self.usesSystemTabBar {
                     self.setSystemTabBarHidden(false, animated: false, syncSubviewState: true)
                 } else {
                     self.setFloatingTabBarVisibility(hidden: false, animated: false)
@@ -265,7 +285,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             let labelVisibilityMode = call.getString("labelVisibilityMode") ?? (labels ? "labeled" : "unlabeled")
             let icons = call.getBool("icons", true)
 
-            if self.usesSystemLiquidGlass && self.tabbarStyle.shape != .curve {
+            if self.usesSystemTabBar {
                 self.floatingTabBar?.isHidden = true
                 self.tabContainer?.isHidden = true
                 // Unhide before rehosting. setTabBarHidden does not recover on iOS 26
@@ -320,7 +340,12 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                         icons: icons,
                         style: self.tabbarStyle
                     )
+                    tabBar.minimized = self.tabbarMinimizeActive
+                    if self.tabbarMinimizeOnScroll {
+                        self.installNavbarScrollBridge()
+                    }
                     tabBar.onSelect = { [weak self] _, item in
+                        self?.setTabbarMinimized(false, animated: true)
                         self?.notifyListeners("tabSelect", data: [
                             "id": item.id,
                             "index": item.sourceIndex,
@@ -995,7 +1020,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private func hideTabBarChrome(animated: Bool = false) {
         if nativeNavigationPrefersAnimatedSystemTabbarVisibility(
             animated: animated,
-            usesSystemLiquidGlass: usesSystemLiquidGlass,
+            usesSystemLiquidGlass: usesSystemTabBar,
             shape: tabbarStyle.shape == .curve ? "curve" : "floating"
         ) {
             tabbarSoftHidden = true
@@ -1010,7 +1035,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         }
 
         tabbarSoftHidden = false
-        if usesSystemLiquidGlass && tabbarStyle.shape != .curve {
+        if usesSystemTabBar {
             hideSystemTabBarChromeCompletely()
         } else {
             restoreWebViewFromSystemTabController()
@@ -1059,7 +1084,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         tabContainer?.isHidden = true
         floatingTabBar?.isHidden = true
         tabBarController?.view.isHidden = false
-        if usesSystemLiquidGlass && tabbarStyle.shape != .curve {
+        if usesSystemTabBar {
             if !tabbarSkipImmediateSystemReveal {
                 setSystemTabBarHidden(false)
             }
@@ -1981,6 +2006,49 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         bridge?.webView?.evaluateJavaScript(script)
     }
 
+    private func handleTabbarMinimizeScroll(offsetY: CGFloat, deltaY: CGFloat) {
+        let action = nativeNavigationNavbarScrollAction(
+            behavior: .both,
+            offsetY: offsetY,
+            deltaY: deltaY,
+            threshold: navbarScrollThreshold,
+            isCollapsed: tabbarMinimized
+        )
+        switch action {
+        case .hide:
+            setTabbarMinimized(true, animated: true)
+        case .reveal:
+            setTabbarMinimized(false, animated: true)
+        case .none:
+            break
+        }
+    }
+
+    /// Revolut-style minimize: every icon stays, labels fold away and the capsule shrinks in both dimensions.
+    private func setTabbarMinimized(_ minimized: Bool, animated: Bool) {
+        guard tabbarMinimized != minimized, !minimized || tabbarMinimizeOnScroll else {
+            return
+        }
+        tabbarMinimized = minimized
+        let apply = {
+            self.floatingTabBar?.minimized = self.tabbarMinimizeActive
+            self.layoutChrome()
+            self.floatingTabBar?.layoutIfNeeded()
+        }
+        guard animated else {
+            apply()
+            return
+        }
+        UIView.animate(
+            withDuration: 0.36,
+            delay: 0,
+            usingSpringWithDamping: 1,
+            initialSpringVelocity: 0,
+            options: [.beginFromCurrentState, .allowUserInteraction],
+            animations: apply
+        )
+    }
+
     private func handleNavbarScroll(offsetY: CGFloat, deltaY: CGFloat) {
         let action = nativeNavigationNavbarScrollAction(
             behavior: navbarScrollBehavior,
@@ -2077,10 +2145,12 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             let trailingDiameter = tabbarStyle.height
             let trailingGap: CGFloat = 10
             let trailingExtra = hasDetachedTrailing ? trailingDiameter + trailingGap : 0
-            let tabbarWidth = min(availableWidth, maxWidth + trailingExtra)
+            let minimizeProgress: CGFloat = tabbarMinimizeActive ? 1 : 0
+            let minimizedSideInset = 24 * minimizeProgress
+            let tabbarWidth = max(0, min(availableWidth, maxWidth + trailingExtra) - minimizedSideInset * 2)
             let curveExtendsToBottom = tabbarStyle.shape == .curve && tabbarStyle.horizontalMargin == 0 && tabbarStyle.bottomGap == 0
             let bottomExtension = curveExtendsToBottom ? safeInsets.bottom : 0
-            let contentHeight = tabbarStyle.height
+            let contentHeight = tabbarStyle.height - 16 * minimizeProgress
             let barTop = tabbarStyle.shape == .curve ? tabbarStyle.centerButtonLift : 0
             let totalHeight = contentHeight + barTop
             let originX = (width - tabbarWidth) / 2
@@ -2094,10 +2164,11 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             floatingTabBar?.layoutIfNeeded()
 
             let capsuleBounds = floatingTabBar?.capsuleBounds(in: container.bounds) ?? container.bounds
-            container.layer.cornerRadius = tabbarStyle.shape == .floating ? tabbarStyle.cornerRadius : 0
+            let floatingCornerRadius = min(tabbarStyle.cornerRadius, capsuleBounds.height / 2)
+            container.layer.cornerRadius = tabbarStyle.shape == .floating ? floatingCornerRadius : 0
             container.layer.shadowPath = NativeNavigationTabbarBackgroundPath.path(in: capsuleBounds, style: tabbarStyle).cgPath
             tabEffectView?.frame = capsuleBounds
-            tabEffectView?.layer.cornerRadius = tabbarStyle.shape == .floating ? tabbarStyle.cornerRadius : 0
+            tabEffectView?.layer.cornerRadius = tabbarStyle.shape == .floating ? floatingCornerRadius : 0
             tabEffectView?.isHidden = tabbarStyle.shape == .curve || prefersOpaqueTabBarBackground() || tabEffectView?.effect == nil
 
             if let trailingBounds = floatingTabBar?.trailingActionBounds(in: container.bounds),
@@ -2121,7 +2192,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
 
     private func bringChromeToFront() {
-        if usesSystemLiquidGlass && tabbarStyle.shape != .curve {
+        if usesSystemTabBar {
             if let tabBarController = tabBarController {
                 (systemTabRootContainer ?? bridge?.viewController?.view)?.bringSubviewToFront(tabBarController.view)
             }
@@ -2228,7 +2299,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         let topInset = navbarTopInset(safeInsets)
         let barHeight = navbarScrollCollapsed ? 0 : navbarHeight
         let navHeight = isEnabled && navbarVisible ? barHeight + topInset : 0
-        let usesSystemTabbar = usesSystemLiquidGlass && tabbarStyle.shape != .curve
+        let usesSystemTabbar = usesSystemTabBar
         let nativeTabHeight = max(tabBar?.frame.height ?? 0, 49 + safeInsets.bottom)
         let customTabHeight = tabbarHeight + safeInsets.bottom + tabbarStyle.bottomGap
         // Hosted in the tab content VC: the WebView already ends above the
@@ -2262,6 +2333,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         layoutChrome()
         let insets = currentInsets()
         notifyListeners("safeAreaChanged", data: ["insets": insets])
+        applyTabbarEdgeBlur(tabbarHeight: insets["tabbarHeight"] as? CGFloat ?? 0)
         guard contentInsetMode != "none" else {
             return
         }
@@ -2289,6 +2361,36 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         bridge?.webView?.evaluateJavaScript(script)
     }
 
+    /// Progressive blur under the tabbar, drawn by the page with CSS backdrop-filter so it follows web
+    /// scrolling for free. Stacked layers with growing masks fade the blur out above the bar.
+    private func applyTabbarEdgeBlur(tabbarHeight: CGFloat) {
+        let active = isEnabled && tabbarEdgeBlur && tabbarVisible && tabbarHeight > 0
+        let height = active ? Int(tabbarHeight.rounded()) + 48 : 0
+        let script = """
+        (function(height){
+          var id = 'cap-native-navigation-edge-blur';
+          var root = document.getElementById(id);
+          if (!(height > 0)) { if (root) { root.remove(); } return; }
+          if (!root) {
+            root = document.createElement('div');
+            root.id = id;
+            root.setAttribute('aria-hidden', 'true');
+            root.style.cssText = 'position:fixed;left:0;right:0;bottom:0;pointer-events:none;z-index:2147483646;';
+            [100, 84, 68, 52, 36, 20].forEach(function(h){
+              var layer = document.createElement('div');
+              var mask = 'linear-gradient(to top,#000 0%,#000 ' + Math.round(h * 0.6) + '%,transparent ' + h + '%)';
+              layer.style.cssText = 'position:absolute;left:0;right:0;top:0;bottom:0;-webkit-backdrop-filter:blur(2px);'
+                + 'backdrop-filter:blur(2px);-webkit-mask-image:' + mask + ';mask-image:' + mask + ';';
+              root.appendChild(layer);
+            });
+          }
+          if (root.parentNode !== document.body && document.body) { document.body.appendChild(root); }
+          root.style.height = height + 'px';
+        })(\(height));
+        """
+        bridge?.webView?.evaluateJavaScript(script)
+    }
+
     private func jsonString(_ value: Any) -> String {
         guard JSONSerialization.isValidJSONObject(value),
               let data = try? JSONSerialization.data(withJSONObject: value),
@@ -2301,6 +2403,96 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 // swiftlint:enable type_body_length
 
 // swiftlint:disable cyclomatic_complexity function_body_length identifier_name
+private struct NativeNavigationSVGArc {
+    let radii: CGSize
+    let rotation: CGFloat
+    let largeArc: Bool
+    let sweep: Bool
+    let end: CGPoint
+}
+
+/// Draws an SVG elliptical arc as cubic Béziers (SVG 1.1 appendix F.6.5 endpoint-to-center conversion).
+func nativeNavigationAddSVGArc(
+    to path: UIBezierPath,
+    from start: CGPoint,
+    to end: CGPoint,
+    radii: CGSize,
+    rotation: CGFloat,
+    largeArc: Bool,
+    sweep: Bool
+) {
+    var rx = abs(radii.width)
+    var ry = abs(radii.height)
+    guard rx > 0, ry > 0, start != end else {
+        path.addLine(to: end)
+        return
+    }
+    let phi = rotation * .pi / 180
+    let cosPhi = cos(phi)
+    let sinPhi = sin(phi)
+    let dx = (start.x - end.x) / 2
+    let dy = (start.y - end.y) / 2
+    let x1 = cosPhi * dx + sinPhi * dy
+    let y1 = -sinPhi * dx + cosPhi * dy
+    let lambda = (x1 * x1) / (rx * rx) + (y1 * y1) / (ry * ry)
+    if lambda > 1 {
+        rx *= sqrt(lambda)
+        ry *= sqrt(lambda)
+    }
+    let numerator = rx * rx * ry * ry - rx * rx * y1 * y1 - ry * ry * x1 * x1
+    let denominator = rx * rx * y1 * y1 + ry * ry * x1 * x1
+    var factor = denominator == 0 ? 0 : sqrt(max(0, numerator / denominator))
+    if largeArc == sweep {
+        factor = -factor
+    }
+    let cxPrime = factor * rx * y1 / ry
+    let cyPrime = -factor * ry * x1 / rx
+    let cx = cosPhi * cxPrime - sinPhi * cyPrime + (start.x + end.x) / 2
+    let cy = sinPhi * cxPrime + cosPhi * cyPrime + (start.y + end.y) / 2
+
+    func angle(_ ux: CGFloat, _ uy: CGFloat, _ vx: CGFloat, _ vy: CGFloat) -> CGFloat {
+        let value = atan2(ux * vy - uy * vx, ux * vx + uy * vy)
+        return value
+    }
+    let theta1 = angle(1, 0, (x1 - cxPrime) / rx, (y1 - cyPrime) / ry)
+    var delta = angle((x1 - cxPrime) / rx, (y1 - cyPrime) / ry, (-x1 - cxPrime) / rx, (-y1 - cyPrime) / ry)
+    if !sweep && delta > 0 {
+        delta -= 2 * .pi
+    } else if sweep && delta < 0 {
+        delta += 2 * .pi
+    }
+
+    let segments = max(1, Int(ceil(abs(delta) / (.pi / 2))))
+    let step = delta / CGFloat(segments)
+    let handle = 4 / 3 * tan(step / 4)
+    func pointOnEllipse(_ theta: CGFloat) -> CGPoint {
+        CGPoint(
+            x: cx + rx * cos(theta) * cosPhi - ry * sin(theta) * sinPhi,
+            y: cy + rx * cos(theta) * sinPhi + ry * sin(theta) * cosPhi
+        )
+    }
+    func derivative(_ theta: CGFloat) -> CGPoint {
+        CGPoint(
+            x: -rx * sin(theta) * cosPhi - ry * cos(theta) * sinPhi,
+            y: -rx * sin(theta) * sinPhi + ry * cos(theta) * cosPhi
+        )
+    }
+    var theta = theta1
+    for index in 0..<segments {
+        let nextTheta = theta + step
+        let from = pointOnEllipse(theta)
+        let to = index == segments - 1 ? end : pointOnEllipse(nextTheta)
+        let d1 = derivative(theta)
+        let d2 = derivative(nextTheta)
+        path.addCurve(
+            to: to,
+            controlPoint1: CGPoint(x: from.x + handle * d1.x, y: from.y + handle * d1.y),
+            controlPoint2: CGPoint(x: to.x - handle * d2.x, y: to.y - handle * d2.y)
+        )
+        theta = nextTheta
+    }
+}
+
 private struct SVGRenderStyle {
     var fill = true
     var stroke = false
@@ -2446,6 +2638,15 @@ private final class NativeNavigationFloatingTabBar: UIView {
     private let backgroundShapeView = NativeNavigationTabbarBackgroundView()
     private var tabbarStyle = NativeNavigationTabbarStyleConfig()
     var curveContentHeightOverride: CGFloat?
+    var minimized = false {
+        didSet {
+            guard minimized != oldValue else {
+                return
+            }
+            buttons.forEach { $0.labelsCollapsed = minimized }
+            setNeedsLayout()
+        }
+    }
 
     var selectedIndex = 0
     var selectedTintColor = UIColor.systemBlue {
@@ -2505,7 +2706,7 @@ private final class NativeNavigationFloatingTabBar: UIView {
             return bounds
         }
         let trailingGap: CGFloat = 10
-        let trailingDiameter = tabbarStyle.height
+        let trailingDiameter = min(tabbarStyle.height, bounds.height)
         let capsuleWidth = max(0, bounds.width - trailingDiameter - trailingGap)
         return CGRect(x: bounds.minX, y: bounds.minY, width: capsuleWidth, height: bounds.height)
     }
@@ -2514,7 +2715,7 @@ private final class NativeNavigationFloatingTabBar: UIView {
         guard hasDetachedTrailing else {
             return nil
         }
-        let trailingDiameter = tabbarStyle.height
+        let trailingDiameter = min(tabbarStyle.height, bounds.height)
         return CGRect(
             x: bounds.maxX - trailingDiameter,
             y: bounds.minY + (bounds.height - trailingDiameter) / 2,
@@ -2611,6 +2812,7 @@ private final class NativeNavigationFloatingTabBar: UIView {
                 style: style(for: index)
             )
             button.addTarget(self, action: #selector(handleTap(_:)), for: .touchUpInside)
+            button.labelsCollapsed = minimized
             addSubview(button)
             return button
         }
@@ -2710,6 +2912,15 @@ private final class NativeNavigationFloatingTabButton: UIControl {
     private var hasLabel = true
     private var isCenterButton = false
     private var badgeText: String?
+    var labelsCollapsed = false {
+        didSet {
+            guard labelsCollapsed != oldValue else {
+                return
+            }
+            titleLabel.alpha = labelsCollapsed ? 0 : 1
+            setNeedsLayout()
+        }
+    }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -2794,7 +3005,7 @@ private final class NativeNavigationFloatingTabButton: UIControl {
         if isCenterButton {
             selectedView.frame = bounds
         } else {
-            let selectedSize: CGFloat = 58
+            let selectedSize = min(58, bounds.height - 6)
             selectedView.frame = CGRect(x: (bounds.width - selectedSize) / 2, y: (bounds.height - selectedSize) / 2, width: selectedSize, height: selectedSize)
         }
         selectedView.layer.cornerRadius = selectedView.bounds.height / 2
@@ -2808,7 +3019,7 @@ private final class NativeNavigationFloatingTabButton: UIControl {
                 imageView.frame = .zero
                 titleLabel.frame = CGRect(x: 8, y: (bounds.height - 18) / 2, width: bounds.width - 16, height: 18)
             }
-        } else if hasIcon && hasLabel {
+        } else if hasIcon && hasLabel && !labelsCollapsed {
             let labelHeight: CGFloat = 14
             let gap: CGFloat = 2
             let stackHeight = iconSize + gap + labelHeight
@@ -2821,7 +3032,8 @@ private final class NativeNavigationFloatingTabButton: UIControl {
             titleLabel.frame = CGRect(x: 4, y: stackY + iconSize + gap, width: bounds.width - 8, height: labelHeight)
         } else if hasIcon {
             imageView.frame = CGRect(x: (bounds.width - iconSize) / 2, y: (bounds.height - iconSize) / 2, width: iconSize, height: iconSize)
-            titleLabel.frame = .zero
+            // Keep the folded label under the icon so it fades in place when the bar expands.
+            titleLabel.frame = hasLabel ? CGRect(x: 4, y: imageView.frame.maxY + 2, width: bounds.width - 8, height: 14) : .zero
         } else {
             imageView.frame = .zero
             titleLabel.frame = CGRect(x: 5, y: (bounds.height - 18) / 2, width: bounds.width - 10, height: 18)
@@ -3326,9 +3538,17 @@ private final class SVGPathParser {
                 lastCubicControl = nil
             }
         case "A":
-            while let end = arcEndpoint(relative: relative) {
-                path.addLine(to: end)
-                current = end
+            while let arc = arcSegment(relative: relative) {
+                nativeNavigationAddSVGArc(
+                    to: path,
+                    from: current,
+                    to: arc.end,
+                    radii: arc.radii,
+                    rotation: arc.rotation,
+                    largeArc: arc.largeArc,
+                    sweep: arc.sweep
+                )
+                current = arc.end
             }
             resetControls()
         case "Z":
@@ -3348,17 +3568,24 @@ private final class SVGPathParser {
         return relative ? CGPoint(x: current.x + x, y: current.y + y) : CGPoint(x: x, y: y)
     }
 
-    private func arcEndpoint(relative: Bool) -> CGPoint? {
-        guard number() != nil,
-              number() != nil,
-              number() != nil,
-              number() != nil,
-              number() != nil,
+    private func arcSegment(relative: Bool) -> NativeNavigationSVGArc? {
+        guard let radiusX = number(),
+              let radiusY = number(),
+              let rotation = number(),
+              let largeArc = number(),
+              let sweep = number(),
               let x = number(),
               let y = number() else {
             return nil
         }
-        return relative ? CGPoint(x: current.x + x, y: current.y + y) : CGPoint(x: x, y: y)
+        let end = relative ? CGPoint(x: current.x + x, y: current.y + y) : CGPoint(x: x, y: y)
+        return NativeNavigationSVGArc(
+            radii: CGSize(width: radiusX, height: radiusY),
+            rotation: rotation,
+            largeArc: largeArc != 0,
+            sweep: sweep != 0,
+            end: end
+        )
     }
 
     private func number() -> CGFloat? {

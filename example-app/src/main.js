@@ -36,7 +36,7 @@ const icons = {
   camera:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L8 6H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3.5"/></svg>',
   settings:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3"/><path d="M12 19v3"/><path d="m4.93 4.93 2.12 2.12"/><path d="m16.95 16.95 2.12 2.12"/><path d="M2 12h3"/><path d="M19 12h3"/><path d="m4.93 19.07 2.12-2.12"/><path d="m16.95 7.05 2.12-2.12"/></svg>',
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.26 9.75 L21.80 10.01 L21.80 13.99 L19.26 14.25 L18.72 15.55 L20.33 17.53 L17.53 20.33 L15.55 18.72 L14.25 19.26 L13.99 21.80 L10.01 21.80 L9.75 19.26 L8.45 18.72 L6.47 20.33 L3.67 17.53 L5.28 15.55 L4.74 14.25 L2.20 13.99 L2.20 10.01 L4.74 9.75 L5.28 8.45 L3.67 6.47 L6.47 3.67 L8.45 5.28 L9.75 4.74 L10.01 2.20 L13.99 2.20 L14.25 4.74 L15.55 5.28 L17.53 3.67 L20.33 6.47 L18.72 8.45 Z"/><circle cx="12" cy="12" r="3"/></svg>',
   profile:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>',
   compose:
@@ -84,6 +84,8 @@ let route = 'home';
 let stack = ['home'];
 let labelsEnabled = true;
 let iconsEnabled = true;
+let minimizeEnabled = false;
+let edgeBlurEnabled = false;
 let tabbarPreset = 'system';
 let tabbarHidden = false;
 let shapeOverride = null;
@@ -278,6 +280,8 @@ const pages = {
       <section class="settings">
         <label><input id="labels-toggle" type="checkbox" /> Tab labels</label>
         <label><input id="icons-toggle" type="checkbox" /> Tab icons</label>
+        <label><input id="minimize-toggle" type="checkbox" /> Minimize tabbar on scroll</label>
+        <label><input id="edge-blur-toggle" type="checkbox" /> Blur behind tabbar</label>
         <div class="layout-presets" aria-label="Tab bar layouts"></div>
         <label><input id="top-button-toggle" type="checkbox" /> Top button</label>
         <button data-action="refresh-version">Read native version</button>
@@ -405,7 +409,7 @@ const configureChrome = async () => {
         : {
             effect: 'liquidGlass',
             blurRadius: 18,
-            surfaceAlpha: 0.62,
+            surfaceAlpha: 0.92,
           },
     });
     chromeConfigured = true;
@@ -466,6 +470,8 @@ const updateTabbar = async () => {
     tabs: tabsForNative(),
     labels: labelsEnabled,
     icons: iconsEnabled,
+    minimizeBehavior: minimizeEnabled ? 'onScrollDown' : 'never',
+    edgeBlur: edgeBlurEnabled,
     colors: tabbarColors(),
     style: tabbarStyle(),
   });
@@ -496,6 +502,14 @@ const syncControls = () => {
   const labelsToggle = document.getElementById('labels-toggle');
   const iconsToggle = document.getElementById('icons-toggle');
   const topButtonToggle = document.getElementById('top-button-toggle');
+  const minimizeToggle = document.getElementById('minimize-toggle');
+  if (minimizeToggle) {
+    minimizeToggle.checked = minimizeEnabled;
+  }
+  const edgeBlurToggle = document.getElementById('edge-blur-toggle');
+  if (edgeBlurToggle) {
+    edgeBlurToggle.checked = edgeBlurEnabled;
+  }
   if (labelsToggle) {
     labelsToggle.checked = labelsEnabled;
   }
@@ -745,6 +759,14 @@ app.addEventListener('change', async (event) => {
   if (event.target.id === 'icons-toggle') {
     iconsEnabled = event.target.checked;
     render();
+    await updateTabbar();
+  }
+  if (event.target.id === 'minimize-toggle') {
+    minimizeEnabled = event.target.checked;
+    await updateTabbar();
+  }
+  if (event.target.id === 'edge-blur-toggle') {
+    edgeBlurEnabled = event.target.checked;
     await updateTabbar();
   }
   if (event.target.id === 'top-button-toggle') {
