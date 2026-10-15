@@ -67,6 +67,7 @@ public class NativeNavigationPlugin extends Plugin {
     private static final int INDICATOR_HORIZONTAL_PADDING_DP = 12;
     private static final int INDICATOR_VERTICAL_PADDING_DP = 6;
     private static final int INDICATOR_SLOT_INSET_DP = 2;
+    private static final int FLOATING_INDICATOR_INSET_DP = 4;
     private static final int DEFAULT_TRANSITION_MS = 350;
     private static final int MENU_ITEM_BASE = 10_000;
     private static final int DEFAULT_TABBAR_BACKGROUND_COLOR = Color.WHITE;
@@ -891,7 +892,12 @@ public class NativeNavigationPlugin extends Plugin {
             GradientDrawable selectedBackground = new GradientDrawable();
             selectedBackground.setShape(GradientDrawable.RECTANGLE);
             selectedBackground.setColor(TabbarChromeSupport.resolveSelectedIndicatorColor(tabbarIndicatorColor, tintColor));
-            TabIndicatorView indicator = new TabIndicatorView(getContext(), contentWidth, indicatorContentHeight(labelVisible, iconVisible));
+            TabIndicatorView indicator = new TabIndicatorView(
+                getContext(),
+                contentWidth,
+                indicatorContentHeight(labelVisible, iconVisible),
+                !tabbarStyle.isCurve()
+            );
             indicator.setBackground(selectedBackground);
             button.addView(
                 indicator,
@@ -991,22 +997,32 @@ public class NativeNavigationPlugin extends Plugin {
         }
     }
 
-    /** Selected-tab capsule that wraps the item's icon and label with padding, kept inside its tab slot. */
+    /**
+     * Selected-tab capsule. On the floating bar it fills the tab slot with an even inset, like the iOS 26 tab bar;
+     * otherwise it wraps the item's icon and label with padding, kept inside its tab slot.
+     */
     private static final class TabIndicatorView extends View {
 
         private final int contentWidth;
         private final int contentHeight;
+        private final boolean fillSlot;
 
-        TabIndicatorView(Context context, int contentWidth, int contentHeight) {
+        TabIndicatorView(Context context, int contentWidth, int contentHeight, boolean fillSlot) {
             super(context);
             this.contentWidth = contentWidth;
             this.contentHeight = contentHeight;
+            this.fillSlot = fillSlot;
         }
 
         @Override
         protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
             int slotWidth = MeasureSpec.getSize(widthMeasureSpec);
             int slotHeight = MeasureSpec.getSize(heightMeasureSpec);
+            if (fillSlot && slotWidth > 0 && slotHeight > 0) {
+                int inset = dp(FLOATING_INDICATOR_INSET_DP);
+                setMeasuredSize(Math.max(0, slotWidth - inset * 2), Math.max(0, slotHeight - inset * 2));
+                return;
+            }
             int height = contentHeight + dp(INDICATOR_VERTICAL_PADDING_DP) * 2;
             if (slotHeight > 0) {
                 height = Math.min(height, slotHeight);
@@ -1015,6 +1031,10 @@ public class NativeNavigationPlugin extends Plugin {
             if (slotWidth > 0) {
                 width = Math.min(width, slotWidth - dp(INDICATOR_SLOT_INSET_DP) * 2);
             }
+            setMeasuredSize(width, height);
+        }
+
+        private void setMeasuredSize(int width, int height) {
             setMeasuredDimension(width, height);
             Drawable background = getBackground();
             if (background instanceof GradientDrawable) {
@@ -2577,8 +2597,15 @@ public class NativeNavigationPlugin extends Plugin {
         }
 
         private static final long SOURCE_CONTENT_REFRESH_INTERVAL_MS = 250L;
+        // The backdrop is blurred anyway, so a quarter-resolution snapshot looks the same and is cheap to render.
+        private static final float SNAPSHOT_SCALE = 0.25f;
 
         private final Paint fallbackPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint snapshotPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
+        private final Rect snapshotSourceRect = new Rect();
+        private final Rect snapshotDestRect = new Rect();
+        private Bitmap snapshot;
+        private Canvas snapshotCanvas;
         private final int[] sourceLocation = new int[2];
         private final int[] viewLocation = new int[2];
         private final ViewTreeObserver.OnScrollChangedListener sourceScrollListener = this::markDirty;
@@ -2623,6 +2650,7 @@ public class NativeNavigationPlugin extends Plugin {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 Api31RenderEffects.clear(this);
             }
+            releaseSnapshot();
             markDirty();
         }
 
@@ -2660,10 +2688,29 @@ public class NativeNavigationPlugin extends Plugin {
             scheduleRedrawIfVisible();
         }
 
+        private final Runnable trailingRefresh = () -> {
+            trailingRefreshPending = false;
+            if (dirty) {
+                lastSourcePreDrawRefreshMs = System.currentTimeMillis();
+                scheduleRedrawIfVisible();
+            }
+        };
+        private boolean trailingRefreshPending;
+
         private void markDirtyFromSourcePreDraw() {
+            if (redrawPending) {
+                // This pre-draw is the frame that draws the pending refresh; don't mark the fresh snapshot stale.
+                return;
+            }
             dirty = true;
             long now = System.currentTimeMillis();
-            if (now - lastSourcePreDrawRefreshMs < SOURCE_CONTENT_REFRESH_INTERVAL_MS) {
+            long sinceLastRefresh = now - lastSourcePreDrawRefreshMs;
+            if (sinceLastRefresh < SOURCE_CONTENT_REFRESH_INTERVAL_MS) {
+                // Refresh once more after the throttle window so the backdrop settles on the final content.
+                if (!trailingRefreshPending) {
+                    trailingRefreshPending = true;
+                    postDelayed(trailingRefresh, SOURCE_CONTENT_REFRESH_INTERVAL_MS - sinceLastRefresh);
+                }
                 return;
             }
             lastSourcePreDrawRefreshMs = now;
@@ -2697,17 +2744,62 @@ public class NativeNavigationPlugin extends Plugin {
 
         private void drawSource(Canvas canvas) {
             View currentSource = source;
-            if (currentSource == null || currentSource.getWidth() <= 0 || currentSource.getHeight() <= 0) {
+            if (currentSource == null || currentSource.getWidth() <= 0 || currentSource.getHeight() <= 0 || !refreshSnapshot(currentSource)) {
                 fallbackPaint.setColor(fallbackColor);
                 canvas.drawRect(0, 0, getWidth(), getHeight(), fallbackPaint);
                 return;
             }
+            snapshotSourceRect.set(0, 0, snapshot.getWidth(), snapshot.getHeight());
+            snapshotDestRect.set(0, 0, getWidth(), getHeight());
+            canvas.drawBitmap(snapshot, snapshotSourceRect, snapshotDestRect, snapshotPaint);
+        }
+
+        /**
+         * Renders the part of the source behind this view into an offscreen software bitmap. Drawing a hardware
+         * WebView straight into this view's display list makes the WebView itself skip that frame, which flashes the
+         * whole page while scrolling.
+         */
+        private boolean refreshSnapshot(View currentSource) {
+            int width = Math.max(1, Math.round(getWidth() * SNAPSHOT_SCALE));
+            int height = Math.max(1, Math.round(getHeight() * SNAPSHOT_SCALE));
+            if (snapshot == null || snapshot.getWidth() != width || snapshot.getHeight() != height) {
+                releaseSnapshot();
+                try {
+                    snapshot = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+                } catch (OutOfMemoryError error) {
+                    return false;
+                }
+                snapshotCanvas = new Canvas(snapshot);
+                dirty = true;
+            }
+            if (!dirty) {
+                return true;
+            }
             currentSource.getLocationOnScreen(sourceLocation);
             getLocationOnScreen(viewLocation);
-            canvas.save();
-            canvas.translate(sourceLocation[0] - viewLocation[0], sourceLocation[1] - viewLocation[1]);
-            currentSource.draw(canvas);
-            canvas.restore();
+            snapshot.eraseColor(fallbackColor);
+            int save = snapshotCanvas.save();
+            snapshotCanvas.scale((float) width / getWidth(), (float) height / getHeight());
+            snapshotCanvas.translate(sourceLocation[0] - viewLocation[0], sourceLocation[1] - viewLocation[1]);
+            currentSource.draw(snapshotCanvas);
+            snapshotCanvas.restoreToCount(save);
+            return true;
+        }
+
+        private void releaseSnapshot() {
+            if (snapshot != null) {
+                snapshot.recycle();
+            }
+            snapshot = null;
+            snapshotCanvas = null;
+        }
+
+        @Override
+        protected void onDetachedFromWindow() {
+            super.onDetachedFromWindow();
+            removeCallbacks(trailingRefresh);
+            trailingRefreshPending = false;
+            releaseSnapshot();
         }
 
         @Override
