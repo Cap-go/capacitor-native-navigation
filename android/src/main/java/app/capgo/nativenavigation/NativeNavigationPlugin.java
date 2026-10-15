@@ -25,14 +25,12 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
-import android.view.ViewTreeObserver;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-import androidx.annotation.RequiresApi;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.graphics.PathParser;
@@ -78,9 +76,7 @@ public class NativeNavigationPlugin extends Plugin {
     private View tabbarBackdrop;
     private Toolbar toolbar;
     private NativeTabbarLayout tabbar;
-    private GlassBackdropView navbarGlassBackdrop;
     private View navbarGlassSurface;
-    private GlassBackdropView tabbarGlassBackdrop;
     private View tabbarGlassSurface;
     private ImageView transitionSnapshot;
     private boolean enabled = true;
@@ -679,10 +675,6 @@ public class NativeNavigationPlugin extends Plugin {
         if (tabbarStyle.isCurve()) {
             tabbarContainer.setClipToOutline(false);
             tabbarContainer.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
-            if (tabbarGlassBackdrop != null) {
-                tabbarGlassBackdrop.setClipToOutline(false);
-                tabbarGlassBackdrop.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
-            }
             if (tabbarGlassSurface != null) {
                 tabbarGlassSurface.setClipToOutline(false);
                 tabbarGlassSurface.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
@@ -693,10 +685,6 @@ public class NativeNavigationPlugin extends Plugin {
         ViewOutlineProvider floatingOutlineProvider = floatingTabbarOutlineProvider();
         tabbarContainer.setClipToOutline(false);
         tabbarContainer.setOutlineProvider(floatingOutlineProvider);
-        if (tabbarGlassBackdrop != null) {
-            tabbarGlassBackdrop.setClipToOutline(true);
-            tabbarGlassBackdrop.setOutlineProvider(floatingOutlineProvider);
-        }
         if (tabbarGlassSurface != null) {
             tabbarGlassSurface.setClipToOutline(true);
             tabbarGlassSurface.setOutlineProvider(floatingOutlineProvider);
@@ -742,9 +730,7 @@ public class NativeNavigationPlugin extends Plugin {
         navbarContainer.setElevation(dp(8));
         toolbar = new Toolbar(getContext());
         toolbar.setPopupTheme(androidx.appcompat.R.style.ThemeOverlay_AppCompat_Light);
-        navbarGlassBackdrop = new GlassBackdropView(getContext());
         navbarGlassSurface = new View(getContext());
-        navbarGlassBackdrop.setVisibility(View.GONE);
         navbarGlassSurface.setVisibility(View.GONE);
 
         toolbar.setOnMenuItemClickListener((item) -> {
@@ -757,7 +743,6 @@ public class NativeNavigationPlugin extends Plugin {
             return true;
         });
 
-        navbarContainer.addView(navbarGlassBackdrop);
         navbarContainer.addView(navbarGlassSurface);
         navbarContainer.addView(toolbar);
         if (root != null) {
@@ -787,15 +772,12 @@ public class NativeNavigationPlugin extends Plugin {
             tabbarContainer.setOutlineSpotShadowColor(0x66000000);
         }
 
-        tabbarGlassBackdrop = new GlassBackdropView(getContext());
         tabbarGlassSurface = new View(getContext());
-        tabbarGlassBackdrop.setVisibility(View.GONE);
         tabbarGlassSurface.setVisibility(View.GONE);
         tabbar = new NativeTabbarLayout(getContext());
         tabbar.setClipChildren(false);
         tabbar.setClipToPadding(false);
         tabbar.setBackgroundColor(Color.TRANSPARENT);
-        tabbarContainer.addView(tabbarGlassBackdrop);
         tabbarContainer.addView(tabbarGlassSurface);
         tabbarContainer.addView(
             tabbar,
@@ -1709,7 +1691,7 @@ public class NativeNavigationPlugin extends Plugin {
             nativeToolbar.setNavigationIcon(tintedIcon);
         }
         nativeToolbar.setBackgroundColor(Color.TRANSPARENT);
-        applyChromeBackground(navbarContainer, navbarGlassBackdrop, navbarGlassSurface, background, navbarGlassOptions, 0f);
+        applyChromeBackground(navbarContainer, navbarGlassSurface, background, navbarGlassOptions, 0f);
         for (int index = 0; index < nativeToolbar.getMenu().size(); index++) {
             Drawable icon = nativeToolbar.getMenu().getItem(index).getIcon();
             if (icon != null) {
@@ -1792,44 +1774,12 @@ public class NativeNavigationPlugin extends Plugin {
             tabbarBackdrop.setBackgroundColor(drawColor);
         }
 
-        GlassOptions resolvedGlassOptions = tabbarGlassOptions == null ? GlassOptions.defaults() : tabbarGlassOptions;
-        boolean glassBlurActive =
-            resolvedGlassOptions.isLiquidGlass() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S;
-        if (resolvedGlassOptions.isLiquidGlass()) {
-            if (tabbarContainer != null) {
-                tabbarContainer.setBackgroundColor(Color.TRANSPARENT);
-            }
-            if (tabbarGlassSurface != null) {
-                if (glassBlurActive) {
-                    tabbarGlassSurface.setBackground(chromeBackgroundDrawable(drawColor, 0f));
-                    tabbarGlassSurface.setVisibility(View.VISIBLE);
-                } else {
-                    tabbarGlassSurface.setBackground(null);
-                    tabbarGlassSurface.setVisibility(View.GONE);
-                }
-            }
-            if (tabbarGlassBackdrop != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                View webView = getBridge() == null ? null : getBridge().getWebView();
-                tabbarGlassBackdrop.setClipPathProvider((width, height) -> tabbar.backgroundPath(width, height));
-                tabbarGlassBackdrop.configure(webView, dp(resolvedGlassOptions.blurRadiusDp), Color.TRANSPARENT);
-                tabbarGlassBackdrop.setVisibility(View.VISIBLE);
-            } else if (tabbarGlassBackdrop != null) {
-                tabbarGlassBackdrop.setClipPathProvider((width, height) -> tabbar.backgroundPath(width, height));
-                tabbarGlassBackdrop.clearEffect();
-                tabbarGlassBackdrop.setVisibility(View.GONE);
-            }
-        } else {
-            hideGlassBackground(tabbarGlassBackdrop, tabbarGlassSurface);
-            if (tabbarGlassBackdrop != null) {
-                tabbarGlassBackdrop.setClipPathProvider(null);
-            }
-            if (tabbarContainer != null) {
-                tabbarContainer.setBackgroundColor(Color.TRANSPARENT);
-            }
+        // The tabbar draws its own translucent fill (see resolvedTabbarSurfaceColor); there is no live blur.
+        hideGlassSurface(tabbarGlassSurface);
+        if (tabbarContainer != null) {
+            tabbarContainer.setBackgroundColor(Color.TRANSPARENT);
         }
-
-        int tabbarFillColor = glassBlurActive ? Color.TRANSPARENT : drawColor;
-        tabbar.setTabbarStyle(tabbarStyle, tabbarFillColor, centerIndex);
+        tabbar.setTabbarStyle(tabbarStyle, drawColor, centerIndex);
         applyTabbarContainerOutline();
     }
 
@@ -1860,7 +1810,7 @@ public class NativeNavigationPlugin extends Plugin {
 
     private void reapplyVisibleChromeBackgrounds() {
         if (navbarContainer != null && navbarContainer.getVisibility() == View.VISIBLE) {
-            applyChromeBackground(navbarContainer, navbarGlassBackdrop, navbarGlassSurface, navbarBackgroundColor, navbarGlassOptions, 0f);
+            applyChromeBackground(navbarContainer, navbarGlassSurface, navbarBackgroundColor, navbarGlassOptions, 0f);
         }
         if (tabbarContainer != null && tabbarContainer.getVisibility() == View.VISIBLE) {
             applyTabbarBackground();
@@ -1869,7 +1819,6 @@ public class NativeNavigationPlugin extends Plugin {
 
     private void applyChromeBackground(
         ViewGroup container,
-        GlassBackdropView backdrop,
         View surface,
         int background,
         GlassOptions glassOptions,
@@ -1880,7 +1829,7 @@ public class NativeNavigationPlugin extends Plugin {
         }
         GlassOptions resolvedGlassOptions = glassOptions == null ? GlassOptions.defaults() : glassOptions;
         if (!resolvedGlassOptions.isLiquidGlass()) {
-            hideGlassBackground(backdrop, surface);
+            hideGlassSurface(surface);
             container.setBackground(chromeBackgroundDrawable(background, cornerRadius));
             return;
         }
@@ -1891,22 +1840,9 @@ public class NativeNavigationPlugin extends Plugin {
             surface.setBackground(chromeBackgroundDrawable(surfaceColor, cornerRadius));
             surface.setVisibility(View.VISIBLE);
         }
-        if (backdrop != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            View webView = getBridge() == null ? null : getBridge().getWebView();
-            backdrop.setClipPathProvider(null);
-            backdrop.configure(webView, dp(resolvedGlassOptions.blurRadiusDp), surfaceColor);
-            backdrop.setVisibility(View.VISIBLE);
-        } else if (backdrop != null) {
-            backdrop.clearEffect();
-            backdrop.setVisibility(View.GONE);
-        }
     }
 
-    private void hideGlassBackground(GlassBackdropView backdrop, View surface) {
-        if (backdrop != null) {
-            backdrop.clearEffect();
-            backdrop.setVisibility(View.GONE);
-        }
+    private void hideGlassSurface(View surface) {
         if (surface != null) {
             surface.setBackground(null);
             surface.setVisibility(View.GONE);
@@ -2028,7 +1964,6 @@ public class NativeNavigationPlugin extends Plugin {
             );
             toolbarParams.topMargin = status;
             toolbar.setLayoutParams(toolbarParams);
-            fillContainer(navbarGlassBackdrop);
             fillContainer(navbarGlassSurface);
         }
 
@@ -2059,13 +1994,9 @@ public class NativeNavigationPlugin extends Plugin {
             );
             tabbarContainerParams.bottomMargin = tabbarBottomMargin;
             tabbarContainer.setLayoutParams(tabbarContainerParams);
-            fillContainer(tabbarGlassBackdrop);
             fillContainer(tabbarGlassSurface);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 tabbarContainer.invalidateOutline();
-                if (tabbarGlassBackdrop != null) {
-                    tabbarGlassBackdrop.invalidateOutline();
-                }
                 if (tabbarGlassSurface != null) {
                     tabbarGlassSurface.invalidateOutline();
                 }
@@ -2598,257 +2529,6 @@ public class NativeNavigationPlugin extends Plugin {
 
         boolean isLiquidGlass() {
             return EFFECT_LIQUID_GLASS.equals(effect);
-        }
-    }
-
-    private static final class GlassBackdropView extends View {
-
-        interface PathProvider {
-            Path path(int width, int height);
-        }
-
-        private static final long SOURCE_CONTENT_REFRESH_INTERVAL_MS = 250L;
-        // The backdrop is blurred anyway, so a quarter-resolution snapshot looks the same and is cheap to render.
-        private static final float SNAPSHOT_SCALE = 0.25f;
-
-        private final Paint fallbackPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final Paint snapshotPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
-        private final Rect snapshotSourceRect = new Rect();
-        private final Rect snapshotDestRect = new Rect();
-        private Bitmap snapshot;
-        private Canvas snapshotCanvas;
-        private final int[] sourceLocation = new int[2];
-        private final int[] viewLocation = new int[2];
-        private final ViewTreeObserver.OnScrollChangedListener sourceScrollListener = this::markDirty;
-        private final ViewTreeObserver.OnPreDrawListener sourcePreDrawListener = () -> {
-            markDirtyFromSourcePreDraw();
-            return true;
-        };
-        private final View.OnLayoutChangeListener sourceLayoutListener = (
-            view,
-            left,
-            top,
-            right,
-            bottom,
-            oldLeft,
-            oldTop,
-            oldRight,
-            oldBottom
-        ) -> markDirty();
-        private View source;
-        private PathProvider clipPathProvider;
-        private int fallbackColor = Color.TRANSPARENT;
-        private boolean dirty;
-        private boolean redrawPending;
-        private long lastSourcePreDrawRefreshMs;
-
-        GlassBackdropView(android.content.Context context) {
-            super(context);
-            setWillNotDraw(false);
-        }
-
-        void configure(View source, float blurRadiusPx, int fallbackColor) {
-            this.fallbackColor = fallbackColor;
-            attachSource(source);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                Api31RenderEffects.setBlur(this, blurRadiusPx);
-            }
-            markDirty();
-        }
-
-        void clearEffect() {
-            attachSource(null);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                Api31RenderEffects.clear(this);
-            }
-            releaseSnapshot();
-            markDirty();
-        }
-
-        void setClipPathProvider(PathProvider clipPathProvider) {
-            this.clipPathProvider = clipPathProvider;
-            markDirty();
-        }
-
-        private void attachSource(View nextSource) {
-            if (source == nextSource) {
-                return;
-            }
-            if (source != null) {
-                source.removeOnLayoutChangeListener(sourceLayoutListener);
-                ViewTreeObserver observer = source.getViewTreeObserver();
-                if (observer.isAlive()) {
-                    observer.removeOnScrollChangedListener(sourceScrollListener);
-                    observer.removeOnPreDrawListener(sourcePreDrawListener);
-                }
-            }
-            source = nextSource;
-            if (source != null) {
-                source.addOnLayoutChangeListener(sourceLayoutListener);
-                ViewTreeObserver observer = source.getViewTreeObserver();
-                if (observer.isAlive()) {
-                    observer.addOnScrollChangedListener(sourceScrollListener);
-                    observer.addOnPreDrawListener(sourcePreDrawListener);
-                }
-            }
-            markDirty();
-        }
-
-        private void markDirty() {
-            dirty = true;
-            scheduleRedrawIfVisible();
-        }
-
-        private final Runnable trailingRefresh = () -> {
-            trailingRefreshPending = false;
-            if (dirty) {
-                lastSourcePreDrawRefreshMs = System.currentTimeMillis();
-                scheduleRedrawIfVisible();
-            }
-        };
-        private boolean trailingRefreshPending;
-
-        private void markDirtyFromSourcePreDraw() {
-            if (redrawPending) {
-                // This pre-draw is the frame that draws the pending refresh; don't mark the fresh snapshot stale.
-                return;
-            }
-            dirty = true;
-            long now = System.currentTimeMillis();
-            long sinceLastRefresh = now - lastSourcePreDrawRefreshMs;
-            if (sinceLastRefresh < SOURCE_CONTENT_REFRESH_INTERVAL_MS) {
-                // Refresh once more after the throttle window so the backdrop settles on the final content.
-                if (!trailingRefreshPending) {
-                    trailingRefreshPending = true;
-                    postDelayed(trailingRefresh, SOURCE_CONTENT_REFRESH_INTERVAL_MS - sinceLastRefresh);
-                }
-                return;
-            }
-            lastSourcePreDrawRefreshMs = now;
-            scheduleRedrawIfVisible();
-        }
-
-        private void scheduleRedrawIfVisible() {
-            if (redrawPending || getVisibility() != View.VISIBLE || !isShown()) {
-                return;
-            }
-            redrawPending = true;
-            postInvalidateOnAnimation();
-        }
-
-        @Override
-        protected void onDraw(Canvas canvas) {
-            super.onDraw(canvas);
-            Path clipPath = clipPathProvider == null ? null : clipPathProvider.path(getWidth(), getHeight());
-            if (clipPath == null) {
-                drawSource(canvas);
-            } else {
-                int save = canvas.save();
-                canvas.clipPath(clipPath);
-                drawSource(canvas);
-                canvas.restoreToCount(save);
-            }
-
-            dirty = false;
-            redrawPending = false;
-        }
-
-        private void drawSource(Canvas canvas) {
-            View currentSource = source;
-            if (currentSource == null || currentSource.getWidth() <= 0 || currentSource.getHeight() <= 0 || !refreshSnapshot(currentSource)) {
-                fallbackPaint.setColor(fallbackColor);
-                canvas.drawRect(0, 0, getWidth(), getHeight(), fallbackPaint);
-                return;
-            }
-            snapshotSourceRect.set(0, 0, snapshot.getWidth(), snapshot.getHeight());
-            snapshotDestRect.set(0, 0, getWidth(), getHeight());
-            canvas.drawBitmap(snapshot, snapshotSourceRect, snapshotDestRect, snapshotPaint);
-        }
-
-        /**
-         * Renders the part of the source behind this view into an offscreen software bitmap. Drawing a hardware
-         * WebView straight into this view's display list makes the WebView itself skip that frame, which flashes the
-         * whole page while scrolling.
-         */
-        private boolean refreshSnapshot(View currentSource) {
-            int width = Math.max(1, Math.round(getWidth() * SNAPSHOT_SCALE));
-            int height = Math.max(1, Math.round(getHeight() * SNAPSHOT_SCALE));
-            if (snapshot == null || snapshot.getWidth() != width || snapshot.getHeight() != height) {
-                releaseSnapshot();
-                try {
-                    snapshot = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-                } catch (OutOfMemoryError error) {
-                    return false;
-                }
-                snapshotCanvas = new Canvas(snapshot);
-                dirty = true;
-            }
-            if (!dirty) {
-                return true;
-            }
-            currentSource.getLocationOnScreen(sourceLocation);
-            getLocationOnScreen(viewLocation);
-            snapshot.eraseColor(fallbackColor);
-            int save = snapshotCanvas.save();
-            snapshotCanvas.scale((float) width / getWidth(), (float) height / getHeight());
-            snapshotCanvas.translate(sourceLocation[0] - viewLocation[0], sourceLocation[1] - viewLocation[1]);
-            currentSource.draw(snapshotCanvas);
-            snapshotCanvas.restoreToCount(save);
-            return true;
-        }
-
-        private void releaseSnapshot() {
-            if (snapshot != null) {
-                snapshot.recycle();
-            }
-            snapshot = null;
-            snapshotCanvas = null;
-        }
-
-        @Override
-        protected void onDetachedFromWindow() {
-            super.onDetachedFromWindow();
-            removeCallbacks(trailingRefresh);
-            trailingRefreshPending = false;
-            releaseSnapshot();
-        }
-
-        @Override
-        protected void onSizeChanged(int width, int height, int oldWidth, int oldHeight) {
-            super.onSizeChanged(width, height, oldWidth, oldHeight);
-            if (width != oldWidth || height != oldHeight) {
-                markDirty();
-            }
-        }
-
-        @Override
-        protected void onVisibilityChanged(View changedView, int visibility) {
-            super.onVisibilityChanged(changedView, visibility);
-            if (visibility != View.VISIBLE) {
-                redrawPending = false;
-                return;
-            }
-            if (dirty) {
-                scheduleRedrawIfVisible();
-            }
-        }
-    }
-
-    @RequiresApi(Build.VERSION_CODES.S)
-    private static final class Api31RenderEffects {
-
-        static void setBlur(View view, float blurRadiusPx) {
-            if (blurRadiusPx <= 0f) {
-                view.setRenderEffect(null);
-                return;
-            }
-            view.setRenderEffect(
-                android.graphics.RenderEffect.createBlurEffect(blurRadiusPx, blurRadiusPx, android.graphics.Shader.TileMode.CLAMP)
-            );
-        }
-
-        static void clear(View view) {
-            view.setRenderEffect(null);
         }
     }
 
