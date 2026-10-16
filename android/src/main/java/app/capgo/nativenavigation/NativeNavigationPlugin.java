@@ -21,6 +21,7 @@ import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
+import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
@@ -97,6 +98,12 @@ public class NativeNavigationPlugin extends Plugin {
     private NavbarScrollSupport.ScrollBehavior navbarScrollBehavior = NavbarScrollSupport.ScrollBehavior.NONE;
     private float navbarScrollThreshold = 8f;
     private boolean navbarScrollCollapsed = false;
+    private TextView largeTitleView;
+    private boolean navbarLarge = false;
+    private float navbarLargeProgress = 0f;
+    private ValueAnimator navbarLargeAnimator;
+    private String navbarTitle;
+    private int navbarForegroundColor = Color.rgb(20, 24, 32);
     private boolean tabbarVisible = false;
     private String contentInsetMode = "css";
     private GlassOptions defaultGlassOptions = GlassOptions.defaults();
@@ -214,7 +221,19 @@ public class NativeNavigationPlugin extends Plugin {
             }
 
             Toolbar nativeToolbar = ensureToolbar();
-            nativeToolbar.setTitle(call.getString("title", ""));
+            String title = call.getString("title", "");
+            boolean large = Boolean.TRUE.equals(call.getBoolean("large", false));
+            boolean animateLarge = NavbarLargeTitleSupport.shouldAnimate(
+                navbarContainer.getVisibility() == View.VISIBLE,
+                navbarTitle,
+                title,
+                navbarLarge,
+                large
+            );
+            navbarTitle = title;
+            navbarLarge = large;
+            nativeToolbar.setTitle(title);
+            largeTitleView.setText(title);
             nativeToolbar.setSubtitle(call.getString("subtitle", null));
             nativeToolbar.getMenu().clear();
             menuActionIds.clear();
@@ -237,6 +256,7 @@ public class NativeNavigationPlugin extends Plugin {
             navbarGlassConfig = call.getObject("glass", null);
             navbarGlassOptions = GlassOptions.from(navbarGlassConfig, defaultGlassOptions);
             applyToolbarColors(nativeToolbar, colors);
+            setNavbarLargeProgress(large ? 1f : 0f, animateLarge);
             navbarContainer.setVisibility(View.VISIBLE);
             configureNavbarScrollBehavior(call);
             layoutChrome();
@@ -777,8 +797,20 @@ public class NativeNavigationPlugin extends Plugin {
             return true;
         });
 
+        largeTitleView = new TextView(getContext());
+        largeTitleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, NavbarLargeTitleSupport.LARGE_TITLE_TEXT_SP);
+        largeTitleView.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+        largeTitleView.setSingleLine(true);
+        largeTitleView.setEllipsize(TextUtils.TruncateAt.END);
+        largeTitleView.setGravity(Gravity.BOTTOM | Gravity.START);
+        largeTitleView.setPaddingRelative(dp(16), 0, dp(16), dp(NavbarLargeTitleSupport.LARGE_TITLE_BOTTOM_PADDING_DP));
+        largeTitleView.setAlpha(0f);
+        // The toolbar keeps the title for screen readers; the large copy is visual only.
+        largeTitleView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+
         navbarContainer.addView(navbarGlassSurface);
         navbarContainer.addView(toolbar);
+        navbarContainer.addView(largeTitleView);
         if (root != null) {
             root.addView(navbarContainer);
         } else {
@@ -2221,7 +2253,11 @@ public class NativeNavigationPlugin extends Plugin {
         navbarBackgroundColor = background;
         int foreground = parseColor(colors.getString("foreground", null), foregroundFallback);
         tintColor = tint;
+        navbarForegroundColor = foreground;
         nativeToolbar.setTitleTextColor(foreground);
+        if (largeTitleView != null) {
+            largeTitleView.setTextColor(foreground);
+        }
         nativeToolbar.setSubtitleTextColor(withAlpha(foreground, 190));
         Drawable navigationIcon = nativeToolbar.getNavigationIcon();
         if (navigationIcon != null) {
@@ -2501,7 +2537,7 @@ public class NativeNavigationPlugin extends Plugin {
         }
         int status = statusBarInset();
         int bottom = navigationBarInset();
-        int navbarToolbar = navbarScrollCollapsed ? 0 : dp(DEFAULT_NAVBAR_DP);
+        int navbarToolbar = navbarScrollCollapsed ? 0 : navbarBarHeight(navbarLargeProgress);
         int navbarHeight = navbarVisible ? status + navbarToolbar : 0;
         boolean tabbarLayoutVisible = tabbarVisible || tabbarChromeHideAnimating;
 
@@ -2519,6 +2555,13 @@ public class NativeNavigationPlugin extends Plugin {
             );
             toolbarParams.topMargin = status;
             toolbar.setLayoutParams(toolbarParams);
+            FrameLayout.LayoutParams largeTitleParams = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(NavbarLargeTitleSupport.LARGE_TITLE_ROW_DP),
+                Gravity.TOP
+            );
+            largeTitleParams.topMargin = status + dp(DEFAULT_NAVBAR_DP);
+            largeTitleView.setLayoutParams(largeTitleParams);
             fillContainer(navbarGlassSurface);
         }
 
@@ -2861,11 +2904,63 @@ public class NativeNavigationPlugin extends Plugin {
         }
     }
 
+    /** Navbar height under the status bar for a large title progress, in device pixels. */
+    private int navbarBarHeight(float largeProgress) {
+        return Math.round(dp((double) NavbarLargeTitleSupport.barHeightDp(largeProgress)));
+    }
+
+    private void setNavbarLargeProgress(float target, boolean animated) {
+        if (navbarLargeAnimator != null) {
+            navbarLargeAnimator.cancel();
+            navbarLargeAnimator = null;
+        }
+        if (!animated || navbarLargeProgress == target) {
+            navbarLargeProgress = target;
+            applyNavbarLargeProgress();
+            return;
+        }
+        ValueAnimator animator = ValueAnimator.ofFloat(navbarLargeProgress, target);
+        animator.setDuration(NavbarLargeTitleSupport.ANIMATION_MS);
+        animator.setInterpolator(new PathInterpolator(0.2f, 0f, 0f, 1f));
+        animator.addUpdateListener((animation) -> {
+            navbarLargeProgress = (float) animation.getAnimatedValue();
+            applyNavbarLargeProgress();
+            resizeNavbarContainer();
+        });
+        navbarLargeAnimator = animator;
+        animator.start();
+    }
+
+    /** Animation frames only resize the navbar; the tabbar and insets keep their layout. */
+    private void resizeNavbarContainer() {
+        if (navbarContainer == null || !navbarVisible) {
+            return;
+        }
+        ViewGroup.LayoutParams params = navbarContainer.getLayoutParams();
+        if (params == null) {
+            return;
+        }
+        params.height = statusBarInset() + (navbarScrollCollapsed ? 0 : navbarBarHeight(navbarLargeProgress));
+        navbarContainer.setLayoutParams(params);
+    }
+
+    private void applyNavbarLargeProgress() {
+        if (toolbar == null || largeTitleView == null) {
+            return;
+        }
+        float progress = navbarLargeProgress;
+        largeTitleView.setAlpha(NavbarLargeTitleSupport.largeTitleAlpha(progress));
+        largeTitleView.setTranslationY(-(1f - progress) * dp(NavbarLargeTitleSupport.LARGE_TITLE_ROW_DP) * 0.5f);
+        largeTitleView.setVisibility(progress > 0f ? View.VISIBLE : View.INVISIBLE);
+        float inlineAlpha = NavbarLargeTitleSupport.inlineTitleAlpha(progress);
+        toolbar.setTitleTextColor(withAlpha(navbarForegroundColor, Math.round(Color.alpha(navbarForegroundColor) * inlineAlpha)));
+    }
+
     private void applyNavbarScrollCollapsedAppearance(boolean animated) {
         if (navbarContainer == null) {
             return;
         }
-        float hideDistance = dp(DEFAULT_NAVBAR_DP);
+        float hideDistance = navbarBarHeight(navbarLargeProgress);
         if (animated) {
             navbarContainer
                 .animate()
@@ -2882,7 +2977,8 @@ public class NativeNavigationPlugin extends Plugin {
     private JSObject currentInsets() {
         // View layout uses device pixels; CSS variables must be density-independent
         // or a 3x screen writes `192px` which CSS treats as 192 CSS px.
-        int navbarToolbar = navbarScrollCollapsed ? 0 : dp(DEFAULT_NAVBAR_DP);
+        // Insets follow the target title state so the page moves once, not on every animation frame.
+        int navbarToolbar = navbarScrollCollapsed ? 0 : navbarBarHeight(navbarLarge ? 1f : 0f);
         int top = navbarVisible ? statusBarInset() + navbarToolbar : 0;
         int bottom = tabbarVisible ? navigationBarInset() + dp(tabbarStyle.totalHeight()) + dp(tabbarStyle.bottomGap) : 0;
         JSObject insets = new JSObject();
