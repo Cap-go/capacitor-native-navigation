@@ -46,6 +46,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var tabBar: UITabBar?
     /// `nil` when the app did not set `edgeBlur`.
     private var tabbarEdgeBlur: Bool?
+    /// `nil` when the app did not set navbar `edgeBlur`.
+    private var navbarEdgeBlur: Bool?
     private var tabbarMinimizeOnScroll = false
     private var tabbarMinimized = false
     private var floatingTabBar: NativeNavigationFloatingTabBar?
@@ -59,6 +61,9 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var liftedWebViewOverlays: [NativeNavigationWeakView] = []
     private var isWebViewHostedInSystemTabController = false
     private var navbarHeight: CGFloat = 44
+    /// Large title requested by the page, and whether scrolling folded it into the inline title.
+    private var navbarLarge = false
+    private var navbarLargeCollapsed = false
     private var tabbarHeight: CGFloat = NativeNavigationTabbarStyleConfig().totalHeight
     private var navbarVisible = false
     private var tabbarVisible = false
@@ -188,9 +193,20 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
             let hidden = call.getBool("hidden", false)
             self.navbarVisible = !hidden
+            self.navbarEdgeBlur = call.getBool("edgeBlur")
             let animated = call.getBool("animated", false)
             let large = call.getBool("large", false)
-            self.navbarHeight = large ? 96 : 44
+            // iOS 26 draws the subtitle under the large title, which needs another line.
+            let hasSubtitle = !(call.getString("subtitle") ?? "").isEmpty
+            if #available(iOS 26.0, *), large, hasSubtitle {
+                self.navbarHeight = 116
+            } else {
+                self.navbarHeight = large ? 96 : 44
+            }
+            if !large || call.getBool("resetScrollCollapsed", false) {
+                self.navbarLargeCollapsed = false
+            }
+            self.navbarLarge = large
 
             guard !hidden else {
                 self.navContainer?.isHidden = true
@@ -202,20 +218,29 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
             let navBar = self.ensureNavBar()
             let navItem = UINavigationItem(title: call.getString("title") ?? "")
-            navItem.prompt = call.getString("subtitle")
+            // `prompt` draws above the title and outside the bar height, so it overlapped the status bar.
+            let subtitle = call.getString("subtitle").flatMap { $0.isEmpty ? nil : $0 }
+            if #available(iOS 26.0, *) {
+                navItem.subtitle = subtitle
+            } else if let subtitle {
+                navItem.titleView = self.makeNavbarTitleView(title: navItem.title ?? "", subtitle: subtitle, options: call)
+            }
             if #available(iOS 11.0, *) {
-                navBar.prefersLargeTitles = large
-                navItem.largeTitleDisplayMode = large ? .always : .never
+                navBar.prefersLargeTitles = large && !self.navbarLargeCollapsed
+                navItem.largeTitleDisplayMode = large && !self.navbarLargeCollapsed ? .always : .never
             }
 
             self.navbarItemPlacement.removeAll()
             self.navbarItemTitle.removeAll()
 
             if let backButton = call.getObject("backButton"), backButton["visible"] as? Bool == true {
-                let title = backButton["title"] as? String
-                let item = UIBarButtonItem(title: title ?? "Back", style: .plain, target: self, action: #selector(self.handleNavbarBack))
+                let title = backButton["title"] as? String ?? "Back"
+                let item = title.isEmpty
+                    ? UIBarButtonItem(image: UIImage(systemName: "chevron.backward"), style: .plain, target: self, action: #selector(self.handleNavbarBack))
+                    : UIBarButtonItem(title: title, style: .plain, target: self, action: #selector(self.handleNavbarBack))
                 self.configureGlassBarButtonItem(item, id: "back")
-                navItem.leftBarButtonItem = item
+                let leftItems = self.makeBarButtonItems(call.getArray("leftItems") as? [[String: Any]] ?? [], placement: "left")
+                navItem.leftBarButtonItems = [item] + leftItems
             } else {
                 navItem.leftBarButtonItems = self.makeBarButtonItems(call.getArray("leftItems") as? [[String: Any]] ?? [], placement: "left")
             }
@@ -237,6 +262,9 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             let deltaY = CGFloat(call.getDouble("deltaY") ?? 0)
             if self.navbarScrollBehavior != .none, self.navbarVisible {
                 self.handleNavbarScroll(offsetY: offsetY, deltaY: deltaY)
+            }
+            if self.navbarLarge, self.navbarVisible {
+                self.setNavbarLargeCollapsed(offsetY > 30)
             }
             if self.tabbarMinimizeOnScroll, self.tabbarVisible {
                 self.handleTabbarMinimizeScroll(offsetY: offsetY, deltaY: deltaY)
@@ -1594,6 +1622,23 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             centerButtonIconColor: centerButtonIconColor
         )
     }
+    /// Title with a subtitle line under it, for iOS versions without `UINavigationItem.subtitle`.
+    private func makeNavbarTitleView(title: String, subtitle: String, options call: CAPPluginCall) -> UIView {
+        let foreground = colorValue(call.getObject("colors")?["foreground"]) ?? .label
+        let titleLabel = UILabel()
+        titleLabel.text = title
+        titleLabel.font = .systemFont(ofSize: 17, weight: .semibold)
+        titleLabel.textColor = foreground
+        let subtitleLabel = UILabel()
+        subtitleLabel.text = subtitle
+        subtitleLabel.font = .systemFont(ofSize: 12)
+        subtitleLabel.textColor = .secondaryLabel
+        let stack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
+        stack.axis = .vertical
+        stack.alignment = .center
+        return stack
+    }
+
     private func applyNavBarAppearance(navBar: UINavigationBar, options call: CAPPluginCall) {
         let appearance = UINavigationBarAppearance()
         let transparent = call.getBool("transparent", false)
@@ -1971,6 +2016,10 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             navbarScrollThreshold = CGFloat(threshold)
         }
 
+        if navbarLarge, navbarVisible {
+            // The large title folds on scroll, so it needs scroll samples even without scrollBehavior.
+            installNavbarScrollBridge()
+        }
         guard navbarScrollBehavior != .none, navbarVisible else {
             stopNavbarScrollObservation(resetCollapsed: true)
             return
@@ -2020,6 +2069,22 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         })();
         """
         bridge?.webView?.evaluateJavaScript(script)
+    }
+
+    /// Fold the large title into the inline title once the page scrolls, like a UINavigationController
+    /// does for its content scroll view. Insets keep the large height so web content does not jump.
+    private func setNavbarLargeCollapsed(_ collapsed: Bool) {
+        guard navbarLargeCollapsed != collapsed, let navBar else {
+            return
+        }
+        navbarLargeCollapsed = collapsed
+        UIView.animate(withDuration: 0.3, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction]) {
+            navBar.prefersLargeTitles = !collapsed
+            navBar.topItem?.largeTitleDisplayMode = collapsed ? .never : .always
+            self.layoutChrome()
+            navBar.layoutIfNeeded()
+        }
+        applyNavbarEdgeBlur(navbarHeight: currentInsets()["navbarHeight"] as? CGFloat ?? 0)
     }
 
     private func handleTabbarMinimizeScroll(offsetY: CGFloat, deltaY: CGFloat) {
@@ -2144,9 +2209,10 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
         if let container = navContainer {
             let topInset = navbarTopInset(safeInsets)
-            container.frame = CGRect(x: 0, y: 0, width: width, height: topInset + navbarHeight)
+            let visibleNavbarHeight = navbarLarge && navbarLargeCollapsed ? 44 : navbarHeight
+            container.frame = CGRect(x: 0, y: 0, width: width, height: topInset + visibleNavbarHeight)
             navBlurView?.frame = container.bounds
-            navBar?.frame = CGRect(x: 0, y: topInset, width: width, height: navbarHeight)
+            navBar?.frame = CGRect(x: 0, y: topInset, width: width, height: visibleNavbarHeight)
             // The bar isn't hosted by a UINavigationController, so it starts with 8pt margins and the
             // large title sits off the system content margin. Match the hosting controller's margins.
             if let margins = bridge?.viewController?.systemMinimumLayoutMargins {
@@ -2358,6 +2424,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         let insets = currentInsets()
         notifyListeners("safeAreaChanged", data: ["insets": insets])
         applyTabbarEdgeBlur(tabbarHeight: insets["tabbarHeight"] as? CGFloat ?? 0)
+        applyNavbarEdgeBlur(navbarHeight: insets["navbarHeight"] as? CGFloat ?? 0)
         guard contentInsetMode != "none" else {
             return
         }
@@ -2393,19 +2460,37 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         let wantsBlur = tabbarEdgeBlur ?? usesSystemLookCapsule
         let active = isEnabled && wantsBlur && tabbarVisible && tabbarHeight > 0
         let height = active ? Int(tabbarHeight.rounded()) + 48 : 0
-        let script = """
+        bridge?.webView?.evaluateJavaScript(edgeBlurScript(top: false, height: height))
+    }
+
+    /// iOS 26 navbars are clear glass and rely on the scroll edge effect of the content scroll
+    /// view, which the WebView does not get. Draw the same progressive blur under the navbar.
+    private func applyNavbarEdgeBlur(navbarHeight: CGFloat) {
+        let wantsBlur = navbarEdgeBlur ?? usesSystemLiquidGlass
+        let active = isEnabled && wantsBlur && navbarVisible && navbarHeight > 0
+        // Follow the visible bar: a folded large title is shorter than the inset it keeps.
+        let folded = navbarLarge && navbarLargeCollapsed ? self.navbarHeight - 44 : 0
+        let height = active ? Int((navbarHeight - folded).rounded()) + 48 : 0
+        bridge?.webView?.evaluateJavaScript(edgeBlurScript(top: true, height: height))
+    }
+
+    private func edgeBlurScript(top: Bool, height: Int) -> String {
+        let id = top ? "cap-native-navigation-edge-blur-top" : "cap-native-navigation-edge-blur"
+        let edge = top ? "top" : "bottom"
+        let direction = top ? "to bottom" : "to top"
+        return """
         (function(height){
-          var id = 'cap-native-navigation-edge-blur';
+          var id = '\(id)';
           var root = document.getElementById(id);
           if (!(height > 0)) { if (root) { root.remove(); } return; }
           if (!root) {
             root = document.createElement('div');
             root.id = id;
             root.setAttribute('aria-hidden', 'true');
-            root.style.cssText = 'position:fixed;left:0;right:0;bottom:0;pointer-events:none;z-index:2147483646;';
+            root.style.cssText = 'position:fixed;left:0;right:0;\(edge):0;pointer-events:none;z-index:2147483646;';
             [100, 84, 68, 52, 36, 20].forEach(function(h){
               var layer = document.createElement('div');
-              var mask = 'linear-gradient(to top,#000 0%,#000 ' + Math.round(h * 0.6) + '%,transparent ' + h + '%)';
+              var mask = 'linear-gradient(\(direction),#000 0%,#000 ' + Math.round(h * 0.6) + '%,transparent ' + h + '%)';
               layer.style.cssText = 'position:absolute;left:0;right:0;top:0;bottom:0;-webkit-backdrop-filter:blur(2px);'
                 + 'backdrop-filter:blur(2px);-webkit-mask-image:' + mask + ';mask-image:' + mask + ';';
               root.appendChild(layer);
@@ -2415,7 +2500,6 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
           root.style.height = height + 'px';
         })(\(height));
         """
-        bridge?.webView?.evaluateJavaScript(script)
     }
 
     private func jsonString(_ value: Any) -> String {

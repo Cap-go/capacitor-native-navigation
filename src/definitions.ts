@@ -362,6 +362,16 @@ export interface NativeNavigationNavbarOptions {
   glass?: NativeNavigationGlassOptions;
 
   /**
+   * Progressive blur that fades out below the navbar, drawn by the page with
+   * CSS `backdrop-filter` so it follows web scrolling. Not drawn on Android
+   * 11 and older.
+   *
+   * Defaults to `true` on iOS 26+, where the clear Liquid Glass navbar needs
+   * it to match the system scroll edge effect, and `false` elsewhere.
+   */
+  edgeBlur?: boolean;
+
+  /**
    * Back button state.
    */
   backButton?: NativeNavigationBackButton;

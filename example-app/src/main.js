@@ -86,6 +86,36 @@ let labelsEnabled = true;
 let iconsEnabled = true;
 let minimizeEnabled = false;
 let edgeBlurEnabled = false;
+const navbarDemo = {
+  subtitle: true,
+  large: false,
+  transparent: true,
+  edgeBlur: true,
+  backTitle: true,
+  leftItem: false,
+  rightItems: true,
+  textItem: false,
+  disabledItem: false,
+  tint: false,
+  animated: true,
+  hidden: false,
+  scrollBehavior: 'none',
+  blurEffect: 'systemChromeMaterial',
+};
+const navbarToggles = [
+  ['subtitle', 'Subtitle'],
+  ['large', 'Large title'],
+  ['transparent', 'Transparent background'],
+  ['edgeBlur', 'Blur behind navbar'],
+  ['backTitle', 'Back button title'],
+  ['leftItem', 'Left item'],
+  ['rightItems', 'Right icon items'],
+  ['textItem', 'Right text item'],
+  ['disabledItem', 'Disabled right item'],
+  ['tint', 'Orange tint'],
+  ['animated', 'Animate changes'],
+  ['hidden', 'Hide navbar'],
+];
 let tabbarPreset = 'system';
 let tabbarHidden = false;
 let shapeOverride = null;
@@ -196,6 +226,10 @@ const pages = {
         </article>
       </section>
       <section class="demo-actions" aria-label="Navigation demo actions">
+        <button class="tile" data-push="navbar">
+          <span>Navbar playground</span>
+          <small>Every top bar option: title, items, blur, scroll, colors</small>
+        </button>
         <button class="tile" data-push="scrollHeader">
           <span>Scroll header demo</span>
           <small>Native navbar hides on scroll down and returns on scroll up</small>
@@ -309,6 +343,36 @@ const pages = {
         <h1>Visible only while active.</h1>
         <p>The Draft tab is configured with hidden: true. The native tabbar shows it when selected, then removes it after another tab is chosen.</p>
       </section>
+    `,
+  },
+  navbar: {
+    title: 'Navbar',
+    subtitle: 'Playground',
+    body: `
+      <section class="settings">
+        ${navbarToggles.map(([key, label]) => `<label><input type="checkbox" data-nav-opt="${key}" /> ${label}</label>`).join('')}
+        <label>Scroll behavior
+          <select data-nav-opt="scrollBehavior">
+            <option value="none">none</option>
+            <option value="hideOnScrollDown">hideOnScrollDown</option>
+            <option value="revealOnScrollUp">revealOnScrollUp</option>
+            <option value="both">both</option>
+          </select>
+        </label>
+        <label>Blur effect (iOS 25 and older)
+          <select data-nav-opt="blurEffect">
+            <option value="systemChromeMaterial">systemChromeMaterial</option>
+            <option value="systemUltraThinMaterial">systemUltraThinMaterial</option>
+            <option value="systemThickMaterial">systemThickMaterial</option>
+            <option value="none">none</option>
+          </select>
+        </label>
+        <button data-action="go-back">Go back</button>
+        <pre id="version-output">Tap a navbar item.</pre>
+      </section>
+      <ul class="scroll-header-list">
+        ${Array.from({ length: 30 }, (_, index) => `<li><strong>Row ${index + 1}</strong><span>Scroll under the navbar to see the blur.</span></li>`).join('')}
+      </ul>
     `,
   },
   scrollHeader: {
@@ -443,7 +507,41 @@ const pageFor = (id) =>
     `,
   };
 
+const navbarDemoOptions = (resetScrollCollapsed) => {
+  const rightItems = [];
+  if (navbarDemo.rightItems) {
+    rightItems.push({ id: 'star', icon: { svg: icons.star } }, { id: 'compose', icon: { svg: icons.compose } });
+  }
+  if (navbarDemo.textItem) {
+    rightItems.push({ id: 'save', title: 'Save' });
+  }
+  if (navbarDemo.disabledItem) {
+    rightItems.push({ id: 'disabled', title: 'Off', enabled: false });
+  }
+  return {
+    hidden: navbarDemo.hidden,
+    title: 'Navbar',
+    subtitle: navbarDemo.subtitle ? 'Playground' : undefined,
+    large: navbarDemo.large,
+    transparent: navbarDemo.transparent,
+    edgeBlur: navbarDemo.edgeBlur,
+    blurEffect: navbarDemo.blurEffect,
+    animated: navbarDemo.animated,
+    scrollBehavior: navbarDemo.scrollBehavior,
+    scrollThreshold: 8,
+    resetScrollCollapsed,
+    backButton: { visible: stack.length > 1, title: navbarDemo.backTitle ? 'Back' : '' },
+    leftItems: navbarDemo.leftItem ? [{ id: 'menu', title: 'Menu' }] : [],
+    rightItems,
+    colors: navbarDemo.tint ? { tint: '#ff7a1a', foreground: '#ff7a1a' } : undefined,
+  };
+};
+
 const updateNavbar = async (resetScrollCollapsed = false) => {
+  if (route === 'navbar') {
+    await NativeNavigation.setNavbar(navbarDemoOptions(resetScrollCollapsed));
+    return;
+  }
   const page = pageFor(route);
   const scrollHeaderDemo = route === 'scrollHeader';
   await NativeNavigation.setNavbar({
@@ -471,8 +569,7 @@ const updateTabbar = async () => {
     labels: labelsEnabled,
     icons: iconsEnabled,
     minimizeBehavior: minimizeEnabled ? 'onScrollDown' : 'never',
-    // Leave unset when off so iOS can use its default (on while minimize replaces the system bar).
-    edgeBlur: edgeBlurEnabled ? true : undefined,
+    edgeBlur: edgeBlurEnabled,
     colors: tabbarColors(),
     style: tabbarStyle(),
   });
@@ -507,6 +604,14 @@ const syncControls = () => {
   if (minimizeToggle) {
     minimizeToggle.checked = minimizeEnabled;
   }
+  document.querySelectorAll('[data-nav-opt]').forEach((input) => {
+    const value = navbarDemo[input.dataset.navOpt];
+    if (input.type === 'checkbox') {
+      input.checked = value;
+    } else {
+      input.value = value;
+    }
+  });
   const edgeBlurToggle = document.getElementById('edge-blur-toggle');
   if (edgeBlurToggle) {
     edgeBlurToggle.checked = edgeBlurEnabled;
@@ -625,6 +730,10 @@ const navigate = async (nextRoute, direction = 'forward') => {
     stack = [nextRoute];
   }
   render();
+  if (direction !== 'back') {
+    window.scrollTo(0, 0);
+    app.scrollTop = 0;
+  }
   await updateNavbar(true);
   await updateTabbar();
   await NativeNavigation.finishTransition({ id: transition.id, direction });
@@ -752,6 +861,12 @@ app.addEventListener('click', async (event) => {
 });
 
 app.addEventListener('change', async (event) => {
+  const navOption = event.target.dataset.navOpt;
+  if (navOption) {
+    navbarDemo[navOption] = event.target.type === 'checkbox' ? event.target.checked : event.target.value;
+    await updateNavbar(true);
+    return;
+  }
   if (event.target.id === 'labels-toggle') {
     labelsEnabled = event.target.checked;
     render();

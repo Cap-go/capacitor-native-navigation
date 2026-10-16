@@ -133,6 +133,7 @@ public class NativeNavigationPlugin extends Plugin {
     private boolean tabbarMinimizeOnScroll = false;
     private boolean tabbarDragToSelect = true;
     private boolean tabbarEdgeBlur = false;
+    private boolean navbarEdgeBlur = false;
     private boolean tabbarMinimized = false;
     private float tabbarMinimizeProgress = 0f;
     private ValueAnimator tabbarMinimizeAnimator;
@@ -201,6 +202,7 @@ public class NativeNavigationPlugin extends Plugin {
 
             boolean hidden = call.getBoolean("hidden", false);
             navbarVisible = !hidden;
+            navbarEdgeBlur = Boolean.TRUE.equals(call.getBoolean("edgeBlur", false));
             if (hidden) {
                 if (navbarContainer != null) {
                     navbarContainer.setVisibility(View.GONE);
@@ -2715,6 +2717,7 @@ public class NativeNavigationPlugin extends Plugin {
         event.put("insets", insets);
         notifyListeners("safeAreaChanged", event);
         applyTabbarEdgeBlur(insets);
+        applyNavbarEdgeBlur(insets);
         if ("none".equals(contentInsetMode) || getBridge() == null || getBridge().getWebView() == null) {
             return;
         }
@@ -2760,6 +2763,17 @@ public class NativeNavigationPlugin extends Plugin {
         boolean active = enabled && tabbarEdgeBlur && tabbarVisible && supportsBlur();
         int height = active ? insets.getInteger("tabbarHeight", 0) + TabbarChromeSupport.EDGE_BLUR_BLEED_CSS_PX : 0;
         getBridge().getWebView().evaluateJavascript(TabbarChromeSupport.edgeBlurScript(height), null);
+    }
+
+    /** Same progressive blur as {@link #applyTabbarEdgeBlur}, pinned under the navbar. */
+    private void applyNavbarEdgeBlur(JSObject insets) {
+        if (getBridge() == null || getBridge().getWebView() == null) {
+            return;
+        }
+        int navbarHeight = insets.getInteger("navbarHeight", 0);
+        boolean active = enabled && navbarEdgeBlur && navbarVisible && navbarHeight > 0 && supportsBlur();
+        int height = active ? navbarHeight + TabbarChromeSupport.EDGE_BLUR_BLEED_CSS_PX : 0;
+        getBridge().getWebView().evaluateJavascript(TabbarChromeSupport.edgeBlurScript(true, height), null);
     }
 
     private void configureNavbarScrollBehavior(PluginCall call) {
