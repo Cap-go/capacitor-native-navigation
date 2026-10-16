@@ -538,23 +538,71 @@ pre {
   gap: 12px;
 }
 
+.settings + .scroll-header-list,
+.settings .demo-actions {
+  margin-top: 16px;
+}
+
 .scroll-header-list li {
   display: grid;
   gap: 4px;
-  padding: 16px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  padding: 16px 18px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: inset 0 0 0 1px rgba(17, 24, 39, 0.08);
 }
 
 .scroll-header-list span {
-  color: #6b7280;
+  color: #667085;
   font-size: 0.92rem;
+}
+
+.settings .eyebrow {
+  margin: 4px 0 0;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b7280;
 }
 
 .settings select {
   margin-left: auto;
   max-width: 55%;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 10px;
   font: inherit;
   font-weight: 500;
+  color: #111827;
+  background: rgba(17, 24, 39, 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  .scroll-header-list li {
+    color: #f8fafc;
+    background: rgba(20, 24, 33, 0.78);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  }
+
+  .scroll-header-list span,
+  .scroll-header-demo p,
+  .scroll-header-demo .eyebrow,
+  .settings .eyebrow {
+    color: #a8b3c4;
+  }
+
+  .settings select {
+    color: #f8fafc;
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .settings select option {
+    color: #f8fafc;
+    background: #141821;
+  }
+
+  pre {
+    background: #0b0e14;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  }
 }

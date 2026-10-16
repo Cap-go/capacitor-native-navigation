@@ -97,8 +97,10 @@ const navbarDemo = {
   textItem: false,
   disabledItem: false,
   tint: false,
+  background: false,
   animated: true,
   hidden: false,
+  glass: '',
   scrollBehavior: 'none',
   blurEffect: 'systemChromeMaterial',
 };
@@ -113,9 +115,78 @@ const navbarToggles = [
   ['textItem', 'Right text item'],
   ['disabledItem', 'Disabled right item'],
   ['tint', 'Orange tint'],
+  ['background', 'Background color'],
   ['animated', 'Animate changes'],
   ['hidden', 'Hide navbar'],
 ];
+const tabbarDemo = {
+  dragToSelect: true,
+  animated: true,
+  dynamicColors: false,
+  customColors: false,
+  selectedIcon: false,
+  nativeIcon: false,
+  disabledTab: false,
+  bakedTint: false,
+  disableTransparentOnScrollEdge: false,
+  disableIndicator: false,
+  labelVisibilityMode: '',
+  trailingRole: 'search',
+  blurEffect: '',
+  glass: '',
+  surfaceAlpha: '',
+};
+const tabbarToggles = [
+  ['dragToSelect', 'Drag to select'],
+  ['animated', 'Animate changes'],
+  ['dynamicColors', 'Material You colors (Android 12+)'],
+  ['customColors', 'Custom indicator, ripple and badge colors'],
+  ['selectedIcon', 'Selected icon on Home'],
+  ['nativeIcon', 'Native Profile icon (SF Symbol / Android drawable)'],
+  ['disabledTab', 'Disable Activity tab'],
+  ['bakedTint', 'Baked tint colors (iOS 26)'],
+  ['disableTransparentOnScrollEdge', 'Solid at scroll edge (iOS)'],
+  ['disableIndicator', 'Hide indicator (Android)'],
+];
+const tabbarSelects = [
+  ['labelVisibilityMode', 'Label visibility', ['', 'auto', 'selected', 'labeled', 'unlabeled']],
+  ['trailingRole', 'Trailing tab role (Trailing layout)', ['search', 'prominent', 'normal']],
+  [
+    'blurEffect',
+    'Blur effect (iOS 25 and older)',
+    ['', 'systemChromeMaterial', 'systemUltraThinMaterial', 'systemThickMaterial', 'dark', 'none'],
+  ],
+  ['glass', 'Glass effect', ['', 'liquidGlass', 'none']],
+  ['surfaceAlpha', 'Glass surface alpha', ['', '0.3', '0.62', '1']],
+];
+const configDemo = {
+  enabled: true,
+  contentInsetMode: 'css',
+  animationDuration: '360',
+  glass: 'liquidGlass',
+  transitionDuration: '',
+};
+const configToggles = [['enabled', 'Native chrome enabled']];
+const configSelects = [
+  ['contentInsetMode', 'Content inset mode', ['css', 'none']],
+  ['animationDuration', 'Default animation duration (ms)', ['360', '150', '800']],
+  ['glass', 'Shared glass effect', ['liquidGlass', 'none']],
+  ['transitionDuration', 'Transition duration override (ms)', ['', '150', '800']],
+];
+const controlsMarkup = (group, toggles, selects = []) =>
+  toggles
+    .map(([key, label]) => `<label><input type="checkbox" data-${group}-opt="${key}" /> ${label}</label>`)
+    .join('') +
+  selects
+    .map(
+      ([key, label, values]) => `
+        <label>${label}
+          <select data-${group}-opt="${key}">
+            ${values.map((value) => `<option value="${value}">${value || 'default'}</option>`).join('')}
+          </select>
+        </label>`,
+    )
+    .join('');
 let tabbarPreset = 'system';
 let tabbarHidden = false;
 let shapeOverride = null;
@@ -175,9 +246,7 @@ const withItemPatch = (tab) => {
 };
 
 const currentTabs = () => {
-  const base = tabs
-    .filter((tab) => tab.id !== 'draft' && !removedTabIds.includes(tab.id))
-    .map(withItemPatch);
+  const base = tabs.filter((tab) => tab.id !== 'draft' && !removedTabIds.includes(tab.id)).map(withItemPatch);
   const extras = addableTabs.filter((tab) => addedTabIds.includes(tab.id)).map(withItemPatch);
   return [...base, ...extras];
 };
@@ -229,6 +298,14 @@ const pages = {
         <button class="tile" data-push="navbar">
           <span>Navbar playground</span>
           <small>Every top bar option: title, items, blur, scroll, colors</small>
+        </button>
+        <button class="tile" data-push="tabbar">
+          <span>Tabbar playground</span>
+          <small>Glass, blur, label modes, roles, colors, icons, drag</small>
+        </button>
+        <button class="tile" data-push="advanced">
+          <span>Configure and transitions</span>
+          <small>Global options, every transition direction, live insets</small>
         </button>
         <button class="tile" data-push="scrollHeader">
           <span>Scroll header demo</span>
@@ -359,6 +436,13 @@ const pages = {
             <option value="both">both</option>
           </select>
         </label>
+        <label>Glass effect
+          <select data-nav-opt="glass">
+            <option value="">default</option>
+            <option value="liquidGlass">liquidGlass</option>
+            <option value="none">none</option>
+          </select>
+        </label>
         <label>Blur effect (iOS 25 and older)
           <select data-nav-opt="blurEffect">
             <option value="systemChromeMaterial">systemChromeMaterial</option>
@@ -373,6 +457,44 @@ const pages = {
       <ul class="scroll-header-list">
         ${Array.from({ length: 30 }, (_, index) => `<li><strong>Row ${index + 1}</strong><span>Scroll under the navbar to see the blur.</span></li>`).join('')}
       </ul>
+    `,
+  },
+  tabbar: {
+    title: 'Tabbar',
+    subtitle: 'Playground',
+    body: `
+      <section class="settings">
+        <label><input id="labels-toggle" type="checkbox" /> Tab labels</label>
+        <label><input id="icons-toggle" type="checkbox" /> Tab icons</label>
+        <label><input id="minimize-toggle" type="checkbox" /> Minimize tabbar on scroll</label>
+        <label><input id="edge-blur-toggle" type="checkbox" /> Blur behind tabbar</label>
+        ${controlsMarkup('tab', tabbarToggles, tabbarSelects)}
+        <div class="layout-presets" aria-label="Tab bar layouts"></div>
+        <button data-action="go-back">Go back</button>
+      </section>
+      <ul class="scroll-header-list">
+        ${Array.from({ length: 30 }, (_, index) => `<li><strong>Row ${index + 1}</strong><span>Scroll to minimize the tabbar.</span></li>`).join('')}
+      </ul>
+    `,
+  },
+  advanced: {
+    title: 'Configure',
+    subtitle: 'Global options and transitions',
+    body: `
+      <section class="settings">
+        ${controlsMarkup('cfg', configToggles, configSelects)}
+        <p class="eyebrow">Transitions to the detail page</p>
+        <div class="demo-actions">
+          ${['forward', 'root', 'tab', 'zoom', 'none']
+            .map(
+              (direction) => `<button class="tile" data-transition="${direction}"><span>${direction}</span></button>`,
+            )
+            .join('')}
+        </div>
+        <p class="eyebrow">Insets (safeAreaChanged)</p>
+        <pre id="insets-output">Waiting for insets.</pre>
+        <button data-action="go-back">Go back</button>
+      </section>
     `,
   },
   scrollHeader: {
@@ -409,10 +531,23 @@ const tabbarColors = () => ({
 
 const tabsForNative = () =>
   currentTabs().map((tab) => {
+    let next = tab;
     if (tabbarShape() === 'floating' && tabbarPreset === 'trailing' && tab.id === 'profile' && !shapeOverride) {
-      return { ...tab, role: 'search' };
+      next = { ...next, role: tabbarDemo.trailingRole };
     }
-    return tab;
+    if (tabbarDemo.selectedIcon && tab.id === 'home') {
+      next = { ...next, selectedIcon: { svg: icons.star } };
+    }
+    if (tabbarDemo.nativeIcon && tab.id === 'profile' && !isWebPreview) {
+      next = {
+        ...next,
+        icon: { ios: { sfSymbol: 'person.crop.circle.fill' }, android: { resource: 'ic_menu_myplaces' } },
+      };
+    }
+    if (tabbarDemo.disabledTab && tab.id === 'activity') {
+      next = { ...next, enabled: false };
+    }
+    return next;
   });
 
 const tabbarStyle = () => {
@@ -456,16 +591,24 @@ const setTopButtonVisible = (visible) => {
   writeTopButtonPreference(visible);
 };
 
-const configureChrome = async () => {
-  const applyNativeChrome = async () => {
-    await NativeNavigation.configure({
-      contentInsetMode: 'css',
-      animationDuration: 360,
-      colors: {
-        tint: '#0a84ff',
-        inactiveTint: '#6b7280',
-      },
-      glass: screenshotMode
+const showInsets = (insets) => {
+  const output = document.getElementById('insets-output');
+  if (output) {
+    output.textContent = JSON.stringify(insets, null, 2);
+  }
+};
+
+const applyConfigure = async () => {
+  const result = await NativeNavigation.configure({
+    enabled: configDemo.enabled,
+    contentInsetMode: configDemo.contentInsetMode,
+    animationDuration: Number(configDemo.animationDuration),
+    colors: {
+      tint: '#0a84ff',
+      inactiveTint: '#6b7280',
+    },
+    glass:
+      screenshotMode || configDemo.glass === 'none'
         ? {
             effect: 'none',
             surfaceAlpha: 0.72,
@@ -475,7 +618,13 @@ const configureChrome = async () => {
             blurRadius: 18,
             surfaceAlpha: 0.92,
           },
-    });
+  });
+  showInsets(result.insets);
+};
+
+const configureChrome = async () => {
+  const applyNativeChrome = async () => {
+    await applyConfigure();
     chromeConfigured = true;
     await updateNavbar();
     await updateTabbar();
@@ -533,7 +682,14 @@ const navbarDemoOptions = (resetScrollCollapsed) => {
     backButton: { visible: stack.length > 1, title: navbarDemo.backTitle ? 'Back' : '' },
     leftItems: navbarDemo.leftItem ? [{ id: 'menu', title: 'Menu' }] : [],
     rightItems,
-    colors: navbarDemo.tint ? { tint: '#ff7a1a', foreground: '#ff7a1a' } : undefined,
+    glass: navbarDemo.glass ? { effect: navbarDemo.glass } : undefined,
+    colors:
+      navbarDemo.tint || navbarDemo.background
+        ? {
+            ...(navbarDemo.tint ? { tint: '#ff7a1a', foreground: '#ff7a1a' } : {}),
+            ...(navbarDemo.background ? { background: '#cce4ffee' } : {}),
+          }
+        : undefined,
   };
 };
 
@@ -570,8 +726,30 @@ const updateTabbar = async () => {
     icons: iconsEnabled,
     minimizeBehavior: minimizeEnabled ? 'onScrollDown' : 'never',
     edgeBlur: edgeBlurEnabled,
-    colors: tabbarColors(),
+    colors: { ...tabbarColors(), dynamic: tabbarDemo.dynamicColors },
     style: tabbarStyle(),
+    dragToSelect: tabbarDemo.dragToSelect,
+    animated: tabbarDemo.animated,
+    labelVisibilityMode: tabbarDemo.labelVisibilityMode || undefined,
+    blurEffect: tabbarDemo.blurEffect || undefined,
+    glass:
+      tabbarDemo.glass || tabbarDemo.surfaceAlpha
+        ? {
+            ...(tabbarDemo.glass ? { effect: tabbarDemo.glass } : {}),
+            ...(tabbarDemo.surfaceAlpha ? { surfaceAlpha: Number(tabbarDemo.surfaceAlpha) } : {}),
+          }
+        : undefined,
+    experimentalBakedTintColors: tabbarDemo.bakedTint,
+    disableTransparentOnScrollEdge: tabbarDemo.disableTransparentOnScrollEdge,
+    disableIndicator: tabbarDemo.disableIndicator,
+    ...(tabbarDemo.customColors
+      ? {
+          indicatorColor: '#ffd8a8',
+          rippleColor: '#33ff7a1a',
+          badgeBackgroundColor: '#16a34a',
+          badgeTextColor: '#ffffff',
+        }
+      : {}),
   });
 };
 
@@ -604,14 +782,23 @@ const syncControls = () => {
   if (minimizeToggle) {
     minimizeToggle.checked = minimizeEnabled;
   }
-  document.querySelectorAll('[data-nav-opt]').forEach((input) => {
-    const value = navbarDemo[input.dataset.navOpt];
-    if (input.type === 'checkbox') {
-      input.checked = value;
-    } else {
-      input.value = value;
-    }
+  [
+    ['navOpt', 'nav-opt', navbarDemo],
+    ['tabOpt', 'tab-opt', tabbarDemo],
+    ['cfgOpt', 'cfg-opt', configDemo],
+  ].forEach(([dataKey, attribute, state]) => {
+    document.querySelectorAll(`[data-${attribute}]`).forEach((input) => {
+      const value = state[input.dataset[dataKey]];
+      if (input.type === 'checkbox') {
+        input.checked = value;
+      } else {
+        input.value = value;
+      }
+    });
   });
+  if (app.dataset.insets) {
+    showInsets(JSON.parse(app.dataset.insets));
+  }
   const edgeBlurToggle = document.getElementById('edge-blur-toggle');
   if (edgeBlurToggle) {
     edgeBlurToggle.checked = edgeBlurEnabled;
@@ -664,7 +851,8 @@ const syncControls = () => {
     labelItemState.textContent = activityTab ? `Activity item: ${activityTab.title}` : 'Activity item is hidden';
   }
   if (iconItemState) {
-    iconItemState.textContent = itemPatches.activity?.icon?.svg === icons.star ? 'Activity item: star' : 'Activity item: bars';
+    iconItemState.textContent =
+      itemPatches.activity?.icon?.svg === icons.star ? 'Activity item: star' : 'Activity item: bars';
   }
   document.querySelectorAll('.layout-presets').forEach((container) => {
     container.innerHTML = Object.entries(tabbarPresets)
@@ -719,10 +907,11 @@ const render = () => {
   syncControls();
 };
 
-const navigate = async (nextRoute, direction = 'forward') => {
-  const transition = await NativeNavigation.beginTransition({ direction });
+const navigate = async (nextRoute, direction = 'forward', extra = {}) => {
+  const duration = configDemo.transitionDuration ? Number(configDemo.transitionDuration) : undefined;
+  const transition = await NativeNavigation.beginTransition({ direction, duration, ...extra });
   route = nextRoute;
-  if (direction === 'forward') {
+  if (direction === 'forward' || direction === 'zoom' || direction === 'none') {
     stack.push(nextRoute);
   } else if (direction === 'back' && stack.length > 1) {
     stack.pop();
@@ -736,7 +925,7 @@ const navigate = async (nextRoute, direction = 'forward') => {
   }
   await updateNavbar(true);
   await updateTabbar();
-  await NativeNavigation.finishTransition({ id: transition.id, direction });
+  await NativeNavigation.finishTransition({ id: transition.id, direction, duration, ...extra });
 };
 
 app.addEventListener('click', async (event) => {
@@ -753,6 +942,16 @@ app.addEventListener('click', async (event) => {
   const pushRoute = target.dataset.push;
   if (pushRoute) {
     await navigate(pushRoute, 'forward');
+    return;
+  }
+  const transitionDirection = target.dataset.transition;
+  if (transitionDirection) {
+    const rect = target.getBoundingClientRect();
+    const extra =
+      transitionDirection === 'zoom'
+        ? { sourceRect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }, cornerRadius: 16 }
+        : {};
+    await navigate('detail', transitionDirection, extra);
     return;
   }
   if (target.dataset.action === 'go-back') {
@@ -867,6 +1066,22 @@ app.addEventListener('change', async (event) => {
     await updateNavbar(true);
     return;
   }
+  const tabOption = event.target.dataset.tabOpt;
+  if (tabOption) {
+    tabbarDemo[tabOption] = event.target.type === 'checkbox' ? event.target.checked : event.target.value;
+    await updateTabbar();
+    return;
+  }
+  const cfgOption = event.target.dataset.cfgOpt;
+  if (cfgOption) {
+    configDemo[cfgOption] = event.target.type === 'checkbox' ? event.target.checked : event.target.value;
+    if (cfgOption !== 'transitionDuration') {
+      await applyConfigure();
+      await updateNavbar();
+      await updateTabbar();
+    }
+    return;
+  }
   if (event.target.id === 'labels-toggle') {
     labelsEnabled = event.target.checked;
     render();
@@ -912,6 +1127,7 @@ NativeNavigation.addListener('tabSelect', async (event) => {
 
 NativeNavigation.addListener('safeAreaChanged', (event) => {
   app.dataset.insets = JSON.stringify(event.insets);
+  showInsets(event.insets);
 });
 
 document.addEventListener('visibilitychange', () => {
