@@ -551,3 +551,10 @@ pre {
   color: #6b7280;
   font-size: 0.92rem;
 }
+
+.settings select {
+  margin-left: auto;
+  max-width: 55%;
+  font: inherit;
+  font-weight: 500;
+}

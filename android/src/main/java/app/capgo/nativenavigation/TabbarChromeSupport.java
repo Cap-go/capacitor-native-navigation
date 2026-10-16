@@ -78,18 +78,33 @@ public final class TabbarChromeSupport {
      * Adds, resizes or removes the page element that blurs content behind the tabbar. Stacked layers with growing
      * masks make the blur strongest at the bottom edge and fade it out above the bar. A height of 0 removes it.
      */
+    /** Progressive blur pinned to the bottom edge (under the tabbar). */
     public static String edgeBlurScript(int heightCssPx) {
+        return edgeBlurScript(false, heightCssPx);
+    }
+
+    /** Progressive blur pinned to the top edge (under the navbar) or the bottom edge (under the tabbar). */
+    public static String edgeBlurScript(boolean top, int heightCssPx) {
+        String id = top ? "cap-native-navigation-edge-blur-top" : "cap-native-navigation-edge-blur";
+        String edge = top ? "top" : "bottom";
+        String direction = top ? "to bottom" : "to top";
         return (
             "(function(height){" +
-            "var id='cap-native-navigation-edge-blur';" +
+            "var id='" +
+            id +
+            "';" +
             "var root=document.getElementById(id);" +
             "if(!(height>0)){if(root){root.remove();}return;}" +
             "if(!root){" +
             "root=document.createElement('div');root.id=id;root.setAttribute('aria-hidden','true');" +
-            "root.style.cssText='position:fixed;left:0;right:0;bottom:0;pointer-events:none;z-index:2147483646;';" +
+            "root.style.cssText='position:fixed;left:0;right:0;" +
+            edge +
+            ":0;pointer-events:none;z-index:2147483646;';" +
             "[100,84,68,52,36,20].forEach(function(h){" +
             "var layer=document.createElement('div');" +
-            "var mask='linear-gradient(to top,#000 0%,#000 '+Math.round(h*0.6)+'%,transparent '+h+'%)';" +
+            "var mask='linear-gradient(" +
+            direction +
+            ",#000 0%,#000 '+Math.round(h*0.6)+'%,transparent '+h+'%)';" +
             "layer.style.cssText='position:absolute;left:0;right:0;top:0;bottom:0;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);-webkit-mask-image:'+mask+';mask-image:'+mask+';';" +
             "root.appendChild(layer);" +
             "});" +
