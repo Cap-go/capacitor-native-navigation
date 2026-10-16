@@ -340,7 +340,9 @@ export interface NativeNavigationNavbarOptions {
   subtitle?: string;
 
   /**
-   * Prefer a large iOS title style.
+   * Show a large title under the bar, like iOS large titles. On Android the bar grows by 52dp and
+   * the title moves into its own row. Send `large: false` with the same title to collapse it to the
+   * inline title (animated on Android), e.g. once the page scrolls.
    */
   large?: boolean;
 
