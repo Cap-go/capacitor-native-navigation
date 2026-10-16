@@ -10,6 +10,31 @@ class NativeNavigationTests: XCTestCase {
         XCTAssertEqual("native", result)
     }
 
+    func testPullToRefreshIsOptIn() {
+        let webView = UIView()
+        let pullToRefresh = NativeNavigationPullToRefresh {}
+
+        XCTAssertFalse(pullToRefresh.isEnabled)
+        XCTAssertTrue(webView.gestureRecognizers?.isEmpty ?? true)
+
+        pullToRefresh.enable(on: webView, scrollView: nil, tintColor: .red)
+        XCTAssertTrue(pullToRefresh.isEnabled)
+        XCTAssertEqual(webView.gestureRecognizers?.count, 1)
+        XCTAssertEqual((webView.subviews.last as? UIActivityIndicatorView)?.color, .red)
+
+        pullToRefresh.disable()
+        XCTAssertFalse(pullToRefresh.isEnabled)
+        XCTAssertTrue(webView.gestureRecognizers?.isEmpty ?? true)
+        XCTAssertTrue(webView.subviews.isEmpty)
+    }
+
+    func testPullStateArmsAtThreshold() {
+        XCTAssertEqual(nativeNavigationPullState(distance: -20), NativeNavigationPullState(offset: 0, progress: 0, armed: false))
+        XCTAssertEqual(nativeNavigationPullState(distance: 45, threshold: 90), NativeNavigationPullState(offset: 22.5, progress: 0.5, armed: false))
+        XCTAssertEqual(nativeNavigationPullState(distance: 90, threshold: 90), NativeNavigationPullState(offset: 45, progress: 1, armed: true))
+        XCTAssertEqual(nativeNavigationPullState(distance: 190, threshold: 90).offset, 60, accuracy: 0.001)
+    }
+
     func testTabContentControllerHostsWebView() {
         let webView = UIView()
         let originalContainer = UIView()

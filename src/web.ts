@@ -9,6 +9,7 @@ import type {
   NativeNavigationNavbarOptions,
   NativeNavigationNavbarScrollEvent,
   NativeNavigationPlugin,
+  NativeNavigationPullToRefreshOptions,
   NativeNavigationTabbarOptions,
   NativeNavigationTransitionDirection,
   NativeNavigationTransitionResult,
@@ -72,6 +73,14 @@ export class NativeNavigationWeb extends WebPlugin implements NativeNavigationPl
   async reportNavbarScroll(options: NativeNavigationNavbarScrollEvent): Promise<void> {
     this.applyNavbarScrollSample(options.offsetY, options.deltaY);
     await this.applyInsets();
+  }
+
+  async setPullToRefresh(_options: NativeNavigationPullToRefreshOptions): Promise<void> {
+    // Browsers own pull-to-refresh on the web.
+  }
+
+  async endPullToRefresh(): Promise<void> {
+    // Nothing to stop on the web.
   }
 
   async setTabbar(options: NativeNavigationTabbarOptions): Promise<NativeNavigationInsetsResult> {
