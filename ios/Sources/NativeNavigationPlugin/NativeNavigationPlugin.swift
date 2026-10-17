@@ -30,6 +30,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         CAPPluginMethod(name: "configure", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setNavbar", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "reportNavbarScroll", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setPullToRefresh", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "endPullToRefresh", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setTabbar", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "beginTransition", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "finishTransition", returnType: CAPPluginReturnPromise),
@@ -95,6 +97,9 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var activeTransitionContainerBackgroundColor: UIColor?
     private var activeTransitionContainerWasOpaque = false
     private var activeTransitionContainerBackgroundCaptured = false
+    private lazy var pullToRefresh = NativeNavigationPullToRefresh { [weak self] in
+        self?.notifyListeners("pullToRefresh", data: [:])
+    }
 
     private var usesSystemLiquidGlass: Bool {
         if #available(iOS 26.0, *) {
@@ -260,6 +265,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         DispatchQueue.main.async {
             let offsetY = CGFloat(call.getDouble("offsetY") ?? 0)
             let deltaY = CGFloat(call.getDouble("deltaY") ?? 0)
+            self.pullToRefresh.reportWebScroll(offsetY: offsetY)
             if self.navbarScrollBehavior != .none, self.navbarVisible {
                 self.handleNavbarScroll(offsetY: offsetY, deltaY: deltaY)
             }
@@ -269,6 +275,41 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             if self.tabbarMinimizeOnScroll, self.tabbarVisible {
                 self.handleTabbarMinimizeScroll(offsetY: offsetY, deltaY: deltaY)
             }
+            call.resolve()
+        }
+    }
+
+    @objc func setPullToRefresh(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            guard call.getBool("enabled", false) else {
+                self.pullToRefresh.disable()
+                call.resolve()
+                return
+            }
+            guard let webView = self.bridge?.webView else {
+                call.reject("WebView unavailable")
+                return
+            }
+            self.pullToRefresh.enable(
+                on: webView,
+                scrollView: webView.scrollView,
+                tintColor: self.colorValue(call.getString("tintColor"))
+            )
+            self.pullToRefresh.updateTopInset(self.pullToRefreshTopInset())
+            // Inner scroll roots (`#app`, marked elements) report offsets through the scroll bridge.
+            self.installNavbarScrollBridge()
+            call.resolve()
+        }
+    }
+
+    private func pullToRefreshTopInset() -> CGFloat {
+        let safeTop = bridge?.viewController?.view.safeAreaInsets.top ?? 0
+        return max(currentInsets()["navbarHeight"] as? CGFloat ?? 0, safeTop)
+    }
+
+    @objc func endPullToRefresh(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            self.pullToRefresh.endRefreshing()
             call.resolve()
         }
     }
@@ -452,6 +493,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 call.reject("WebView unavailable")
                 return
             }
+            // A new route starts at the top; a stale offset would block the gesture.
+            self.pullToRefresh.resetWebScroll()
 
             let transitionId = call.getString("id") ?? self.activeTransitionId ?? "transition-\(Int(Date().timeIntervalSince1970 * 1_000))"
             let direction = call.getString("direction") ?? self.activeTransitionDirection
@@ -2425,6 +2468,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         notifyListeners("safeAreaChanged", data: ["insets": insets])
         applyTabbarEdgeBlur(tabbarHeight: insets["tabbarHeight"] as? CGFloat ?? 0)
         applyNavbarEdgeBlur(navbarHeight: insets["navbarHeight"] as? CGFloat ?? 0)
+        pullToRefresh.updateTopInset(pullToRefreshTopInset())
         guard contentInsetMode != "none" else {
             return
         }

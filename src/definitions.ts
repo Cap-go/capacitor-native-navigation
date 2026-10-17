@@ -835,6 +835,37 @@ export interface NativeNavigationTransitionEvent {
 }
 
 /**
+ * Options for the optional native pull-to-refresh gesture.
+ */
+export interface NativeNavigationPullToRefreshOptions {
+  /**
+   * Turn native pull-to-refresh on or off. Off by default: nothing is attached
+   * to the WebView until this is `true`, and `false` restores the original
+   * view setup.
+   *
+   * iOS shows the system activity indicator below the navbar and arms the
+   * refresh with a haptic, like `UIRefreshControl`. Android wraps the WebView
+   * in a `SwipeRefreshLayout`. Both work whether the page scrolls `window` or
+   * an inner root (`#app`, `[data-cap-native-navigation-scroll]`): the gesture
+   * only starts when that root is at the top. Call `reportNavbarScroll()` for
+   * other scroll containers.
+   *
+   * @default false
+   */
+  enabled: boolean;
+
+  /**
+   * Spinner color as a hex string. Defaults to the platform spinner color.
+   */
+  tintColor?: string;
+
+  /**
+   * Spinner disc background color as a hex string. Android only.
+   */
+  backgroundColor?: string;
+}
+
+/**
  * Framework-agnostic native navigation chrome API.
  */
 export interface NativeNavigationPlugin {
@@ -855,6 +886,22 @@ export interface NativeNavigationPlugin {
    * install those listeners automatically when scrolling is enabled.
    */
   reportNavbarScroll(options: NativeNavigationNavbarScrollEvent): Promise<void>;
+
+  /**
+   * Enable or disable the native pull-to-refresh gesture. Listen for
+   * `pullToRefresh`, reload your data, then call `endPullToRefresh()` to hide
+   * the spinner. No-op on web.
+   *
+   * @since 8.11.0
+   */
+  setPullToRefresh(options: NativeNavigationPullToRefreshOptions): Promise<void>;
+
+  /**
+   * Stop the native pull-to-refresh spinner once the refresh is done.
+   *
+   * @since 8.11.0
+   */
+  endPullToRefresh(): Promise<void>;
 
   /**
    * Render or update the native tabbar.
@@ -905,4 +952,12 @@ export interface NativeNavigationPlugin {
     eventName: 'transitionEnd',
     listenerFunc: (event: NativeNavigationTransitionEvent) => void,
   ): Promise<PluginListenerHandle>;
+
+  /**
+   * Fired when the user pulls to refresh. The spinner keeps spinning until
+   * `endPullToRefresh()` is called.
+   *
+   * @since 8.11.0
+   */
+  addListener(eventName: 'pullToRefresh', listenerFunc: () => void): Promise<PluginListenerHandle>;
 }

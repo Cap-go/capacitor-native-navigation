@@ -451,6 +451,7 @@ const pages = {
             <option value="none">none</option>
           </select>
         </label>
+        <label><input type="checkbox" id="pull-to-refresh-toggle" /> Pull to refresh</label>
         <button data-action="go-back">Go back</button>
         <pre id="version-output">Tap a navbar item.</pre>
       </section>
@@ -1100,6 +1101,9 @@ app.addEventListener('change', async (event) => {
     edgeBlurEnabled = event.target.checked;
     await updateTabbar();
   }
+  if (event.target.id === 'pull-to-refresh-toggle') {
+    await NativeNavigation.setPullToRefresh({ enabled: event.target.checked });
+  }
   if (event.target.id === 'top-button-toggle') {
     setTopButtonVisible(event.target.checked);
     await updateNavbar();
@@ -1123,6 +1127,15 @@ NativeNavigation.addListener('tabSelect', async (event) => {
   }
   activeTab = event.id;
   await navigate(event.id, 'tab');
+});
+
+NativeNavigation.addListener('pullToRefresh', async () => {
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+  await NativeNavigation.endPullToRefresh();
+  const output = document.getElementById('version-output');
+  if (output) {
+    output.textContent = `Refreshed at ${new Date().toLocaleTimeString()}`;
+  }
 });
 
 NativeNavigation.addListener('safeAreaChanged', (event) => {

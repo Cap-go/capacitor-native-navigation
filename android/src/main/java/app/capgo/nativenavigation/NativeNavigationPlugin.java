@@ -144,6 +144,7 @@ public class NativeNavigationPlugin extends Plugin {
     private boolean tabbarMinimized = false;
     private float tabbarMinimizeProgress = 0f;
     private ValueAnimator tabbarMinimizeAnimator;
+    private final PullToRefreshSupport pullToRefresh = new PullToRefreshSupport();
 
     @Override
     public void load() {
@@ -270,6 +271,7 @@ public class NativeNavigationPlugin extends Plugin {
         runOnUiThread(() -> {
             float offsetY = call.getFloat("offsetY", 0f);
             float deltaY = call.getFloat("deltaY", 0f);
+            pullToRefresh.reportWebScroll(offsetY);
             if (navbarScrollBehavior != NavbarScrollSupport.ScrollBehavior.NONE && navbarVisible) {
                 handleNavbarScroll(offsetY, deltaY);
             }
@@ -278,6 +280,44 @@ public class NativeNavigationPlugin extends Plugin {
             }
             call.resolve();
         });
+    }
+
+    @PluginMethod
+    public void setPullToRefresh(PluginCall call) {
+        runOnUiThread(() -> {
+            View webView = getBridge() == null ? null : getBridge().getWebView();
+            if (webView == null) {
+                call.reject("WebView unavailable");
+                return;
+            }
+            if (!call.getBoolean("enabled", false)) {
+                pullToRefresh.disable();
+                call.resolve();
+                return;
+            }
+            pullToRefresh.enable(webView, () -> notifyListeners("pullToRefresh", new JSObject()));
+            pullToRefresh.setColors(
+                parseColorOrNull(call.getString("tintColor", null)),
+                parseColorOrNull(call.getString("backgroundColor", null))
+            );
+            pullToRefresh.setTopOffset(pullToRefreshTopPx());
+            // Inner scroll roots (`#app`, marked elements) report offsets through the scroll bridge.
+            startNavbarScrollObservation();
+            call.resolve();
+        });
+    }
+
+    @PluginMethod
+    public void endPullToRefresh(PluginCall call) {
+        runOnUiThread(() -> {
+            pullToRefresh.setRefreshing(false);
+            call.resolve();
+        });
+    }
+
+    private int pullToRefreshTopPx() {
+        int navbarToolbar = navbarScrollCollapsed ? 0 : navbarBarHeight(navbarLarge ? 1f : 0f);
+        return statusBarInset() + (navbarVisible ? navbarToolbar : 0);
     }
 
     @PluginMethod
@@ -464,6 +504,8 @@ public class NativeNavigationPlugin extends Plugin {
                 call.reject("WebView unavailable");
                 return;
             }
+            // A new route starts at the top; a stale offset would block the gesture.
+            pullToRefresh.resetWebScroll();
 
             String transitionId = call.getString(
                 "id",
@@ -2761,6 +2803,7 @@ public class NativeNavigationPlugin extends Plugin {
         notifyListeners("safeAreaChanged", event);
         applyTabbarEdgeBlur(insets);
         applyNavbarEdgeBlur(insets);
+        pullToRefresh.setTopOffset(pullToRefreshTopPx());
         if ("none".equals(contentInsetMode) || getBridge() == null || getBridge().getWebView() == null) {
             return;
         }
