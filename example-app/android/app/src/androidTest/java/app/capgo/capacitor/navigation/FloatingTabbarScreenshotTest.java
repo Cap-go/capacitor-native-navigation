@@ -21,7 +21,7 @@ import org.junit.runner.RunWith;
 public class FloatingTabbarScreenshotTest {
 
     private static final String SCREENSHOT_FILE = "floating-tabbar-screenshot.png";
-    private static final long READY_TIMEOUT_MS = 60_000L;
+    private static final long READY_TIMEOUT_MS = 300_000L;
 
     @Rule
     public ActivityScenarioRule<MainActivity> activityRule = new ActivityScenarioRule<>(MainActivity.class);

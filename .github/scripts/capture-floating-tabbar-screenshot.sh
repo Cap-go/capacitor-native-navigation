@@ -11,11 +11,19 @@ VERIFY_SCRIPT="${REPO_ROOT}/.github/scripts/verify-tabbar-screenshot.py"
 WORK_PNG="${OUTPUT%.png}.work.png"
 VENV_DIR="${REPO_ROOT}/.github/.venv-tabbar-screenshot"
 
-if [ ! -x "${VENV_DIR}/bin/python" ]; then
-  python3 -m venv "${VENV_DIR}"
-  "${VENV_DIR}/bin/pip" install -q pillow
+if [ -x "${VENV_DIR}/bin/python" ]; then
+  PYTHON="${VENV_DIR}/bin/python"
+elif python3 -c "import PIL" 2>/dev/null; then
+  PYTHON="python3"
+else
+  if python3 -m venv "${VENV_DIR}" 2>/dev/null; then
+    "${VENV_DIR}/bin/pip" install -q pillow
+    PYTHON="${VENV_DIR}/bin/python"
+  else
+    python3 -m pip install -q --user pillow
+    PYTHON="python3"
+  fi
 fi
-PYTHON="${VENV_DIR}/bin/python"
 
 screen_size() {
   adb shell wm size 2>/dev/null | tr -d '\r' | awk '/Physical size/ {print $3; exit}'
