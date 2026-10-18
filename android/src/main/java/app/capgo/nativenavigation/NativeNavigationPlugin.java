@@ -1613,7 +1613,7 @@ public class NativeNavigationPlugin extends Plugin {
         }
 
         void applyLayoutDirection(String layoutDirection) {
-            if (layoutDirection == null) {
+            if (layoutDirection == null || (!"rtl".equals(layoutDirection) && !"ltr".equals(layoutDirection))) {
                 layoutRtl = false;
                 setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
                 for (int index = 0; index < getChildCount(); index++) {

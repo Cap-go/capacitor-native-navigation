@@ -14,6 +14,7 @@ public class TabbarLayoutSupportTest {
         assertTrue(TabbarLayoutSupport.isRtlLayoutDirection("rtl"));
         assertFalse(TabbarLayoutSupport.isRtlLayoutDirection("ltr"));
         assertFalse(TabbarLayoutSupport.isRtlLayoutDirection(null));
+        assertFalse(TabbarLayoutSupport.isRtlLayoutDirection("auto"));
     }
 
     @Test
