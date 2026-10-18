@@ -37,4 +37,21 @@ public class TabbarLayoutSupportTest {
     public void slotLeftsRtlPlacesFromTrailingEdge() {
         assertArrayEquals(new int[] { 220, 100, 0 }, TabbarLayoutSupport.slotLefts(0, 300, new int[] { 80, 120, 100 }, true));
     }
+
+    @Test
+    public void dragRangeContainsUsesFullTabSpan() {
+        float[] centers = new float[] { 250f, 150f, 50f };
+        float[] widths = new float[] { 80f, 80f, 80f };
+        assertTrue(TabbarLayoutSupport.dragRangeContains(250f, centers, widths));
+        assertTrue(TabbarLayoutSupport.dragRangeContains(50f, centers, widths));
+        assertFalse(TabbarLayoutSupport.dragRangeContains(5f, centers, widths));
+    }
+
+    @Test
+    public void dragPositionAtRtlMapsRightmostTabToIndexZero() {
+        float[] centers = new float[] { 250f, 150f, 50f };
+        assertEquals(0f, TabbarLayoutSupport.dragPositionAt(260f, centers, true), 0.001f);
+        assertEquals(2f, TabbarLayoutSupport.dragPositionAt(40f, centers, true), 0.001f);
+        assertEquals(1f, TabbarLayoutSupport.dragPositionAt(150f, centers, true), 0.001f);
+    }
 }

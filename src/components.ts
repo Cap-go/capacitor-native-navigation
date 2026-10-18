@@ -159,6 +159,7 @@ export function defineNativeNavigationElements(): void {
         'badge-text-color',
         'experimental-baked-tint-colors',
         'animated',
+        'layout-direction',
       ];
     }
 

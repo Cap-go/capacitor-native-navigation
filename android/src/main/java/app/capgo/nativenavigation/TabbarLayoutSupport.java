@@ -38,4 +38,54 @@ public final class TabbarLayoutSupport {
         }
         return lefts;
     }
+
+    public static boolean dragRangeContains(float x, float[] centers, float[] widths) {
+        if (centers == null || widths == null || centers.length == 0 || centers.length != widths.length) {
+            return false;
+        }
+        float min = centers[0] - widths[0] / 2f;
+        float max = centers[0] + widths[0] / 2f;
+        for (int index = 1; index < centers.length; index++) {
+            min = Math.min(min, centers[index] - widths[index] / 2f);
+            max = Math.max(max, centers[index] + widths[index] / 2f);
+        }
+        return x >= min && x <= max;
+    }
+
+    public static float dragPositionAt(float x, float[] centers, boolean layoutRtl) {
+        int last = centers == null ? -1 : centers.length - 1;
+        if (last < 0) {
+            return 0f;
+        }
+        if (!layoutRtl) {
+            if (x <= centers[0]) {
+                return 0f;
+            }
+            if (x >= centers[last]) {
+                return last;
+            }
+            for (int index = 0; index < last; index++) {
+                float start = centers[index];
+                float end = centers[index + 1];
+                if (x < end) {
+                    return index + (end > start ? (x - start) / (end - start) : 0f);
+                }
+            }
+            return last;
+        }
+        if (x >= centers[0]) {
+            return 0f;
+        }
+        if (x <= centers[last]) {
+            return last;
+        }
+        for (int index = 0; index < last; index++) {
+            float outer = centers[index];
+            float inner = centers[index + 1];
+            if (x > inner) {
+                return index + (outer > inner ? (outer - x) / (outer - inner) : 0f);
+            }
+        }
+        return last;
+    }
 }

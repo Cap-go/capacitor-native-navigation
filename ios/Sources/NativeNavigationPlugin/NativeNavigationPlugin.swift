@@ -1892,10 +1892,18 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
 
     private func applyTabBarLayoutDirection(_ layoutDirection: String?, tabBar: UITabBar) {
-        guard let layoutDirection, layoutDirection == "rtl" || layoutDirection == "ltr" else {
-            return
+        let attribute: UISemanticContentAttribute
+        if let layoutDirection {
+            if layoutDirection == "rtl" {
+                attribute = .forceRightToLeft
+            } else if layoutDirection == "ltr" {
+                attribute = .forceLeftToRight
+            } else {
+                return
+            }
+        } else {
+            attribute = .unspecified
         }
-        let attribute: UISemanticContentAttribute = layoutDirection == "rtl" ? .forceRightToLeft : .forceLeftToRight
         tabBar.semanticContentAttribute = attribute
         tabBarController?.view.semanticContentAttribute = attribute
         tabBar.setNeedsLayout()
