@@ -1899,7 +1899,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             } else if layoutDirection == "ltr" {
                 attribute = .forceLeftToRight
             } else {
-                return
+                attribute = .unspecified
             }
         } else {
             attribute = .unspecified
