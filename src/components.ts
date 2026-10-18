@@ -159,6 +159,7 @@ export function defineNativeNavigationElements(): void {
         'badge-text-color',
         'experimental-baked-tint-colors',
         'animated',
+        'layout-direction',
       ];
     }
 
@@ -193,6 +194,10 @@ export function defineNativeNavigationElements(): void {
         experimentalBakedTintColors: parseBoolean(this.getAttribute('experimental-baked-tint-colors')),
         badgeTextColor: normalizeAttribute(this.getAttribute('badge-text-color')),
         animated: parseBoolean(this.getAttribute('animated')),
+        layoutDirection: typedAttribute<NonNullable<NativeNavigationTabbarOptions['layoutDirection']>>(
+          this,
+          'layout-direction',
+        ),
       };
 
       const NativeNavigation = await getNativeNavigation();

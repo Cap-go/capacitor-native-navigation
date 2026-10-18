@@ -201,6 +201,73 @@ class NativeNavigationTests: XCTestCase {
         XCTAssertEqual(insets.systemTabbarHeight, 83)
     }
 
+    func testTabBarSemanticContentAttributeMapping() {
+        XCTAssertEqual(nativeNavigationTabBarSemanticContentAttribute(layoutDirection: nil), .unspecified)
+        XCTAssertEqual(nativeNavigationTabBarSemanticContentAttribute(layoutDirection: "ltr"), .forceLeftToRight)
+        XCTAssertEqual(nativeNavigationTabBarSemanticContentAttribute(layoutDirection: "rtl"), .forceRightToLeft)
+        XCTAssertEqual(nativeNavigationTabBarSemanticContentAttribute(layoutDirection: "auto"), .unspecified)
+    }
+
+    func testSystemTabBarLayoutDirectionUpdateDoesNotClobberAppController() {
+        let omitted = nativeNavigationSystemTabBarLayoutDirectionUpdate(layoutDirection: nil, didOverrideController: false)
+        XCTAssertEqual(omitted.tabBarAttribute, .unspecified)
+        XCTAssertNil(omitted.controllerAttribute)
+        XCTAssertFalse(omitted.didOverrideController)
+
+        let rtl = nativeNavigationSystemTabBarLayoutDirectionUpdate(layoutDirection: "rtl", didOverrideController: false)
+        XCTAssertEqual(rtl.controllerAttribute, .forceRightToLeft)
+        XCTAssertTrue(rtl.didOverrideController)
+
+        let cleared = nativeNavigationSystemTabBarLayoutDirectionUpdate(layoutDirection: nil, didOverrideController: true)
+        XCTAssertEqual(cleared.controllerAttribute, .unspecified)
+        XCTAssertFalse(cleared.didOverrideController)
+    }
+
+    func testFloatingTabOriginXLtrAndRtl() {
+        XCTAssertEqual(
+            nativeNavigationFloatingTabOriginX(
+                rectMinX: 0,
+                rectWidth: 300,
+                position: 0,
+                itemWidth: 100,
+                pitch: 100,
+                inset: 0,
+                systemLook: false,
+                layoutDirection: "ltr"
+            ),
+            0,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            nativeNavigationFloatingTabOriginX(
+                rectMinX: 0,
+                rectWidth: 300,
+                position: 0,
+                itemWidth: 100,
+                pitch: 100,
+                inset: 0,
+                systemLook: false,
+                layoutDirection: "rtl"
+            ),
+            200,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            nativeNavigationFloatingTabOriginX(
+                rectMinX: 10,
+                rectWidth: 280,
+                position: 1,
+                itemWidth: 92,
+                pitch: 80,
+                inset: 4,
+                systemLook: true,
+                layoutDirection: "rtl"
+            ),
+            10 + 280 - 4 - 2 * 80 - (92 - 80),
+            accuracy: 0.001
+        )
+    }
+
     func testAnimatedSystemTabbarVisibilityUsesSoftHide() {
         XCTAssertTrue(
             nativeNavigationPrefersAnimatedSystemTabbarVisibility(

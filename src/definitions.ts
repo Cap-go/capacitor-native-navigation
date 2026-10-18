@@ -633,6 +633,16 @@ export interface NativeNavigationTabbarOptions {
   disableTransparentOnScrollEdge?: boolean;
 
   /**
+   * Tab bar layout direction. Use `rtl` when the app language is right to left
+   * but the device locale is not. Omitted leaves Android layout direction
+   * inherited from the host and resets any explicit iOS system tab bar
+   * direction override from this plugin.
+   *
+   * @since 8.12.0
+   */
+  layoutDirection?: 'ltr' | 'rtl';
+
+  /**
    * Disable the Android active tab indicator.
    */
   disableIndicator?: boolean;

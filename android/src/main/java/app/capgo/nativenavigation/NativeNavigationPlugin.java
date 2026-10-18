@@ -387,6 +387,7 @@ public class NativeNavigationPlugin extends Plugin {
             applyTabbarColors(call, colors);
             tabbarStyle = makeTabbarStyle(call.getObject("style", new JSObject()));
             tabbarGlassOptions = resolveTabbarGlassOptions(call);
+            nativeTabbar.applyLayoutDirection(call.getString("layoutDirection", null));
 
             // Keep at most one detached trailing action for floating bars.
             // Curve bars ignore role so tab order / center selection stay stable.
@@ -805,14 +806,19 @@ public class NativeNavigationPlugin extends Plugin {
                 }
 
                 boolean hasDetachedTrailing = tabItems.stream().anyMatch((item) -> item.detachedTrailing);
+                int trailingDiameter = Math.min(dp(tabbarStyle.height), height);
+                int trailingGap = dp(10);
                 int capsuleWidth = TabbarChromeSupport.floatingCapsuleWidth(
                     width,
-                    Math.min(dp(tabbarStyle.height), height),
-                    dp(10),
+                    trailingDiameter,
+                    trailingGap,
                     hasDetachedTrailing
                 );
+                int capsuleLeft = hasDetachedTrailing
+                    ? TabbarLayoutSupport.capsuleLeftForDetachedTrailing(trailingDiameter, trailingGap, tabbar.isLayoutRtl())
+                    : 0;
                 float radius = Math.min(dp(tabbarStyle.cornerRadius), height / 2f);
-                outline.setRoundRect(0, 0, capsuleWidth, height, radius);
+                outline.setRoundRect(capsuleLeft, 0, capsuleLeft + capsuleWidth, height, radius);
             }
         };
     }
@@ -1598,11 +1604,25 @@ public class NativeNavigationPlugin extends Plugin {
         private float downX = 0f;
         private float downY = 0f;
         private int hoverIndex = -1;
+        private boolean layoutRtl = false;
 
         NativeTabbarLayout(Context context) {
             super(context);
             setWillNotDraw(false);
             touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
+        }
+
+        void applyLayoutDirection(String layoutDirection) {
+            layoutRtl = TabbarLayoutSupport.isRtlLayoutDirection(layoutDirection);
+            int direction = TabbarLayoutSupport.viewLayoutDirectionForTabbarOption(layoutDirection);
+            setLayoutDirection(direction);
+            for (int index = 0; index < getChildCount(); index++) {
+                getChildAt(index).setLayoutDirection(direction);
+            }
+        }
+
+        boolean isLayoutRtl() {
+            return layoutRtl;
         }
 
         void setDragListener(DragListener listener) {
@@ -1695,30 +1715,12 @@ public class NativeNavigationPlugin extends Plugin {
         }
 
         private boolean inDragRange(float x) {
-            int count = slotCenters.length;
-            if (count == 0) {
-                return false;
-            }
-            return x <= slotCenters[count - 1] + slotWidths[count - 1] / 2f;
+            return TabbarLayoutSupport.dragRangeContains(x, slotCenters, slotWidths);
         }
 
         /** Fractional tab position under {@code x}: 1.5 is halfway between the second and third tab. */
         private float positionAt(float x) {
-            int last = slotCenters.length - 1;
-            if (x <= slotCenters[0]) {
-                return 0f;
-            }
-            if (x >= slotCenters[last]) {
-                return last;
-            }
-            for (int index = 0; index < last; index++) {
-                float start = slotCenters[index];
-                float end = slotCenters[index + 1];
-                if (x < end) {
-                    return index + (end > start ? (x - start) / (end - start) : 0f);
-                }
-            }
-            return last;
+            return TabbarLayoutSupport.dragPositionAt(x, slotCenters, layoutRtl);
         }
 
         @Override
@@ -1947,19 +1949,27 @@ public class NativeNavigationPlugin extends Plugin {
                 View center = getChildAt(centerIndex);
                 int centerTop = Math.max(0, barTop - dp(style.centerButtonLift));
                 center.layout((width - buttonDiameter) / 2, centerTop, (width + buttonDiameter) / 2, centerTop + buttonDiameter);
-                layoutRange(0, centerIndex, 0, barTop, leftWidth, barHeight);
-                layoutRange(centerIndex + 1, getChildCount(), rightX, barTop, width - rightX, barHeight);
+                if (layoutRtl) {
+                    layoutRange(0, centerIndex, rightX, barTop, width - rightX, barHeight);
+                    layoutRange(centerIndex + 1, getChildCount(), 0, barTop, leftWidth, barHeight);
+                } else {
+                    layoutRange(0, centerIndex, 0, barTop, leftWidth, barHeight);
+                    layoutRange(centerIndex + 1, getChildCount(), rightX, barTop, width - rightX, barHeight);
+                }
                 return;
             }
 
             int trailingIndex = detachedTrailingIndex();
             if (trailingIndex >= 0) {
                 int trailingDiameter = trailingDiameter(height);
-                int capsuleWidth = Math.max(0, width - trailingDiameter - dp(10));
+                int trailingGap = dp(10);
+                int capsuleWidth = Math.max(0, width - trailingDiameter - trailingGap);
                 View trailing = getChildAt(trailingIndex);
                 int trailingTop = Math.max(0, (height - trailingDiameter) / 2);
-                trailing.layout(width - trailingDiameter, trailingTop, width, trailingTop + trailingDiameter);
-                layoutRange(0, trailingIndex, 0, 0, capsuleWidth, height);
+                int trailingLeft = TabbarLayoutSupport.trailingActionLeft(width, trailingDiameter, layoutRtl);
+                trailing.layout(trailingLeft, trailingTop, trailingLeft + trailingDiameter, trailingTop + trailingDiameter);
+                int capsuleLeft = TabbarLayoutSupport.capsuleLeftForDetachedTrailing(trailingDiameter, trailingGap, layoutRtl);
+                layoutRange(0, trailingIndex, capsuleLeft, 0, capsuleWidth, height);
                 refreshSlotGeometry();
                 return;
             }
@@ -2007,11 +2017,11 @@ public class NativeNavigationPlugin extends Plugin {
 
         private void layoutRange(int start, int end, int left, int top, int width, int height) {
             int[] widths = slotWidths(start, end, width);
-            int childLeft = left;
+            int[] lefts = TabbarLayoutSupport.slotLefts(left, width, widths, layoutRtl);
             for (int index = start; index < end; index++) {
                 int childWidth = widths[index - start];
+                int childLeft = lefts[index - start];
                 getChildAt(index).layout(childLeft, top, childLeft + childWidth, top + height);
-                childLeft += childWidth;
             }
         }
 
@@ -2069,7 +2079,8 @@ public class NativeNavigationPlugin extends Plugin {
                     Math.min(dp(style.cornerRadius), height / 2f),
                     trailingDiameter(height),
                     dp(10),
-                    detachedTrailingIndex() >= 0
+                    detachedTrailingIndex() >= 0,
+                    layoutRtl
                 );
             }
             float barTop = dp(style.barTop());

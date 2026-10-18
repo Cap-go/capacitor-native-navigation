@@ -57,12 +57,40 @@ public final class TabbarChromeSupport {
         float trailingGapPx,
         boolean hasDetachedTrailing
     ) {
+        return buildFloatingTabbarPath(
+            width,
+            height,
+            cornerRadiusPx,
+            barHeightPx,
+            trailingGapPx,
+            hasDetachedTrailing,
+            false
+        );
+    }
+
+    public static Path buildFloatingTabbarPath(
+        int width,
+        int height,
+        float cornerRadiusPx,
+        float barHeightPx,
+        float trailingGapPx,
+        boolean hasDetachedTrailing,
+        boolean layoutRtl
+    ) {
         Path path = new Path();
         int capsuleWidth = floatingCapsuleWidth(width, (int) barHeightPx, (int) trailingGapPx, hasDetachedTrailing);
-        path.addRoundRect(new RectF(0, 0, capsuleWidth, height), cornerRadiusPx, cornerRadiusPx, Path.Direction.CW);
+        float capsuleLeft = hasDetachedTrailing
+            ? TabbarLayoutSupport.capsuleLeftForDetachedTrailing((int) barHeightPx, (int) trailingGapPx, layoutRtl)
+            : 0;
+        path.addRoundRect(
+            new RectF(capsuleLeft, 0, capsuleLeft + capsuleWidth, height),
+            cornerRadiusPx,
+            cornerRadiusPx,
+            Path.Direction.CW
+        );
         if (hasDetachedTrailing) {
             float diameter = barHeightPx;
-            float left = width - diameter;
+            float left = layoutRtl ? 0 : width - diameter;
             float top = (height - diameter) / 2f;
             path.addRoundRect(
                 new RectF(left, top, left + diameter, top + diameter),
