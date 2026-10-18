@@ -6,8 +6,9 @@ MAIN_WT="${REPO_ROOT}/.worktrees/main-pr83-screenshot"
 OUT_DIR="${REPO_ROOT}/docs/screenshots/pr-83"
 BEFORE_APK="${REPO_ROOT}/.tmp/pr83-before.apk"
 AFTER_APK="${REPO_ROOT}/.tmp/pr83-after.apk"
-BEFORE_TEST_APK="${REPO_ROOT}/.tmp/pr83-before-test.apk"
-AFTER_TEST_APK="${REPO_ROOT}/.tmp/pr83-after-test.apk"
+BEFORE_FULL="${REPO_ROOT}/.tmp/pr83-before-full.png"
+AFTER_FULL="${REPO_ROOT}/.tmp/pr83-after-full.png"
+CAPTURE_SCRIPT="${REPO_ROOT}/.github/scripts/capture-floating-tabbar-screenshot.sh"
 OPTIMIZE_SCRIPT="${REPO_ROOT}/.github/scripts/optimize-pr83-tabbar-screenshot.py"
 
 mkdir -p "${OUT_DIR}" "${REPO_ROOT}/.tmp"
@@ -33,25 +34,18 @@ build_screenshot_apk() {
     VITE_SCREENSHOT_MODE=floating-tabbar bun x cap sync android
     cd android
     chmod +x gradlew
-    VITE_SCREENSHOT_MODE=floating-tabbar ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon -q
+    VITE_SCREENSHOT_MODE=floating-tabbar ./gradlew :app:assembleDebug --no-daemon -q
     cp app/build/outputs/apk/debug/app-debug.apk "${out_apk}"
   )
 }
 
-run_instrumented_screenshot() {
+capture_apk_to_pr83_png() {
   local apk="$1"
-  local android_test_apk="$2"
+  local full_png="$2"
   local output_png="$3"
   configure_rtl_emulator
-  adb uninstall app.capgo.capacitor.navigation >/dev/null 2>&1 || true
-  adb install -r -g "${apk}"
-  adb install -r "${android_test_apk}"
-  adb shell am instrument -w -r \
-    -e class 'app.capgo.capacitor.navigation.FloatingTabbarScreenshotTest' \
-    app.capgo.capacitor.navigation.test/androidx.test.runner.AndroidJUnitRunner
-  adb exec-out run-as app.capgo.capacitor.navigation cat files/Pictures/floating-tabbar-screenshot.png > "${output_png}.full"
-  python3 "${OPTIMIZE_SCRIPT}" "${output_png}.full" "${output_png}"
-  rm -f "${output_png}.full"
+  bash "${CAPTURE_SCRIPT}" "${apk}" "${full_png}"
+  python3 "${OPTIMIZE_SCRIPT}" "${full_png}" "${output_png}"
 }
 
 prepare_main_worktree() {
@@ -68,16 +62,10 @@ configure_rtl_emulator() {
 }
 
 prepare_main_worktree
-ANDROID_TEST_SRC="${REPO_ROOT}/example-app/android/app/src/androidTest/java/app/capgo/capacitor/navigation/FloatingTabbarScreenshotTest.java"
-ANDROID_TEST_DST="${MAIN_WT}/example-app/android/app/src/androidTest/java/app/capgo/capacitor/navigation/FloatingTabbarScreenshotTest.java"
-mkdir -p "$(dirname "${ANDROID_TEST_DST}")"
-cp "${ANDROID_TEST_SRC}" "${ANDROID_TEST_DST}"
 build_screenshot_apk "${MAIN_WT}" "" "${BEFORE_APK}"
-cp "${MAIN_WT}/example-app/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk" "${BEFORE_TEST_APK}"
 build_screenshot_apk "${REPO_ROOT}" "rtl" "${AFTER_APK}"
-cp "${REPO_ROOT}/example-app/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk" "${AFTER_TEST_APK}"
 
-run_instrumented_screenshot "${BEFORE_APK}" "${BEFORE_TEST_APK}" "${OUT_DIR}/android-before.png"
-run_instrumented_screenshot "${AFTER_APK}" "${AFTER_TEST_APK}" "${OUT_DIR}/android-after.png"
+capture_apk_to_pr83_png "${BEFORE_APK}" "${BEFORE_FULL}" "${OUT_DIR}/android-before.png"
+capture_apk_to_pr83_png "${AFTER_APK}" "${AFTER_FULL}" "${OUT_DIR}/android-after.png"
 
 ls -lh "${OUT_DIR}/android-before.png" "${OUT_DIR}/android-after.png"
