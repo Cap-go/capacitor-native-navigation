@@ -1,8 +1,14 @@
 # PR #83 tab bar layout direction screenshots
 
-PNG pairs document tab order for issue #82:
+Android emulator captures (API 34, Pixel 6 profile) with `debug.force_rtl` enabled:
 
-- `*-before.png`: `main` behavior without `layoutDirection` (index 0 on the left).
-- `*-after.png`: `layoutDirection: 'rtl'` (index 0 on the right).
+- `android-before.png`: example app built from `main` (no `layoutDirection` option).
+- `android-after.png`: example app from this branch with `setTabbar({ layoutDirection: 'rtl' })` via `VITE_SCREENSHOT_LAYOUT_DIRECTION=rtl` in screenshot mode.
 
-Regenerate with `python3 render_tabbar_screenshots.py` from this directory.
+Regenerate locally or in CI:
+
+```bash
+.github/scripts/capture-pr83-android-tabbar-screenshots.sh
+```
+
+Or run the `PR83 layout direction screenshots` GitHub Actions workflow (`workflow_dispatch`).
