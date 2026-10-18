@@ -1613,16 +1613,8 @@ public class NativeNavigationPlugin extends Plugin {
         }
 
         void applyLayoutDirection(String layoutDirection) {
-            if (layoutDirection == null || (!"rtl".equals(layoutDirection) && !"ltr".equals(layoutDirection))) {
-                layoutRtl = false;
-                setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
-                for (int index = 0; index < getChildCount(); index++) {
-                    getChildAt(index).setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
-                }
-                return;
-            }
             layoutRtl = TabbarLayoutSupport.isRtlLayoutDirection(layoutDirection);
-            int direction = layoutRtl ? View.LAYOUT_DIRECTION_RTL : View.LAYOUT_DIRECTION_LTR;
+            int direction = TabbarLayoutSupport.viewLayoutDirectionForTabbarOption(layoutDirection);
             setLayoutDirection(direction);
             for (int index = 0; index < getChildCount(); index++) {
                 getChildAt(index).setLayoutDirection(direction);

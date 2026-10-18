@@ -208,6 +208,21 @@ class NativeNavigationTests: XCTestCase {
         XCTAssertEqual(nativeNavigationTabBarSemanticContentAttribute(layoutDirection: "auto"), .unspecified)
     }
 
+    func testSystemTabBarLayoutDirectionUpdateDoesNotClobberAppController() {
+        let omitted = nativeNavigationSystemTabBarLayoutDirectionUpdate(layoutDirection: nil, didOverrideController: false)
+        XCTAssertEqual(omitted.tabBarAttribute, .unspecified)
+        XCTAssertNil(omitted.controllerAttribute)
+        XCTAssertFalse(omitted.didOverrideController)
+
+        let rtl = nativeNavigationSystemTabBarLayoutDirectionUpdate(layoutDirection: "rtl", didOverrideController: false)
+        XCTAssertEqual(rtl.controllerAttribute, .forceRightToLeft)
+        XCTAssertTrue(rtl.didOverrideController)
+
+        let cleared = nativeNavigationSystemTabBarLayoutDirectionUpdate(layoutDirection: nil, didOverrideController: true)
+        XCTAssertEqual(cleared.controllerAttribute, .unspecified)
+        XCTAssertFalse(cleared.didOverrideController)
+    }
+
     func testFloatingTabOriginXLtrAndRtl() {
         XCTAssertEqual(
             nativeNavigationFloatingTabOriginX(

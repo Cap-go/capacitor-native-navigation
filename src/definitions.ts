@@ -634,8 +634,11 @@ export interface NativeNavigationTabbarOptions {
 
   /**
    * Tab bar layout direction. Use `rtl` when the app language is right to left
-   * but the device locale is not. Omitted keeps today's platform default
-   * (physical left to right tab order).
+   * but the device locale is not. Omitted leaves Android layout direction
+   * inherited from the host and resets any explicit iOS system tab bar
+   * direction override from this plugin.
+   *
+   * @since 8.12.0
    */
   layoutDirection?: 'ltr' | 'rtl';
 

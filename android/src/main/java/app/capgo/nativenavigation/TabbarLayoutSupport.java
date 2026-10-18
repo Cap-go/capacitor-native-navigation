@@ -1,5 +1,7 @@
 package app.capgo.nativenavigation;
 
+import android.view.View;
+
 /** Layout helpers for native tab bars (unit tested). */
 public final class TabbarLayoutSupport {
 
@@ -7,6 +9,16 @@ public final class TabbarLayoutSupport {
 
     public static boolean isRtlLayoutDirection(String layoutDirection) {
         return "rtl".equals(layoutDirection);
+    }
+
+    public static int viewLayoutDirectionForTabbarOption(String layoutDirection) {
+        if ("rtl".equals(layoutDirection)) {
+            return View.LAYOUT_DIRECTION_RTL;
+        }
+        if ("ltr".equals(layoutDirection)) {
+            return View.LAYOUT_DIRECTION_LTR;
+        }
+        return View.LAYOUT_DIRECTION_INHERIT;
     }
 
     public static int trailingActionLeft(int width, int trailingDiameter, boolean layoutRtl) {

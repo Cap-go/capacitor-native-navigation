@@ -5,9 +5,19 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import android.view.View;
+
 import org.junit.Test;
 
 public class TabbarLayoutSupportTest {
+
+    @Test
+    public void viewLayoutDirectionInheritsWhenOptionOmitted() {
+        assertEquals(View.LAYOUT_DIRECTION_INHERIT, TabbarLayoutSupport.viewLayoutDirectionForTabbarOption(null));
+        assertEquals(View.LAYOUT_DIRECTION_INHERIT, TabbarLayoutSupport.viewLayoutDirectionForTabbarOption("auto"));
+        assertEquals(View.LAYOUT_DIRECTION_RTL, TabbarLayoutSupport.viewLayoutDirectionForTabbarOption("rtl"));
+        assertEquals(View.LAYOUT_DIRECTION_LTR, TabbarLayoutSupport.viewLayoutDirectionForTabbarOption("ltr"));
+    }
 
     @Test
     public void isRtlLayoutDirectionRecognizesRtl() {

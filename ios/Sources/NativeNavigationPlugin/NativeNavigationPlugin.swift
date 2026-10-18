@@ -87,6 +87,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var tabSelectedImages: [UIImage?] = []
     private var suppressTabSelectEvent = false
     private var tabSelectEmittedForReTap = false
+    private var didOverrideSystemTabBarControllerSemanticContentAttribute = false
     private var lastSetTabbarOptions: [String: Any] = [:]
     private var transitionSnapshot: UIView?
     private var activeTransitionId: String?
@@ -1892,9 +1893,15 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
 
     private func applyTabBarLayoutDirection(_ layoutDirection: String?, tabBar: UITabBar) {
-        let attribute = nativeNavigationTabBarSemanticContentAttribute(layoutDirection: layoutDirection)
-        tabBar.semanticContentAttribute = attribute
-        tabBarController?.view.semanticContentAttribute = attribute
+        let update = nativeNavigationSystemTabBarLayoutDirectionUpdate(
+            layoutDirection: layoutDirection,
+            didOverrideController: didOverrideSystemTabBarControllerSemanticContentAttribute
+        )
+        tabBar.semanticContentAttribute = update.tabBarAttribute
+        if let controllerAttribute = update.controllerAttribute {
+            tabBarController?.view.semanticContentAttribute = controllerAttribute
+        }
+        didOverrideSystemTabBarControllerSemanticContentAttribute = update.didOverrideController
         tabBar.setNeedsLayout()
         tabBarController?.view.setNeedsLayout()
     }
@@ -3476,6 +3483,38 @@ func nativeNavigationTabBarSemanticContentAttribute(layoutDirection: String?) ->
         return .forceLeftToRight
     }
     return .unspecified
+}
+
+struct NativeNavigationSystemTabBarLayoutDirectionUpdate {
+    let tabBarAttribute: UISemanticContentAttribute
+    let controllerAttribute: UISemanticContentAttribute?
+    let didOverrideController: Bool
+}
+
+func nativeNavigationSystemTabBarLayoutDirectionUpdate(
+    layoutDirection: String?,
+    didOverrideController: Bool
+) -> NativeNavigationSystemTabBarLayoutDirectionUpdate {
+    let tabBarAttribute = nativeNavigationTabBarSemanticContentAttribute(layoutDirection: layoutDirection)
+    if layoutDirection == "rtl" || layoutDirection == "ltr" {
+        return NativeNavigationSystemTabBarLayoutDirectionUpdate(
+            tabBarAttribute: tabBarAttribute,
+            controllerAttribute: tabBarAttribute,
+            didOverrideController: true
+        )
+    }
+    if didOverrideController {
+        return NativeNavigationSystemTabBarLayoutDirectionUpdate(
+            tabBarAttribute: tabBarAttribute,
+            controllerAttribute: .unspecified,
+            didOverrideController: false
+        )
+    }
+    return NativeNavigationSystemTabBarLayoutDirectionUpdate(
+        tabBarAttribute: tabBarAttribute,
+        controllerAttribute: nil,
+        didOverrideController: false
+    )
 }
 
 func nativeNavigationFloatingTabOriginX(
