@@ -2,9 +2,6 @@ name: PR83 layout direction screenshots
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - cursor/tabbar-layout-direction-3f1f
 
 permissions:
   contents: read
