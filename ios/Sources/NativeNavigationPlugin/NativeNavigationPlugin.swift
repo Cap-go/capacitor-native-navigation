@@ -387,6 +387,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                     self.lastSetTabbarOptions = options
                 }
                 self.applyTabBarAppearance(tabBar: tabBar, options: call)
+                self.applyTabBarLayoutDirection(call.getString("layoutDirection"), tabBar: tabBar)
                 if items.isEmpty {
                     self.tabbarVisible = false
                     self.tabbarSkipImmediateSystemReveal = false
@@ -1886,7 +1887,19 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         if let color = colorValue(call.getString("badgeTextColor")) ?? colorValue(colors?["badgeText"]) {
             tabBar.badgeTextColor = color
         }
+        tabBar.layoutDirection = call.getString("layoutDirection")
         tabBar.setNeedsLayout()
+    }
+
+    private func applyTabBarLayoutDirection(_ layoutDirection: String?, tabBar: UITabBar) {
+        guard let layoutDirection, layoutDirection == "rtl" || layoutDirection == "ltr" else {
+            return
+        }
+        let attribute: UISemanticContentAttribute = layoutDirection == "rtl" ? .forceRightToLeft : .forceLeftToRight
+        tabBar.semanticContentAttribute = attribute
+        tabBarController?.view.semanticContentAttribute = attribute
+        tabBar.setNeedsLayout()
+        tabBarController?.view.setNeedsLayout()
     }
 
     private func applyTabBarBadgeOptions(_ appearance: UITabBarAppearance, options call: CAPPluginCall) {
@@ -2832,6 +2845,11 @@ private final class NativeNavigationFloatingTabBar: UIView {
         }
     }
     var onSelect: ((Int, NativeNavigationFloatingTabItem) -> Void)?
+    var layoutDirection: String?
+
+    private var usesRtlLayout: Bool {
+        layoutDirection == "rtl"
+    }
 
     var hasDetachedTrailing: Bool {
         tabbarStyle.shape == .floating && items.contains(where: \.isDetachedTrailing)
@@ -2873,7 +2891,8 @@ private final class NativeNavigationFloatingTabBar: UIView {
         let trailingGap: CGFloat = 10
         let trailingDiameter = systemLook ? bounds.height : min(tabbarStyle.height, bounds.height)
         let capsuleWidth = max(0, bounds.width - trailingDiameter - trailingGap)
-        return CGRect(x: bounds.minX, y: bounds.minY, width: capsuleWidth, height: bounds.height)
+        let capsuleX = usesRtlLayout ? bounds.minX + trailingDiameter + trailingGap : bounds.minX
+        return CGRect(x: capsuleX, y: bounds.minY, width: capsuleWidth, height: bounds.height)
     }
 
     func trailingActionBounds(in bounds: CGRect) -> CGRect? {
@@ -2881,8 +2900,9 @@ private final class NativeNavigationFloatingTabBar: UIView {
             return nil
         }
         let trailingDiameter = systemLook ? bounds.height : min(tabbarStyle.height, bounds.height)
+        let trailingX = usesRtlLayout ? bounds.minX : bounds.maxX - trailingDiameter
         return CGRect(
-            x: bounds.maxX - trailingDiameter,
+            x: trailingX,
             y: bounds.minY + (bounds.height - trailingDiameter) / 2,
             width: trailingDiameter,
             height: trailingDiameter
@@ -2914,11 +2934,15 @@ private final class NativeNavigationFloatingTabBar: UIView {
             )
 
             buttons[centerIndex].frame = centerFrame
-            layoutButtons(Array(0..<centerIndex), in: CGRect(x: 0, y: barFrame.minY, width: leftWidth, height: barFrame.height))
-            layoutButtons(
-                Array((centerIndex + 1)..<buttons.count),
-                in: CGRect(x: rightX, y: barFrame.minY, width: bounds.width - rightX, height: barFrame.height)
-            )
+            let rightSegment = CGRect(x: rightX, y: barFrame.minY, width: bounds.width - rightX, height: barFrame.height)
+            let leftSegment = CGRect(x: 0, y: barFrame.minY, width: leftWidth, height: barFrame.height)
+            if usesRtlLayout {
+                layoutButtons(Array(0..<centerIndex), in: rightSegment)
+                layoutButtons(Array((centerIndex + 1)..<buttons.count), in: leftSegment)
+            } else {
+                layoutButtons(Array(0..<centerIndex), in: leftSegment)
+                layoutButtons(Array((centerIndex + 1)..<buttons.count), in: rightSegment)
+            }
             return
         }
 
@@ -2943,8 +2967,18 @@ private final class NativeNavigationFloatingTabBar: UIView {
         let pitch = max(0, (rect.width - inset * 2 - pillOverlap) / count)
         let itemWidth = pitch + pillOverlap
         for (position, index) in indices.enumerated() where buttons.indices.contains(index) {
+            let originX = nativeNavigationFloatingTabOriginX(
+                rectMinX: rect.minX,
+                rectWidth: rect.width,
+                position: position,
+                itemWidth: itemWidth,
+                pitch: pitch,
+                inset: inset,
+                systemLook: true,
+                layoutDirection: layoutDirection
+            )
             buttons[index].frame = CGRect(
-                x: rect.minX + inset + CGFloat(position) * pitch,
+                x: originX,
                 y: rect.minY,
                 width: itemWidth,
                 height: rect.height
@@ -2962,8 +2996,18 @@ private final class NativeNavigationFloatingTabBar: UIView {
         }
         let itemWidth = rect.width / CGFloat(indices.count)
         for (position, index) in indices.enumerated() where buttons.indices.contains(index) {
+            let originX = nativeNavigationFloatingTabOriginX(
+                rectMinX: rect.minX,
+                rectWidth: rect.width,
+                position: position,
+                itemWidth: itemWidth,
+                pitch: itemWidth,
+                inset: 0,
+                systemLook: false,
+                layoutDirection: layoutDirection
+            )
             buttons[index].frame = CGRect(
-                x: rect.minX + CGFloat(position) * itemWidth,
+                x: originX,
                 y: rect.minY,
                 width: itemWidth,
                 height: rect.height
@@ -3422,6 +3466,29 @@ func nativeNavigationPrefersAnimatedSystemTabbarVisibility(
     shape: String
 ) -> Bool {
     animated && usesSystemLiquidGlass && shape != "curve"
+}
+
+func nativeNavigationFloatingTabOriginX(
+    rectMinX: CGFloat,
+    rectWidth: CGFloat,
+    position: Int,
+    itemWidth: CGFloat,
+    pitch: CGFloat,
+    inset: CGFloat,
+    systemLook: Bool,
+    layoutDirection: String?
+) -> CGFloat {
+    let rtl = layoutDirection == "rtl"
+    if !rtl {
+        if systemLook {
+            return rectMinX + inset + CGFloat(position) * pitch
+        }
+        return rectMinX + CGFloat(position) * itemWidth
+    }
+    if systemLook {
+        return rectMinX + rectWidth - inset - CGFloat(position + 1) * pitch - (itemWidth - pitch)
+    }
+    return rectMinX + rectWidth - CGFloat(position + 1) * itemWidth
 }
 
 struct NativeNavigationTabbarInsetHeights {
