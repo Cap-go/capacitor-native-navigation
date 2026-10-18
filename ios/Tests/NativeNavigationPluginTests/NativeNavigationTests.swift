@@ -201,6 +201,13 @@ class NativeNavigationTests: XCTestCase {
         XCTAssertEqual(insets.systemTabbarHeight, 83)
     }
 
+    func testTabBarSemanticContentAttributeMapping() {
+        XCTAssertEqual(nativeNavigationTabBarSemanticContentAttribute(layoutDirection: nil), .unspecified)
+        XCTAssertEqual(nativeNavigationTabBarSemanticContentAttribute(layoutDirection: "ltr"), .forceLeftToRight)
+        XCTAssertEqual(nativeNavigationTabBarSemanticContentAttribute(layoutDirection: "rtl"), .forceRightToLeft)
+        XCTAssertEqual(nativeNavigationTabBarSemanticContentAttribute(layoutDirection: "auto"), .unspecified)
+    }
+
     func testFloatingTabOriginXLtrAndRtl() {
         XCTAssertEqual(
             nativeNavigationFloatingTabOriginX(

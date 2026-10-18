@@ -1892,18 +1892,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
 
     private func applyTabBarLayoutDirection(_ layoutDirection: String?, tabBar: UITabBar) {
-        let attribute: UISemanticContentAttribute
-        if let layoutDirection {
-            if layoutDirection == "rtl" {
-                attribute = .forceRightToLeft
-            } else if layoutDirection == "ltr" {
-                attribute = .forceLeftToRight
-            } else {
-                attribute = .unspecified
-            }
-        } else {
-            attribute = .unspecified
-        }
+        let attribute = nativeNavigationTabBarSemanticContentAttribute(layoutDirection: layoutDirection)
         tabBar.semanticContentAttribute = attribute
         tabBarController?.view.semanticContentAttribute = attribute
         tabBar.setNeedsLayout()
@@ -3474,6 +3463,19 @@ func nativeNavigationPrefersAnimatedSystemTabbarVisibility(
     shape: String
 ) -> Bool {
     animated && usesSystemLiquidGlass && shape != "curve"
+}
+
+func nativeNavigationTabBarSemanticContentAttribute(layoutDirection: String?) -> UISemanticContentAttribute {
+    guard let layoutDirection else {
+        return .unspecified
+    }
+    if layoutDirection == "rtl" {
+        return .forceRightToLeft
+    }
+    if layoutDirection == "ltr" {
+        return .forceLeftToRight
+    }
+    return .unspecified
 }
 
 func nativeNavigationFloatingTabOriginX(
