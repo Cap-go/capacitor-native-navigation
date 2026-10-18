@@ -7,8 +7,6 @@ import { NativeNavigation } from '@capgo/capacitor-native-navigation';
 const app = document.getElementById('app');
 const isWebPreview = Capacitor.getPlatform() === 'web';
 const screenshotMode = import.meta.env.VITE_SCREENSHOT_MODE === 'floating-tabbar';
-const screenshotLayoutDirection =
-  screenshotMode && import.meta.env.VITE_SCREENSHOT_LAYOUT_DIRECTION === 'rtl' ? 'rtl' : undefined;
 const topButtonStorageKey = 'native-navigation-top-button-visible';
 
 const readTopButtonPreference = () => {
@@ -753,7 +751,6 @@ const updateTabbar = async () => {
           badgeTextColor: '#ffffff',
         }
       : {}),
-    ...(screenshotLayoutDirection ? { layoutDirection: screenshotLayoutDirection } : {}),
   });
 };
 
