@@ -321,6 +321,76 @@ export interface NativeNavigationBackButton {
 export type NativeNavigationNavbarScrollBehavior = 'none' | 'hideOnScrollDown' | 'revealOnScrollUp' | 'both';
 
 /**
+ * One choice inside a navbar segment row.
+ *
+ * @since 8.13.0
+ */
+export interface NativeNavigationNavbarSegmentItem {
+  /**
+   * Stable id returned in `navbarSegmentSelect`.
+   */
+  id: string;
+
+  /**
+   * Visible label. Items without a title show only their icon.
+   */
+  title?: string;
+
+  /**
+   * Native icon descriptor.
+   */
+  icon?: NativeNavigationIcon;
+
+  /**
+   * Screen reader label. Defaults to `title`. Set it for icon-only items.
+   */
+  accessibilityLabel?: string;
+
+  /**
+   * Whether the item can be selected. Defaults to `true`.
+   */
+  enabled?: boolean;
+}
+
+/**
+ * How a navbar segment row draws its items.
+ *
+ * - `segmented`: equal-width control that fills the row (`UISegmentedControl` on iOS).
+ * - `scroll`: horizontally scrolling pills, for rows with many or long items.
+ * - `auto`: `segmented` for up to 4 items, `scroll` otherwise.
+ *
+ * @since 8.13.0
+ */
+export type NativeNavigationNavbarSegmentStyle = 'auto' | 'segmented' | 'scroll';
+
+/**
+ * A row of native segments drawn under the navbar, such as section tabs.
+ *
+ * @since 8.13.0
+ */
+export interface NativeNavigationNavbarSegmentGroup {
+  /**
+   * Stable id returned in `navbarSegmentSelect`.
+   */
+  id: string;
+
+  /**
+   * Items of the row.
+   */
+  items: NativeNavigationNavbarSegmentItem[];
+
+  /**
+   * Id of the selected item. No item is selected when omitted.
+   */
+  selectedId?: string;
+
+  /**
+   * Row layout. Defaults to `auto`.
+   */
+  style?: NativeNavigationNavbarSegmentStyle;
+}
+
+/**
  * Native navbar state.
  */
 export interface NativeNavigationNavbarOptions {
@@ -387,6 +457,18 @@ export interface NativeNavigationNavbarOptions {
    * Right-side action buttons.
    */
   rightItems?: NativeNavigationBarButton[];
+
+  /**
+   * Rows of native segments drawn under the bar, top to bottom. Each row adds
+   * 44pt (iOS) or 48dp (Android) to the navbar and to the reported insets.
+   * Selecting an item fires `navbarSegmentSelect` and moves the selection
+   * natively. Each `setNavbar` call applies `selectedId` again, so store the
+   * selected id from the event and pass it on every later `setNavbar` call.
+   * To reject a selection, send the previous `selectedId`.
+   *
+   * @since 8.13.0
+   */
+  segments?: NativeNavigationNavbarSegmentGroup[];
 
   /**
    * Navbar color hints.
@@ -828,6 +910,23 @@ export interface NativeNavigationBarItemTapEvent {
   placement: 'left' | 'right';
 }
 
+export interface NativeNavigationNavbarSegmentSelectEvent {
+  /**
+   * Id of the segment row.
+   */
+  groupId: string;
+
+  /**
+   * Id of the selected item.
+   */
+  id: string;
+
+  /**
+   * Index of the selected item in its row.
+   */
+  index: number;
+}
+
 export interface NativeNavigationTabSelectEvent {
   id: string;
   index: number;
@@ -941,6 +1040,16 @@ export interface NativeNavigationPlugin {
   addListener(
     eventName: 'navbarItemTap',
     listenerFunc: (event: NativeNavigationBarItemTapEvent) => void,
+  ): Promise<PluginListenerHandle>;
+
+  /**
+   * Fired when the user selects an item in a navbar segment row.
+   *
+   * @since 8.13.0
+   */
+  addListener(
+    eventName: 'navbarSegmentSelect',
+    listenerFunc: (event: NativeNavigationNavbarSegmentSelectEvent) => void,
   ): Promise<PluginListenerHandle>;
 
   addListener(

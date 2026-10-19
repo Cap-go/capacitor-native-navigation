@@ -42,6 +42,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var navContainer: UIView?
     private var navBlurView: UIVisualEffectView?
     private var navBar: UINavigationBar?
+    private var navSegmentsView: NativeNavigationSegmentRowsView?
     private var tabContainer: UIView?
     private var tabEffectView: UIVisualEffectView?
     private var trailingTabEffectView: UIVisualEffectView?
@@ -254,6 +255,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             navItem.rightBarButtonItems = self.makeBarButtonItems(call.getArray("rightItems") as? [[String: Any]] ?? [], placement: "right")
             navBar.setItems([navItem], animated: animated)
             self.applyNavBarAppearance(navBar: navBar, options: call)
+            self.applyNavbarSegments(options: call)
             self.navContainer?.isHidden = false
             self.configureNavbarScrollBehavior(from: call)
             self.layoutChrome()
@@ -699,6 +701,75 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         ])
     }
 
+    private func applyNavbarSegments(options call: CAPPluginCall) {
+        let rawGroups = call.getArray("segments") as? [[String: Any]] ?? []
+        let groups = rawGroups.compactMap { rawGroup -> NativeNavigationSegmentGroup? in
+            guard let id = rawGroup["id"] as? String else {
+                return nil
+            }
+            let items = (rawGroup["items"] as? [[String: Any]] ?? []).compactMap { rawItem -> NativeNavigationSegmentItem? in
+                guard let itemId = rawItem["id"] as? String else {
+                    return nil
+                }
+                let icon = rawItem["icon"] as? [String: Any]
+                return NativeNavigationSegmentItem(
+                    id: itemId,
+                    title: rawItem["title"] as? String,
+                    accessibilityLabel: rawItem["accessibilityLabel"] as? String,
+                    enabled: rawItem["enabled"] as? Bool ?? true,
+                    iconKey: icon
+                        .flatMap { try? JSONSerialization.data(withJSONObject: $0, options: .sortedKeys) }
+                        .flatMap { String(data: $0, encoding: .utf8) } ?? "",
+                    image: image(from: icon)
+                )
+            }
+            guard !items.isEmpty else {
+                return nil
+            }
+            return NativeNavigationSegmentGroup(
+                id: id,
+                items: items,
+                selectedId: rawGroup["selectedId"] as? String,
+                style: NativeNavigationSegmentGroup.style(from: rawGroup["style"] as? String, itemCount: items.count)
+            )
+        }
+
+        guard !groups.isEmpty else {
+            navSegmentsView?.apply(groups: [], tint: nil, foreground: nil)
+            navSegmentsView?.isHidden = true
+            return
+        }
+        let segmentsView: NativeNavigationSegmentRowsView
+        if let existing = navSegmentsView {
+            segmentsView = existing
+        } else {
+            segmentsView = NativeNavigationSegmentRowsView()
+            segmentsView.onSelect = { [weak self] groupId, id, index in
+                self?.notifyListeners("navbarSegmentSelect", data: ["groupId": groupId, "id": id, "index": index])
+            }
+            navContainer?.addSubview(segmentsView)
+            navSegmentsView = segmentsView
+        }
+        let colors = call.getObject("colors")
+        segmentsView.apply(groups: groups, tint: colorValue(colors?["tint"]), foreground: colorValue(colors?["foreground"]))
+        // Glass and transparent bars show the container blur behind the rows; an opaque bar
+        // continues its own background under them.
+        if usesSystemLiquidGlass || call.getBool("transparent", false) {
+            segmentsView.backgroundColor = .clear
+        } else {
+            segmentsView.backgroundColor = colorValue(colors?["background"]) ?? .systemBackground
+        }
+        segmentsView.isHidden = false
+    }
+
+    /// Height of the segment rows under the bar; part of the navbar inset.
+    private var navbarSegmentsHeight: CGFloat {
+        guard let view = navSegmentsView, !view.isHidden else {
+            return 0
+        }
+        return view.contentHeight
+    }
+
     public func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {
         notifyTabSelect(index: item.tag)
     }
@@ -788,11 +859,11 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             if usesSystemLiquidGlass,
                !lastSetTabbarOptions.isEmpty,
                let refreshCall = CAPPluginCall(
-                   callbackId: "tabbar-refresh",
-                   methodName: "setTabbar",
-                   options: lastSetTabbarOptions,
-                   success: { _, _ in },
-                   error: { _ in }
+                callbackId: "tabbar-refresh",
+                methodName: "setTabbar",
+                options: lastSetTabbarOptions,
+                success: { _, _ in },
+                error: { _ in }
                ) {
                 applyTabBarAppearance(tabBar: tabBar, options: refreshCall)
             } else {
@@ -1724,6 +1795,11 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             }
         }
 
+        // Segment rows extend the bar, so the separator belongs under them, not between.
+        if !(call.getArray("segments") ?? []).isEmpty {
+            appearance.shadowColor = .clear
+        }
+
         navBar.standardAppearance = appearance
         navBar.scrollEdgeAppearance = appearance
         navBar.compactAppearance = appearance
@@ -2229,7 +2305,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             return
         }
 
-        let hideDistance = navbarHeight
+        let hideDistance = navbarHeight + navbarSegmentsHeight
         let updates = {
             if self.navbarScrollCollapsed {
                 container.transform = CGAffineTransform(translationX: 0, y: -hideDistance)
@@ -2270,9 +2346,11 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         if let container = navContainer {
             let topInset = navbarTopInset(safeInsets)
             let visibleNavbarHeight = navbarLarge && navbarLargeCollapsed ? 44 : navbarHeight
-            container.frame = CGRect(x: 0, y: 0, width: width, height: topInset + visibleNavbarHeight)
+            let segmentsHeight = navbarSegmentsHeight
+            container.frame = CGRect(x: 0, y: 0, width: width, height: topInset + visibleNavbarHeight + segmentsHeight)
             navBlurView?.frame = container.bounds
             navBar?.frame = CGRect(x: 0, y: topInset, width: width, height: visibleNavbarHeight)
+            navSegmentsView?.frame = CGRect(x: 0, y: topInset + visibleNavbarHeight, width: width, height: segmentsHeight)
             // The bar isn't hosted by a UINavigationController, so it starts with 8pt margins and the
             // large title sits off the system content margin. Match the hosting controller's margins.
             if let margins = bridge?.viewController?.systemMinimumLayoutMargins {
@@ -2445,7 +2523,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private func currentInsets() -> [String: Any] {
         let safeInsets = bridge?.viewController?.view.safeAreaInsets ?? .zero
         let topInset = navbarTopInset(safeInsets)
-        let barHeight = navbarScrollCollapsed ? 0 : navbarHeight
+        let barHeight = navbarScrollCollapsed ? 0 : navbarHeight + navbarSegmentsHeight
         let navHeight = isEnabled && navbarVisible ? barHeight + topInset : 0
         let usesSystemTabbar = usesSystemTabBar
         let nativeTabHeight = max(tabBar?.frame.height ?? 0, 49 + safeInsets.bottom)
