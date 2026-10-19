@@ -131,9 +131,14 @@ private final class NativeNavigationSegmentRow: UIView {
         self.selectedIndex = selectedIndex
         if let control = segmentedControl {
             control.selectedSegmentIndex = selectedIndex ?? UISegmentedControl.noSegment
+            // Reassigned on every call so dropping `tint` restores the UIKit default.
+            control.selectedSegmentTintColor = tint
             if let foreground {
                 control.setTitleTextAttributes([.foregroundColor: foreground], for: .normal)
-                control.setTitleTextAttributes([.foregroundColor: foreground], for: .selected)
+            }
+            // Text on the tinted thumb needs contrast, like the selected scroll pills.
+            if let selectedForeground = tint != nil ? UIColor.white : foreground {
+                control.setTitleTextAttributes([.foregroundColor: selectedForeground], for: .selected)
             }
             return
         }

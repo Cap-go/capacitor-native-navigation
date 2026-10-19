@@ -461,8 +461,10 @@ export interface NativeNavigationNavbarOptions {
   /**
    * Rows of native segments drawn under the bar, top to bottom. Each row adds
    * 44pt (iOS) or 48dp (Android) to the navbar and to the reported insets.
-   * Selecting an item fires `navbarSegmentSelect`; the selection moves
-   * natively, so send the new `selectedId` back only when the app rejects it.
+   * Selecting an item fires `navbarSegmentSelect` and moves the selection
+   * natively. Each `setNavbar` call applies `selectedId` again, so store the
+   * selected id from the event and pass it on every later `setNavbar` call.
+   * To reject a selection, send the previous `selectedId`.
    *
    * @since 8.13.0
    */
