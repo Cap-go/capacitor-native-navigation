@@ -99,6 +99,7 @@ public class NativeNavigationPlugin extends Plugin {
     private float navbarScrollThreshold = 8f;
     private boolean navbarScrollCollapsed = false;
     private TextView largeTitleView;
+    private NavbarSegmentRows navbarSegments;
     private boolean navbarLarge = false;
     private float navbarLargeProgress = 0f;
     private ValueAnimator navbarLargeAnimator;
@@ -257,6 +258,7 @@ public class NativeNavigationPlugin extends Plugin {
             navbarGlassConfig = call.getObject("glass", null);
             navbarGlassOptions = GlassOptions.from(navbarGlassConfig, defaultGlassOptions);
             applyToolbarColors(nativeToolbar, colors);
+            applyNavbarSegments(call.getArray("segments", new JSArray()));
             setNavbarLargeProgress(large ? 1f : 0f, animateLarge);
             navbarContainer.setVisibility(View.VISIBLE);
             configureNavbarScrollBehavior(call);
@@ -316,7 +318,7 @@ public class NativeNavigationPlugin extends Plugin {
     }
 
     private int pullToRefreshTopPx() {
-        int navbarToolbar = navbarScrollCollapsed ? 0 : navbarBarHeight(navbarLarge ? 1f : 0f);
+        int navbarToolbar = navbarScrollCollapsed ? 0 : navbarBarHeight(navbarLarge ? 1f : 0f) + navbarSegmentsHeight();
         return statusBarInset() + (navbarVisible ? navbarToolbar : 0);
     }
 
@@ -702,6 +704,52 @@ public class NativeNavigationPlugin extends Plugin {
             .start();
     }
 
+    private void applyNavbarSegments(JSONArray rawGroups) {
+        List<NavbarSegmentRows.Group> groups = new ArrayList<>();
+        for (int groupIndex = 0; groupIndex < rawGroups.length(); groupIndex++) {
+            JSONObject rawGroup = rawGroups.optJSONObject(groupIndex);
+            String groupId = rawGroup == null ? null : rawGroup.optString("id", null);
+            if (groupId == null) {
+                continue;
+            }
+            JSONArray rawItems = rawGroup.optJSONArray("items");
+            List<NavbarSegmentRows.Item> items = new ArrayList<>();
+            for (int index = 0; rawItems != null && index < rawItems.length(); index++) {
+                JSONObject rawItem = rawItems.optJSONObject(index);
+                String id = rawItem == null ? null : rawItem.optString("id", null);
+                if (id == null) {
+                    continue;
+                }
+                JSONObject icon = rawItem.optJSONObject("icon");
+                items.add(
+                    new NavbarSegmentRows.Item(
+                        id,
+                        rawItem.optString("title", null),
+                        rawItem.optString("accessibilityLabel", null),
+                        rawItem.optBoolean("enabled", true),
+                        icon == null ? "" : icon.toString(),
+                        iconFrom(icon)
+                    )
+                );
+            }
+            if (!items.isEmpty()) {
+                groups.add(
+                    new NavbarSegmentRows.Group(groupId, items, rawGroup.optString("selectedId", null), rawGroup.optString("style", "auto"))
+                );
+            }
+        }
+        navbarSegments.apply(groups, tintColor, navbarForegroundColor);
+        navbarSegments.setVisibility(groups.isEmpty() ? View.GONE : View.VISIBLE);
+    }
+
+    /** Height of the segment rows under the toolbar, in device pixels. */
+    private int navbarSegmentsHeight() {
+        if (navbarSegments == null || navbarSegments.getVisibility() != View.VISIBLE) {
+            return 0;
+        }
+        return navbarSegments.rowCount() * dp(NavbarSegmentRows.ROW_HEIGHT_DP);
+    }
+
     private void addToolbarItems(Toolbar nativeToolbar, JSONArray rawItems, String placement) {
         for (int index = 0; index < rawItems.length(); index++) {
             JSONObject rawItem = rawItems.optJSONObject(index);
@@ -856,9 +904,20 @@ public class NativeNavigationPlugin extends Plugin {
         // The toolbar keeps the title for screen readers; the large copy is visual only.
         largeTitleView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
 
+        navbarSegments = new NavbarSegmentRows(getContext());
+        navbarSegments.setVisibility(View.GONE);
+        navbarSegments.setOnSelectListener((groupId, id, index) -> {
+            JSObject event = new JSObject();
+            event.put("groupId", groupId);
+            event.put("id", id);
+            event.put("index", index);
+            notifyListeners("navbarSegmentSelect", event);
+        });
+
         navbarContainer.addView(navbarGlassSurface);
         navbarContainer.addView(toolbar);
         navbarContainer.addView(largeTitleView);
+        navbarContainer.addView(navbarSegments);
         if (root != null) {
             root.addView(navbarContainer);
         } else {
@@ -2590,7 +2649,7 @@ public class NativeNavigationPlugin extends Plugin {
         }
         int status = statusBarInset();
         int bottom = navigationBarInset();
-        int navbarToolbar = navbarScrollCollapsed ? 0 : navbarBarHeight(navbarLargeProgress);
+        int navbarToolbar = navbarScrollCollapsed ? 0 : navbarBarHeight(navbarLargeProgress) + navbarSegmentsHeight();
         int navbarHeight = navbarVisible ? status + navbarToolbar : 0;
         boolean tabbarLayoutVisible = tabbarVisible || tabbarChromeHideAnimating;
 
@@ -2615,6 +2674,13 @@ public class NativeNavigationPlugin extends Plugin {
             );
             largeTitleParams.topMargin = status + dp(DEFAULT_NAVBAR_DP);
             largeTitleView.setLayoutParams(largeTitleParams);
+            FrameLayout.LayoutParams segmentsParams = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                navbarSegmentsHeight(),
+                Gravity.TOP
+            );
+            segmentsParams.topMargin = status + navbarBarHeight(navbarLargeProgress);
+            navbarSegments.setLayoutParams(segmentsParams);
             fillContainer(navbarGlassSurface);
         }
 
@@ -2994,8 +3060,13 @@ public class NativeNavigationPlugin extends Plugin {
         if (params == null) {
             return;
         }
-        params.height = statusBarInset() + (navbarScrollCollapsed ? 0 : navbarBarHeight(navbarLargeProgress));
+        params.height = statusBarInset() + (navbarScrollCollapsed ? 0 : navbarBarHeight(navbarLargeProgress) + navbarSegmentsHeight());
         navbarContainer.setLayoutParams(params);
+        if (navbarSegments != null && navbarSegments.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
+            ViewGroup.MarginLayoutParams segmentsParams = (ViewGroup.MarginLayoutParams) navbarSegments.getLayoutParams();
+            segmentsParams.topMargin = statusBarInset() + navbarBarHeight(navbarLargeProgress);
+            navbarSegments.setLayoutParams(segmentsParams);
+        }
     }
 
     private void applyNavbarLargeProgress() {
@@ -3014,7 +3085,7 @@ public class NativeNavigationPlugin extends Plugin {
         if (navbarContainer == null) {
             return;
         }
-        float hideDistance = navbarBarHeight(navbarLargeProgress);
+        float hideDistance = navbarBarHeight(navbarLargeProgress) + navbarSegmentsHeight();
         if (animated) {
             navbarContainer
                 .animate()
@@ -3032,7 +3103,7 @@ public class NativeNavigationPlugin extends Plugin {
         // View layout uses device pixels; CSS variables must be density-independent
         // or a 3x screen writes `192px` which CSS treats as 192 CSS px.
         // Insets follow the target title state so the page moves once, not on every animation frame.
-        int navbarToolbar = navbarScrollCollapsed ? 0 : navbarBarHeight(navbarLarge ? 1f : 0f);
+        int navbarToolbar = navbarScrollCollapsed ? 0 : navbarBarHeight(navbarLarge ? 1f : 0f) + navbarSegmentsHeight();
         int top = navbarVisible ? statusBarInset() + navbarToolbar : 0;
         int bottom = tabbarVisible ? navigationBarInset() + dp(tabbarStyle.totalHeight()) + dp(tabbarStyle.bottomGap) : 0;
         JSObject insets = new JSObject();

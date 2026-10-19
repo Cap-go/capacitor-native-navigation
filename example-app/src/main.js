@@ -100,6 +100,7 @@ const navbarDemo = {
   background: false,
   animated: true,
   hidden: false,
+  segments: true,
   glass: '',
   scrollBehavior: 'none',
   blurEffect: 'systemChromeMaterial',
@@ -118,7 +119,13 @@ const navbarToggles = [
   ['background', 'Background color'],
   ['animated', 'Animate changes'],
   ['hidden', 'Hide navbar'],
+  ['segments', 'Segment rows'],
 ];
+const segmentSelection = { scope: 'account', section: 'general' };
+const segmentSections = {
+  account: ['General', 'Notifications', 'Password', 'Two-factor'],
+  organization: ['General', 'Members', 'Plans', 'Usage', 'Credits', 'Billing', 'Security', 'Webhooks'],
+};
 const tabbarDemo = {
   dragToSelect: true,
   animated: true,
@@ -683,6 +690,24 @@ const navbarDemoOptions = (resetScrollCollapsed) => {
     backButton: { visible: stack.length > 1, title: navbarDemo.backTitle ? 'Back' : '' },
     leftItems: navbarDemo.leftItem ? [{ id: 'menu', title: 'Menu' }] : [],
     rightItems,
+    segments: navbarDemo.segments
+      ? [
+          {
+            id: 'scope',
+            selectedId: segmentSelection.scope,
+            items: [
+              { id: 'account', title: 'Account' },
+              { id: 'organization', title: 'Organization' },
+            ],
+          },
+          {
+            id: 'section',
+            style: 'scroll',
+            selectedId: segmentSelection.section,
+            items: segmentSections[segmentSelection.scope].map((title) => ({ id: title.toLowerCase(), title })),
+          },
+        ]
+      : [],
     glass: navbarDemo.glass ? { effect: navbarDemo.glass } : undefined,
     colors:
       navbarDemo.tint || navbarDemo.background
@@ -1119,6 +1144,20 @@ NativeNavigation.addListener('navbarItemTap', async (event) => {
   if (output) {
     output.textContent = `Navbar item tapped: ${event.id}`;
   }
+});
+
+NativeNavigation.addListener('navbarSegmentSelect', async (event) => {
+  if (event.groupId === 'scope') {
+    segmentSelection.scope = event.id;
+    segmentSelection.section = 'general';
+  } else {
+    segmentSelection.section = event.id;
+  }
+  const output = document.getElementById('version-output');
+  if (output) {
+    output.textContent = `Segment selected: ${event.groupId} / ${event.id}`;
+  }
+  await updateNavbar();
 });
 
 NativeNavigation.addListener('tabSelect', async (event) => {
