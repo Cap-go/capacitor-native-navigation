@@ -328,7 +328,7 @@ Placeholder media (Martin adds before release):
 
 Pass `segments` to `setNavbar` to stack rows of native segments under the bar, such as a scope switcher on top and section tabs below it. Rows draw top to bottom, each one adds 44pt (iOS) or 48dp (Android) to the navbar and to the reported insets. iOS uses `UISegmentedControl` / glass pills, Android uses Material segmented buttons and filter chips.
 
-<img src="docs/ios-navbar-segments.png" alt="iOS navbar with two segment rows" width="320" />
+<img src="docs/ios-navbar-segments.webp" alt="iOS recording: tapping Account sections, switching to Organization swaps the second row to eight scrolling chips, selecting Billing, then back to Account" width="280" />
 
 ```typescript
 import { NativeNavigation } from '@capgo/capacitor-native-navigation';
