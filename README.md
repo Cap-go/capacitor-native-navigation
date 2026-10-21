@@ -50,6 +50,14 @@ Folded or open, iOS places the system tab bar as a vertical rail on the trailing
   width="280"
 />
 
+### Navbar segment rows
+
+Multi-level native segment rows under the navbar: a scope switcher on top, section chips below it. See [Navbar segment rows](#navbar-segment-rows-multi-level-top-bar).
+
+| iOS                                                                                                                                                                                                 | Android                                                                                                                                                                                         |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <img src="./docs/navbar-segments-ios.webp" alt="iOS recording: tapping Account sections, switching to Organization swaps the second row to eight scrolling chips, selecting Billing" width="160" /> | <img src="./docs/navbar-segments-android.webp" alt="Android recording: segmented Account / Organization row over scrolling section chips, switching scope and selecting Billing" width="160" /> |
+
 ### Pull to refresh
 
 Opt-in native pull-to-refresh, shown below the navbar. It works whether the page scrolls `window` or an inner root such as `#app`.
@@ -327,8 +335,6 @@ Placeholder media (Martin adds before release):
 ## Navbar segment rows (multi-level top bar)
 
 Pass `segments` to `setNavbar` to stack rows of native segments under the bar, such as a scope switcher on top and section tabs below it. Rows draw top to bottom, each one adds 44pt (iOS) or 48dp (Android) to the navbar and to the reported insets. iOS uses `UISegmentedControl` / glass pills, Android uses Material segmented buttons and filter chips.
-
-<img src="docs/ios-navbar-segments.webp" alt="iOS recording: tapping Account sections, switching to Organization swaps the second row to eight scrolling chips, selecting Billing, then back to Account" width="280" />
 
 ```typescript
 import { NativeNavigation } from '@capgo/capacitor-native-navigation';
