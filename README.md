@@ -75,6 +75,7 @@ NativeNavigation.addListener('pullToRefresh', async () => {
 - Capture WebView snapshots for native-feeling push, back, root, tab, and zoom transitions.
 - Configure tab labels, selected icons, badges, indicators, ripples, tint colors, and dynamic colors.
 - Write CSS inset variables so web content can scroll behind native bars without being hidden.
+- Stack multi-level native segment rows under the navbar (scope switcher plus section tabs) with `setNavbar({ segments })`.
 - Opt into native pull-to-refresh (system spinner and haptic on iOS, `SwipeRefreshLayout` on Android) with `setPullToRefresh()`.
 - Work with React, Vue, Angular, Svelte, Solid, vanilla JS, and any router that exposes imperative navigation.
 
@@ -322,6 +323,59 @@ Placeholder media (Martin adds before release):
 <!-- MARTIN_MEDIA: scroll-header-demo.webp -->
 
 ![Scroll-driven native navbar (animated demo placeholder)](docs/media/scroll-header-demo.webp)
+
+## Navbar segment rows (multi-level top bar)
+
+Pass `segments` to `setNavbar` to stack rows of native segments under the bar, such as a scope switcher on top and section tabs below it. Rows draw top to bottom, each one adds 44pt (iOS) or 48dp (Android) to the navbar and to the reported insets. iOS uses `UISegmentedControl` / glass pills, Android uses Material segmented buttons and filter chips.
+
+<img src="docs/ios-navbar-segments.webp" alt="iOS recording: tapping Account sections, switching to Organization swaps the second row to eight scrolling chips, selecting Billing, then back to Account" width="280" />
+
+```typescript
+import { NativeNavigation } from '@capgo/capacitor-native-navigation';
+
+const sections = {
+  account: ['General', 'Notifications', 'Password', 'Two-factor'],
+  organization: ['General', 'Members', 'Plans', 'Usage', 'Credits', 'Billing', 'Security', 'Webhooks'],
+};
+const selection = { scope: 'account', section: 'general' };
+
+const renderNavbar = () =>
+  NativeNavigation.setNavbar({
+    title: 'Settings',
+    segments: [
+      {
+        id: 'scope',
+        selectedId: selection.scope,
+        items: [
+          { id: 'account', title: 'Account' },
+          { id: 'organization', title: 'Organization' },
+        ],
+      },
+      {
+        id: 'section',
+        style: 'scroll', // horizontally scrolling chips; `auto` picks `segmented` for up to 4 items
+        selectedId: selection.section,
+        items: sections[selection.scope].map((title) => ({ id: title.toLowerCase(), title })),
+      },
+    ],
+  });
+
+await NativeNavigation.addListener('navbarSegmentSelect', async ({ groupId, id }) => {
+  if (groupId === 'scope') {
+    selection.scope = id;
+    selection.section = 'general'; // the second level depends on the first one
+  } else {
+    selection.section = id;
+  }
+  await renderNavbar();
+});
+
+await renderNavbar();
+```
+
+Selection moves natively when the user taps, but every `setNavbar` call applies `selectedId` again. Keep the selected ids in your state and pass them on every later `setNavbar` call; to reject a selection, send the previous `selectedId`. Items accept `icon`, `accessibilityLabel` and `enabled` like navbar buttons. Pass `segments: []` to remove the rows.
+
+The example app **Navbar** playground has a **Segment rows** toggle with this exact setup.
 
 ## Zoom Transition
 
