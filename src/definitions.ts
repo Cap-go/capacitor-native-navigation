@@ -395,7 +395,10 @@ export interface NativeNavigationNavbarSegmentGroup {
  */
 export interface NativeNavigationNavbarOptions {
   /**
-   * Hide the native navbar.
+   * Hide the native navbar. A web modal, sheet, dialog, or popover renders
+   * inside the WebView and stays under this bar, so hide the navbar while
+   * that overlay is open. Send the same options again with `hidden: false`
+   * when it closes. The hide is immediate on iOS and Android.
    */
   hidden?: boolean;
 
@@ -476,7 +479,8 @@ export interface NativeNavigationNavbarOptions {
   colors?: NativeNavigationColors;
 
   /**
-   * Animate native navbar changes.
+   * Animate navbar title and item changes while the bar is visible. Hiding
+   * the bar with `hidden: true` does not use this flag.
    */
   animated?: boolean;
 
@@ -652,7 +656,11 @@ export interface NativeNavigationTabbarStyle {
  */
 export interface NativeNavigationTabbarOptions {
   /**
-   * Hide the native tabbar.
+   * Hide the native tabbar. A web modal, sheet, dialog, or popover renders
+   * inside the WebView and stays under this bar, so hide the tabbar while
+   * that overlay is open. Pass `animated: true` together with the same
+   * `tabs` and `selectedId` you last rendered. That soft-hides the bar and
+   * leaves it mounted. `animated: false` hides it immediately.
    */
   hidden?: boolean;
 
@@ -803,7 +811,16 @@ export interface NativeNavigationTabbarOptions {
   dragToSelect?: boolean;
 
   /**
-   * Animate native tabbar changes.
+   * Animate native tabbar changes. With `hidden: true` on iOS 26+ system
+   * Liquid Glass (any shape except `curve`, and while `minimizeBehavior` is
+   * not `onScrollDown`), the plugin calls
+   * `UITabBarController.setTabBarHidden(_:animated:)` and leaves the tab
+   * controller and hosted WebView in place. UIKit fades the bar.
+   * `systemTabbarHeight` stays reported for that soft hide. Other iOS bars
+   * fade over 200ms and stay mounted. Android slides and fades over 200ms,
+   * then removes the bar from layout. Showing the bar with `animated: true`
+   * reverses that. Omit `animated` to hide immediately; on the iOS system
+   * bar that also tears the tab controller down.
    */
   animated?: boolean;
 }
