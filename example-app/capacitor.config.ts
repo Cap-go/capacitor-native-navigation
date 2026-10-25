@@ -2,7 +2,9 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 import pkg from './package.json' with { type: 'json' };
 
-const screenshotBuild = process.env.VITE_SCREENSHOT_MODE === 'floating-tabbar';
+const screenshotBuild =
+  process.env.VITE_SCREENSHOT_MODE === 'floating-tabbar' ||
+  process.env.VITE_SCREENSHOT_MODE === 'center-tabbar';
 
 const config: CapacitorConfig = {
   appId: 'app.capgo.native.navigation.example',

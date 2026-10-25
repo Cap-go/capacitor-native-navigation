@@ -6,7 +6,10 @@ import { NativeNavigation } from '@capgo/capacitor-native-navigation';
 
 const app = document.getElementById('app');
 const isWebPreview = Capacitor.getPlatform() === 'web';
-const screenshotMode = import.meta.env.VITE_SCREENSHOT_MODE === 'floating-tabbar';
+const screenshotMode =
+  import.meta.env.VITE_SCREENSHOT_MODE === 'floating-tabbar' ||
+  import.meta.env.VITE_SCREENSHOT_MODE === 'center-tabbar';
+const screenshotCenter = import.meta.env.VITE_SCREENSHOT_MODE === 'center-tabbar';
 const topButtonStorageKey = 'native-navigation-top-button-visible';
 
 const readTopButtonPreference = () => {
@@ -264,7 +267,7 @@ const applyScreenshotMode = () => {
   if (!screenshotMode) {
     return;
   }
-  tabbarPreset = 'system';
+  tabbarPreset = screenshotCenter ? 'center' : 'system';
   shapeOverride = null;
   route = 'home';
   activeTab = 'home';
@@ -730,7 +733,7 @@ const updateNavbar = async (resetScrollCollapsed = false) => {
     hidden: !scrollHeaderDemo && route === 'home' && tabbarShape() === 'curve',
     title: page.title,
     subtitle: scrollHeaderDemo ? page.subtitle : route === 'home' ? tabbarPresets[tabbarPreset].detail : page.subtitle,
-    large: !scrollHeaderDemo && route === 'home' && tabbarShape() !== 'curve',
+    large: !screenshotMode && !scrollHeaderDemo && route === 'home' && tabbarShape() !== 'curve',
     transparent: true,
     scrollBehavior: scrollHeaderDemo ? 'both' : 'none',
     scrollThreshold: 8,
@@ -739,7 +742,7 @@ const updateNavbar = async (resetScrollCollapsed = false) => {
       visible: stack.length > 1,
       title: 'Back',
     },
-    rightItems: shouldShowTopButton() ? topButtonItems : [],
+    rightItems: shouldShowTopButton() || (screenshotMode && !screenshotCenter) ? topButtonItems : [],
   });
 };
 

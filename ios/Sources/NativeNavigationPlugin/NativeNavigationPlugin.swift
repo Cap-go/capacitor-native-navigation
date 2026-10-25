@@ -2601,6 +2601,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         #if compiler(>=6.4)
         if #available(iOS 27.1, *) {
             bridge?.viewController?.setNeedsUpdateOfVerticalBarConfiguration()
+            tabBarController?.setNeedsUpdateOfVerticalBarConfiguration()
+            tabViewControllers.forEach { $0.setNeedsUpdateOfVerticalBarConfiguration() }
         }
         #endif
     }
@@ -2652,7 +2654,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         let useRail = railEngaged && didWrapSystemNavigation && navbarVisible
         let modeChanged = useRail != navbarUsesSystemRail
         navbarUsesSystemRail = useRail
-        if useRail && (modeChanged || navbarItemsNeedPlacement) {
+        let placedOnRail = useRail && (modeChanged || navbarItemsNeedPlacement)
+        if placedOnRail {
             placeNavbarItemsOnSelectedContent()
             navbarItemsNeedPlacement = false
         } else if !useRail && modeChanged {
@@ -2662,6 +2665,11 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             navbarItemsNeedPlacement = false
         }
         applyDuoNavbarVisibility()
+        // Items assigned after the rail is already visible stay on the horizontal
+        // bar until UIKit is asked to place them.
+        if placedOnRail {
+            requestVerticalBarUpdate()
+        }
     }
 
     /// UIKit only moves navbar items that belong to a navigation controller.

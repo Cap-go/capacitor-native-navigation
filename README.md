@@ -40,7 +40,7 @@ The Android captures come from [Mimesis](https://github.com/Cap-go/mimesis) on A
 
 Folded, and open in landscape, the system tab bar becomes a vertical rail. Open portrait stays a horizontal bar. Split View puts each window's rail on the outer edge. The rail stays on the camera's physical edge, so the semantic edge is trailing in landscape and can be leading or trailing in Split View and in right-to-left layout. The curved center bar stays on the bottom, and its cradle stays a circle around the button when the window widens.
 
-Navbar titles and buttons move into that rail with the system tab bar. Segment rows stay horizontal and clear the rail. Curve and other custom capsules stay on the bottom; their width clears the rail. `configure({ verticalBarBehavior: 'disabled' })` opts that screen out and keeps the top and bottom bars. `safeAreaChanged` reports `verticalBarEdge`, fold `reservedRegions`, and the latest hinge sample. `verticalBarChanged` and `hingeChanged` fire when those change.
+Icon buttons from the navbar join that rail. The title stays in a horizontal bar. Segment rows stay horizontal and clear the rail. Curve and other custom capsules stay on the bottom, and the center button stays a circle. `configure({ verticalBarBehavior: 'disabled' })` opts that screen out and keeps the top and bottom bars. `safeAreaChanged` reports `verticalBarEdge`, fold `reservedRegions`, and the latest hinge sample. `verticalBarChanged` and `hingeChanged` fire when those change.
 
 ```ts
 await NativeNavigation.configure({ verticalBarBehavior: 'automatic' });
@@ -55,14 +55,16 @@ await NativeNavigation.configure({ verticalBarBehavior: 'automatic' });
 
 `--cap-native-navigation-division-x` and `--cap-native-navigation-division-width` mark the fold so a web layout can split around it. The plugin still uses one WebView. On a phone with no rail those inset variables are `0px`.
 
-| Folded, center                                                                                                                                          | Open, center                                                                                                                                      | Open, system                                                                                                                               | Folded, system                                                                                                                    |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| <img src="./docs/iphone-duo-folded-center.webp" alt="iPhone Duo folded with a curved bottom tab bar and a circular center camera button" width="160" /> | <img src="./docs/iphone-duo-open-center.webp" alt="iPhone Duo open with the curved center camera button keeping a circular cradle" width="220" /> | <img src="./docs/iphone-duo-open-system.webp" alt="iPhone Duo open in landscape with the system tab bar as a vertical rail" width="220" /> | <img src="./docs/iphone-duo-folded-system.webp" alt="iPhone Duo folded with the system tab bar as a vertical rail" width="160" /> |
+Captured on the iPhone Duo simulator in iOS 27.1.
+
+| Folded, center                                                                                                                                                         | Open, center                                                                                                                                                              | Open, system                                                                                                                                                                                | Folded, system                                                                                                                                                                              |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <img src="./docs/iphone-duo-folded-center.webp" alt="iPhone Duo simulator, folded: curved tab bar and a circular camera button stay on the bottom" width="160" />     | <img src="./docs/iphone-duo-open-center.webp" alt="iPhone Duo simulator, open in landscape: the camera button stays a circle on the bottom bar" width="220" />            | <img src="./docs/iphone-duo-open-system.webp" alt="iPhone Duo simulator, open in landscape: system tab bar and navbar compose button in the vertical rail" width="220" />                  | <img src="./docs/iphone-duo-folded-system.webp" alt="iPhone Duo simulator, folded: system tab bar and navbar compose button in the vertical rail" width="160" />                            |
 
 <img
-  src="./docs/iphone-duo-unfold.webp"
-  alt="iPhone Duo unfolding while the center camera cradle stays a circle around the button"
-  width="280"
+  src="./docs/iphone-duo-open-portrait.webp"
+  alt="iPhone Duo simulator, open in portrait: navbar and system tab bar stay horizontal"
+  width="220"
 />
 
 ### Navbar segment rows
