@@ -501,4 +501,48 @@ class NativeNavigationTests: XCTestCase {
             accuracy: 0.001
         )
     }
+
+    func testBackButtonJoinsTheRailOnlyAsAnIcon() {
+        XCTAssertFalse(nativeNavigationBackButtonIsIcon(display: nil, title: nil, role: nil))
+        XCTAssertFalse(nativeNavigationBackButtonIsIcon(display: nil, title: "Back", role: "back"))
+        XCTAssertTrue(nativeNavigationBackButtonIsIcon(display: nil, title: "", role: "back"))
+        XCTAssertTrue(nativeNavigationBackButtonIsIcon(display: "icon", title: "Back", role: "back"))
+        XCTAssertFalse(nativeNavigationBackButtonIsIcon(display: "title", title: "", role: "close"))
+        XCTAssertTrue(nativeNavigationBackButtonIsIcon(display: nil, title: "Close", role: "close"))
+        XCTAssertEqual(nativeNavigationBackButtonAccessibilityLabel(title: nil, role: "close"), "Close")
+        XCTAssertEqual(nativeNavigationBackButtonAccessibilityLabel(title: "", role: "back"), "Back")
+        XCTAssertEqual(nativeNavigationBackButtonAccessibilityLabel(title: "Notes", role: "close"), "Notes")
+    }
+
+    func testDockPartitionKeepsSharedItemsAndCollapsesGroups() {
+        let left = [
+            NativeNavigationDockButton(id: "back", dock: "shared", group: nil),
+            NativeNavigationDockButton(id: "reply", dock: "shared", group: "message"),
+            NativeNavigationDockButton(id: "forward", dock: "shared", group: "message")
+        ]
+        let right = [
+            NativeNavigationDockButton(id: "done", dock: "prominent", group: nil),
+            NativeNavigationDockButton(id: "search", dock: "detached", group: "message"),
+            NativeNavigationDockButton(id: "solo", dock: "shared", group: "alone")
+        ]
+        let partition = nativeNavigationPartitionDock(left: left, right: right)
+
+        XCTAssertEqual(partition.plainLeft, ["back", "reply", "forward"])
+        XCTAssertEqual(partition.plainRight, ["done", "search", "solo"])
+        XCTAssertEqual(partition.pinned, ["done"])
+        XCTAssertTrue(partition.usesLeadingGroups)
+        XCTAssertFalse(partition.usesTrailingGroups)
+        XCTAssertEqual(partition.leadingGroups.map(\.ids), [["back"], ["reply", "forward"]])
+        XCTAssertEqual(partition.leadingGroups.map(\.expandable), [false, true])
+        XCTAssertEqual(partition.trailingGroups.map(\.ids), [["search"], ["solo"]])
+        XCTAssertEqual(nativeNavigationDockGroup("  "), nil)
+        XCTAssertEqual(nativeNavigationBarButtonDock("nope"), "shared")
+        XCTAssertEqual(nativeNavigationBarButtonAxis("vertical"), "vertical")
+        XCTAssertEqual(nativeNavigationVerticalBarCompression(nil), "automatic")
+        XCTAssertEqual(nativeNavigationVerticalBarCompression("preferItems"), "preferItems")
+        XCTAssertEqual(nativeNavigationVerticalBarCompression("preferTabs"), "preferTabs")
+        XCTAssertFalse(nativeNavigationSearchPlacementIsButton(nil))
+        XCTAssertFalse(nativeNavigationSearchPlacementIsButton("stacked"))
+        XCTAssertTrue(nativeNavigationSearchPlacementIsButton("button"))
+    }
 }

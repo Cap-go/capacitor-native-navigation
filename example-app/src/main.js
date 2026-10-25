@@ -352,6 +352,12 @@ const applyScreenshotMode = () => {
     route = 'scrollHeader';
     activeTab = 'home';
     stack = ['home', 'scrollHeader'];
+  } else if (screenshotPreset === 'duo-dock') {
+    route = 'settings';
+    activeTab = 'settings';
+    stack = ['home', 'settings'];
+    tabbarDemo.placement = 'bottom';
+    tabbarDemo.alignment = 'center';
   } else {
     route = 'home';
     activeTab = 'home';
@@ -783,10 +789,13 @@ const pageFor = (id) =>
 const navbarDemoOptions = (resetScrollCollapsed) => {
   const rightItems = [];
   if (navbarDemo.rightItems) {
-    rightItems.push({ id: 'star', icon: { svg: icons.star } }, { id: 'compose', icon: { svg: icons.compose } });
+    rightItems.push(
+      { id: 'star', title: 'Star', icon: { svg: icons.star }, group: 'actions' },
+      { id: 'compose', title: 'Compose', icon: { svg: icons.compose }, group: 'actions' },
+    );
   }
   if (navbarDemo.textItem) {
-    rightItems.push({ id: 'save', title: 'Save' });
+    rightItems.push({ id: 'save', title: 'Save', dock: 'prominent', axis: 'vertical' });
   }
   if (navbarDemo.disabledItem) {
     rightItems.push({ id: 'disabled', title: 'Off', enabled: false });
@@ -804,7 +813,12 @@ const navbarDemoOptions = (resetScrollCollapsed) => {
     scrollBehavior: navbarDemo.scrollBehavior,
     scrollThreshold: 8,
     resetScrollCollapsed,
-    backButton: { visible: stack.length > 1, title: navbarDemo.backTitle ? 'Back' : '' },
+    verticalBarCompression: 'preferItems',
+    backButton: {
+      visible: stack.length > 1,
+      title: navbarDemo.backTitle ? 'Back' : '',
+      display: navbarDemo.backTitle ? 'title' : 'icon',
+    },
     leftItems: navbarDemo.leftItem ? [{ id: 'menu', title: 'Menu' }] : [],
     rightItems,
     segments: navbarDemo.segments
@@ -831,6 +845,7 @@ const navbarDemoOptions = (resetScrollCollapsed) => {
           placeholder: 'Search',
           text: navbarSearchText,
           hidesWhenCollapsed: navbarDemo.large,
+          placement: 'button',
         }
       : { hidden: true },
     glass: navbarDemo.glass ? { effect: navbarDemo.glass } : undefined,
@@ -844,6 +859,40 @@ const navbarDemoOptions = (resetScrollCollapsed) => {
 };
 
 const updateNavbar = async (resetScrollCollapsed = false) => {
+  if (screenshotPreset === 'duo-dock') {
+    const palette = chromePalette();
+    await NativeNavigation.setNavbar({
+      hidden: false,
+      title: 'Notes',
+      large: false,
+      transparent: true,
+      verticalBarCompression: 'preferItems',
+      backButton: { visible: true, title: 'Back', display: 'icon' },
+      rightItems: [
+        { id: 'done', title: 'Done', dock: 'prominent', axis: 'vertical' },
+        {
+          id: 'reply',
+          title: 'Reply',
+          icon: { ios: { sfSymbol: 'arrowshape.turn.up.left' }, svg: icons.compose },
+          group: 'message',
+        },
+        {
+          id: 'forward',
+          title: 'Forward',
+          icon: { ios: { sfSymbol: 'arrowshape.turn.up.right' }, svg: icons.star },
+          group: 'message',
+        },
+      ],
+      search: { hidden: false, placement: 'button', placeholder: 'Search' },
+      colors: {
+        tint: palette.tint,
+        inactiveTint: palette.inactiveTint,
+        background: palette.background,
+        foreground: palette.foreground,
+      },
+    });
+    return;
+  }
   if (route === 'navbar') {
     await NativeNavigation.setNavbar(navbarDemoOptions(resetScrollCollapsed));
     return;
@@ -867,11 +916,16 @@ const updateNavbar = async (resetScrollCollapsed = false) => {
     scrollBehavior: scrollHeaderDemo ? 'both' : 'none',
     scrollThreshold: 8,
     resetScrollCollapsed,
+    verticalBarCompression: 'preferItems',
     backButton: {
       visible: stack.length > 1,
       title: 'Back',
+      display: 'icon',
     },
-    rightItems: shouldShowTopButton() || (screenshotMode && screenshotPreset !== 'center-tabbar') ? topButtonItems : [],
+    rightItems:
+      shouldShowTopButton() || (screenshotMode && screenshotPreset !== 'center-tabbar')
+        ? topButtonItems.map((item) => (settingsRoute ? { ...item, dock: 'detached' } : item))
+        : [],
     segments: [],
     search: settingsRoute
       ? {

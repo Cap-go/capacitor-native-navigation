@@ -103,6 +103,140 @@ func nativeNavigationDuoEdgeInsets(
     )
 }
 
+struct NativeNavigationDockButton: Equatable {
+    var id: String
+    var dock: String
+    var group: String?
+}
+
+struct NativeNavigationDockGroup: Equatable {
+    var ids: [String]
+    /// Two or more items collapse to an actionless copy of the first.
+    var expandable: Bool
+}
+
+struct NativeNavigationDockPartition: Equatable {
+    /// Original order, including prominent items. Used below iOS 16.
+    var plainLeft: [String]
+    var plainRight: [String]
+    var leadingGroups: [NativeNavigationDockGroup]
+    var trailingGroups: [NativeNavigationDockGroup]
+    /// Prominent items, leading side first, then trailing.
+    var pinned: [String]
+    var usesLeadingGroups: Bool
+    var usesTrailingGroups: Bool
+}
+
+func nativeNavigationBarButtonDock(_ raw: String?) -> String {
+    switch raw {
+    case "detached", "prominent":
+        return raw ?? "shared"
+    default:
+        return "shared"
+    }
+}
+
+func nativeNavigationBarButtonAxis(_ raw: String?) -> String {
+    switch raw {
+    case "horizontal", "vertical":
+        return raw ?? "automatic"
+    default:
+        return "automatic"
+    }
+}
+
+func nativeNavigationDockGroup(_ raw: String?) -> String? {
+    guard let raw else {
+        return nil
+    }
+    let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? nil : trimmed
+}
+
+func nativeNavigationVerticalBarCompression(_ raw: String?) -> String {
+    switch raw {
+    case "preferItems", "preferTabs":
+        return raw ?? "automatic"
+    default:
+        return "automatic"
+    }
+}
+
+func nativeNavigationSearchPlacementIsButton(_ placement: String?) -> Bool {
+    placement == "button"
+}
+
+/// Explicit `icon` wins. Explicit `title` stays text. An omitted display makes
+/// `close` an icon. Any other omitted display is an icon only when the title
+/// is empty, so the historical default title `"Back"` stays text.
+func nativeNavigationBackButtonIsIcon(display: String?, title: String?, role: String?) -> Bool {
+    if display == "icon" {
+        return true
+    }
+    if display == "title" {
+        return false
+    }
+    if role == "close" {
+        return true
+    }
+    return (title ?? "Back").isEmpty
+}
+
+func nativeNavigationBackButtonAccessibilityLabel(title: String?, role: String?) -> String {
+    if let title, !title.isEmpty {
+        return title
+    }
+    return role == "close" ? "Close" : "Back"
+}
+
+func nativeNavigationPartitionDock(
+    left: [NativeNavigationDockButton],
+    right: [NativeNavigationDockButton]
+) -> NativeNavigationDockPartition {
+    let pinned = left.filter { $0.dock == "prominent" }.map(\.id) + right.filter { $0.dock == "prominent" }.map(\.id)
+    let leading = nativeNavigationPartitionDockSide(left.filter { $0.dock != "prominent" })
+    let trailing = nativeNavigationPartitionDockSide(right.filter { $0.dock != "prominent" })
+    return NativeNavigationDockPartition(
+        plainLeft: left.map(\.id),
+        plainRight: right.map(\.id),
+        leadingGroups: leading.groups,
+        trailingGroups: trailing.groups,
+        pinned: pinned,
+        usesLeadingGroups: leading.expandable,
+        usesTrailingGroups: trailing.expandable
+    )
+}
+
+private func nativeNavigationPartitionDockSide(
+    _ items: [NativeNavigationDockButton]
+) -> (groups: [NativeNavigationDockGroup], expandable: Bool) {
+    var counts: [String: Int] = [:]
+    for item in items where item.dock != "detached" {
+        if let group = item.group {
+            counts[group, default: 0] += 1
+        }
+    }
+
+    var emitted: Set<String> = []
+    var groups: [NativeNavigationDockGroup] = []
+    var expandable = false
+    for item in items {
+        let groupId = item.dock == "detached" ? nil : item.group
+        if let groupId, (counts[groupId] ?? 0) >= 2 {
+            if emitted.contains(groupId) {
+                continue
+            }
+            emitted.insert(groupId)
+            let ids = items.filter { $0.dock != "detached" && $0.group == groupId }.map(\.id)
+            groups.append(NativeNavigationDockGroup(ids: ids, expandable: true))
+            expandable = true
+        } else {
+            groups.append(NativeNavigationDockGroup(ids: [item.id], expandable: false))
+        }
+    }
+    return (groups, expandable)
+}
+
 func nativeNavigationTabContentController(from viewController: UIViewController?) -> NativeNavigationTabContentController? {
     if let content = viewController as? NativeNavigationTabContentController {
         return content

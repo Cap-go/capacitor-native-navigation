@@ -157,6 +157,7 @@ export class NativeNavigationWeb extends WebPlugin implements NativeNavigationPl
     if (!search || search.hidden) {
       return 0;
     }
+    // `placement: 'button'` is the iOS 26 detached search control. Web keeps the stacked field.
     return 52;
   }
 

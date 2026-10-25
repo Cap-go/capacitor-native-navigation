@@ -82,8 +82,14 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var contentInsetMode = "css"
     private var isEnabled = true
     /// Navbar buttons currently installed on either the custom bar or the rail's navigation item.
-    private var navbarRailLeftItems: [UIBarButtonItem] = []
-    private var navbarRailRightItems: [UIBarButtonItem] = []
+    private var navbarDockLeft: [NativeNavigationDockButton] = []
+    private var navbarDockRight: [NativeNavigationDockButton] = []
+    private var navbarButtonsById: [String: UIBarButtonItem] = [:]
+    private var navbarHasBackButton = false
+    private var navbarBackSupplements = false
+    private var navbarVerticalBarCompression = "automatic"
+    private var navbarSearchUsesButton = false
+    private var navbarSearchController: UISearchController?
     private var navbarRailTitle = ""
     private var navbarRailSubtitle: String?
     private var navbarRailLarge = false
@@ -256,10 +262,17 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
             guard !hidden else {
                 self.navbarSearchVisible = false
+                self.navbarSearchUsesButton = false
                 self.navbarSearchSuppliedText = nil
+                self.navbarDockLeft = []
+                self.navbarDockRight = []
+                self.navbarButtonsById.removeAll()
+                self.navbarHasBackButton = false
+                self.navbarBackSupplements = false
                 self.navSearchBar?.isHidden = true
                 self.navContainer?.isHidden = true
                 self.navbarItemsNeedPlacement = false
+                self.releaseStoredNavbarButtons()
                 self.hideSystemRailNavbar()
                 self.stopNavbarScrollObservation(resetCollapsed: true)
                 self.updateInsetsAndNotify()
@@ -283,29 +296,27 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
             self.navbarItemPlacement.removeAll()
             self.navbarItemTitle.removeAll()
+            self.navbarButtonsById.removeAll()
 
-            if let backButton = call.getObject("backButton"), backButton["visible"] as? Bool == true {
-                let title = backButton["title"] as? String ?? "Back"
-                let item = title.isEmpty
-                    ? UIBarButtonItem(image: UIImage(systemName: "chevron.backward"), style: .plain, target: self, action: #selector(self.handleNavbarBack))
-                    : UIBarButtonItem(title: title, style: .plain, target: self, action: #selector(self.handleNavbarBack))
-                self.configureGlassBarButtonItem(item, id: "back")
-                let leftItems = self.makeBarButtonItems(call.getArray("leftItems") as? [[String: Any]] ?? [], placement: "left")
-                navItem.leftBarButtonItems = [item] + leftItems
+            var leftButtons = self.makeDockButtons(call.getArray("leftItems") as? [[String: Any]] ?? [], placement: "left")
+            if let backButton = self.makeBackDockButton(from: call.getObject("backButton")) {
+                leftButtons.insert(backButton, at: 0)
+                self.navbarHasBackButton = true
             } else {
-                navItem.leftBarButtonItems = self.makeBarButtonItems(call.getArray("leftItems") as? [[String: Any]] ?? [], placement: "left")
+                self.navbarHasBackButton = false
+                self.navbarBackSupplements = false
             }
-
-            navItem.rightBarButtonItems = self.makeBarButtonItems(call.getArray("rightItems") as? [[String: Any]] ?? [], placement: "right")
+            self.navbarDockLeft = leftButtons
+            self.navbarDockRight = self.makeDockButtons(call.getArray("rightItems") as? [[String: Any]] ?? [], placement: "right")
+            self.navbarVerticalBarCompression = nativeNavigationVerticalBarCompression(call.getString("verticalBarCompression"))
             self.navbarRailTitle = navItem.title ?? ""
             self.navbarRailSubtitle = subtitle
             self.navbarRailLarge = large
-            self.navbarRailLeftItems = navItem.leftBarButtonItems ?? []
-            self.navbarRailRightItems = navItem.rightBarButtonItems ?? []
             self.navbarItemsNeedPlacement = true
             navBar.setItems([navItem], animated: animated)
             self.applyNavBarAppearance(navBar: navBar, options: call)
             self.applyNavbarSearch(options: call)
+            self.applyDockChrome(to: navItem)
             self.applyNavbarSegments(options: call)
             self.navContainer?.isHidden = false
             self.configureNavbarScrollBehavior(from: call)
@@ -836,13 +847,13 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private func applyNavbarSearch(options call: CAPPluginCall) {
         guard let search = call.getObject("search"), search["hidden"] as? Bool != true else {
             navbarSearchVisible = false
+            navbarSearchUsesButton = false
             navbarSearchSuppliedText = nil
             navSearchBar?.isHidden = true
             navSearchBar?.text = nil
             return
         }
 
-        navbarSearchVisible = true
         let large = call.getBool("large", false)
         if let hides = search["hidesWhenCollapsed"] as? Bool {
             navbarSearchHidesWhenCollapsed = hides
@@ -850,7 +861,51 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             navbarSearchHidesWhenCollapsed = large
         }
 
-        let bar = ensureNavbarSearchBar()
+        if nativeNavigationSearchPlacementIsButton(search["placement"] as? String), navbarSearchButtonSupported {
+            navbarSearchUsesButton = true
+            let stacked = ensureNavbarSearchBar()
+            let controllerBar = ensureNavbarSearchController().searchBar
+            let active = controllerBar.isFirstResponder ? controllerBar : stacked
+            configureSearchBar(active, search: search, call: call)
+            mirrorSearchBar(from: active, to: active === stacked ? controllerBar : stacked)
+            // The detached button only exists on the Duo rail. Everywhere else the
+            // stacked field stays, including a later fold back to a horizontal bar.
+            navbarSearchVisible = !navbarUsesSystemRail
+            navSearchBar?.isHidden = navbarSearchHeight == 0
+            return
+        }
+
+        navbarSearchUsesButton = false
+        navbarSearchVisible = true
+        configureSearchBar(ensureNavbarSearchBar(), search: search, call: call)
+        navSearchBar?.isHidden = navbarSearchHeight == 0
+    }
+
+    private var navbarSearchButtonSupported: Bool {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            return true
+        }
+        #endif
+        return false
+    }
+
+    private func mirrorSearchBar(from source: UISearchBar, to destination: UISearchBar) {
+        guard !destination.isFirstResponder else {
+            return
+        }
+        destination.placeholder = source.placeholder
+        destination.text = source.text
+        destination.tintColor = source.tintColor
+        if #available(iOS 16.4, *) {
+            destination.isEnabled = source.isEnabled
+        } else {
+            destination.searchTextField.isEnabled = source.searchTextField.isEnabled
+            destination.isUserInteractionEnabled = source.isUserInteractionEnabled
+        }
+    }
+
+    private func configureSearchBar(_ bar: UISearchBar, search: [String: Any], call: CAPPluginCall) {
         bar.placeholder = (search["placeholder"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "Search"
         // UISearchBar.isEnabled arrived in iOS 16.4. The text field covers iOS 15.
         let searchEnabled = search["enabled"] as? Bool ?? true
@@ -874,7 +929,21 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         if applyText {
             bar.text = text
         }
-        bar.isHidden = navbarSearchHeight == 0
+    }
+
+    private func ensureNavbarSearchController() -> UISearchController {
+        if let navbarSearchController {
+            return navbarSearchController
+        }
+        let controller = UISearchController(searchResultsController: nil)
+        controller.obscuresBackgroundDuringPresentation = false
+        controller.hidesNavigationBarDuringPresentation = false
+        controller.searchBar.delegate = self
+        controller.searchBar.searchBarStyle = .minimal
+        controller.searchBar.autocapitalizationType = .none
+        controller.searchBar.returnKeyType = .search
+        navbarSearchController = controller
+        return controller
     }
 
     private func ensureNavbarSearchBar() -> UISearchBar {
@@ -1244,6 +1313,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         }
 
         let previousSelectedIndex = tabBarController.selectedIndex
+        let previousContent = nativeNavigationTabContentController(from: tabBarController.selectedViewController)
         let controllers = systemTabContentControllers(for: items)
         let currentControllers = tabBarController.viewControllers ?? []
         let shouldUpdateControllers = currentControllers.count != controllers.count
@@ -1273,6 +1343,12 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         hostWebView(in: controllers[index])
         tabBarController.selectedIndex = index
         tabViewControllers = controllers
+        let nextContent = nativeNavigationTabContentController(from: controllers[index])
+        // didSelect does not run for a programmatic selectedIndex, and the next
+        // layout skips placement unless this flag is set.
+        if shouldUpdateControllers || previousSelectedIndex != index || previousContent !== nextContent {
+            navbarItemsNeedPlacement = true
+        }
     }
 
     private func systemTabContentControllers(for items: [UITabBarItem]) -> [UIViewController] {
@@ -1551,8 +1627,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             .forEach { $0.clearHostedWebView(ifMatching: webView, preservingSnapshot: preservingSnapshots) }
     }
 
-    private func makeBarButtonItems(_ rawItems: [[String: Any]], placement: String) -> [UIBarButtonItem] {
-        return rawItems.map { rawItem in
+    private func makeDockButtons(_ rawItems: [[String: Any]], placement: String) -> [NativeNavigationDockButton] {
+        rawItems.map { rawItem in
             let id = rawItem["id"] as? String ?? UUID().uuidString
             let title = rawItem["title"] as? String
             let image = image(from: rawItem["icon"] as? [String: Any])
@@ -1564,10 +1640,46 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             item.accessibilityIdentifier = id
             item.accessibilityLabel = title
             configureGlassBarButtonItem(item, id: id)
+            let dock = nativeNavigationBarButtonDock(rawItem["dock"] as? String)
+            applyBarButtonDock(dock, to: item)
+            applyBarButtonAxis(nativeNavigationBarButtonAxis(rawItem["axis"] as? String), to: item)
             navbarItemPlacement[id] = placement
             navbarItemTitle[id] = title ?? ""
-            return item
+            navbarButtonsById[id] = item
+            return NativeNavigationDockButton(
+                id: id,
+                dock: dock,
+                group: nativeNavigationDockGroup(rawItem["group"] as? String)
+            )
         }
+    }
+
+    private func makeBackDockButton(from raw: [String: Any]?) -> NativeNavigationDockButton? {
+        guard let raw, raw["visible"] as? Bool == true else {
+            return nil
+        }
+        let title = raw["title"] as? String
+        let role = raw["role"] as? String
+        let display = raw["display"] as? String
+        let isIcon = nativeNavigationBackButtonIsIcon(display: display, title: title, role: role)
+        let symbol = role == "close" ? "xmark" : "chevron.backward"
+        let item: UIBarButtonItem
+        if isIcon {
+            item = UIBarButtonItem(
+                image: UIImage(systemName: symbol),
+                style: .plain,
+                target: self,
+                action: #selector(handleNavbarBack)
+            )
+        } else {
+            item = UIBarButtonItem(title: title ?? "Back", style: .plain, target: self, action: #selector(handleNavbarBack))
+        }
+        item.accessibilityIdentifier = "back"
+        item.accessibilityLabel = nativeNavigationBackButtonAccessibilityLabel(title: title, role: role)
+        configureGlassBarButtonItem(item, id: "back")
+        navbarBackSupplements = raw["supplements"] as? Bool ?? false
+        navbarButtonsById["back"] = item
+        return NativeNavigationDockButton(id: "back", dock: "shared", group: nil)
     }
 
     private func makeTabBarItems(
@@ -2534,7 +2646,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 navBar?.isHidden = true
                 navBlurView?.isHidden = true
                 let accessoryHeight = searchHeight + segmentsHeight
-                if navbarVisible && accessoryHeight > 0 {
+                if isEnabled && navbarVisible && accessoryHeight > 0 {
                     let barWidth = max(0, width - safeInsets.left - safeInsets.right)
                     container.isHidden = false
                     container.frame = CGRect(x: safeInsets.left, y: safeInsets.top, width: barWidth, height: accessoryHeight)
@@ -2556,7 +2668,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 )
                 navBlurView?.frame = container.bounds
                 navBlurView?.isHidden = false
-                navBar?.isHidden = false
+                navBar?.isHidden = !isEnabled || !navbarVisible
                 navBar?.frame = CGRect(x: 0, y: topInset, width: width, height: visibleNavbarHeight)
                 navSearchBar?.frame = CGRect(x: 0, y: topInset + visibleNavbarHeight, width: width, height: searchHeight)
                 navSearchBar?.isHidden = searchHeight == 0
@@ -2808,6 +2920,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         let useRail = railEngaged && didWrapSystemNavigation && navbarVisible
         let modeChanged = useRail != navbarUsesSystemRail
         navbarUsesSystemRail = useRail
+        syncStackedSearchWithRail()
         let placedOnRail = useRail && (modeChanged || navbarItemsNeedPlacement)
         if placedOnRail {
             placeNavbarItemsOnSelectedContent()
@@ -2861,22 +2974,50 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             .forEach { $0.setNavigationBarHidden(true, animated: false) }
     }
 
+    /// Button search is a rail control. A horizontal bar keeps the stacked field.
+    private func syncStackedSearchWithRail() {
+        guard navbarSearchUsesButton, navbarVisible else {
+            return
+        }
+        let showStacked = !navbarUsesSystemRail
+        if showStacked, let stacked = navSearchBar, let controller = navbarSearchController, !stacked.isFirstResponder {
+            stacked.text = controller.searchBar.text
+        } else if !showStacked, let stacked = navSearchBar, let controller = navbarSearchController, !controller.searchBar.isFirstResponder {
+            controller.searchBar.text = stacked.text
+        }
+        navbarSearchVisible = showStacked
+        navSearchBar?.isHidden = !showStacked || navbarSearchHeight == 0
+    }
+
     private func refreshRailNavbarItems() {
         guard navbarUsesSystemRail else {
             return
         }
         placeNavbarItemsOnSelectedContent()
+        requestVerticalBarUpdate()
     }
 
     private func releaseStoredNavbarButtons() {
-        navBar?.topItem?.leftBarButtonItems = nil
-        navBar?.topItem?.rightBarButtonItems = nil
+        if let item = navBar?.topItem {
+            clearNavbarItemChrome(item)
+        }
         for controller in tabViewControllers {
             guard let content = nativeNavigationTabContentController(from: controller) else {
                 continue
             }
-            content.navigationItem.leftBarButtonItems = nil
-            content.navigationItem.rightBarButtonItems = nil
+            clearNavbarItemChrome(content.navigationItem)
+        }
+    }
+
+    private func clearNavbarItemChrome(_ item: UINavigationItem) {
+        item.leftBarButtonItems = nil
+        item.rightBarButtonItems = nil
+        item.leftItemsSupplementBackButton = false
+        item.searchController = nil
+        if #available(iOS 16.0, *) {
+            item.leadingItemGroups = []
+            item.trailingItemGroups = []
+            item.pinnedTrailingGroup = nil
         }
     }
 
@@ -2888,8 +3029,141 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         if #available(iOS 11.0, *) {
             item.largeTitleDisplayMode = navbarRailLarge && !navbarLargeCollapsed ? .always : .never
         }
-        item.leftBarButtonItems = navbarRailLeftItems
-        item.rightBarButtonItems = navbarRailRightItems
+        applyDockChrome(to: item)
+    }
+
+    private func applyDockChrome(to item: UINavigationItem) {
+        let partition = nativeNavigationPartitionDock(left: navbarDockLeft, right: navbarDockRight)
+        let pinned = Set(partition.pinned)
+        if #available(iOS 16.0, *) {
+            if partition.usesLeadingGroups {
+                item.leftBarButtonItems = nil
+                item.leadingItemGroups = makeItemGroups(partition.leadingGroups)
+            } else {
+                item.leadingItemGroups = []
+                item.leftBarButtonItems = barButtons(ids: partition.plainLeft.filter { !pinned.contains($0) })
+            }
+            if partition.usesTrailingGroups {
+                item.rightBarButtonItems = nil
+                item.trailingItemGroups = makeItemGroups(partition.trailingGroups)
+            } else {
+                item.trailingItemGroups = []
+                item.rightBarButtonItems = barButtons(ids: partition.plainRight.filter { !pinned.contains($0) })
+            }
+            if partition.pinned.isEmpty {
+                item.pinnedTrailingGroup = nil
+            } else {
+                let pinnedItems = barButtons(ids: partition.pinned)
+                let representative = pinnedItems.count > 1 ? actionlessRepresentative(for: pinnedItems[0]) : nil
+                item.pinnedTrailingGroup = UIBarButtonItemGroup.fixedGroup(representativeItem: representative, items: pinnedItems)
+            }
+        } else {
+            item.leftBarButtonItems = barButtons(ids: partition.plainLeft)
+            item.rightBarButtonItems = barButtons(ids: partition.plainRight)
+        }
+        item.leftItemsSupplementBackButton = navbarHasBackButton && navbarBackSupplements
+        applyVerticalBarCompression(to: item)
+        applyIntegratedSearchButton(to: item, usesTrailingGroups: partition.usesTrailingGroups)
+    }
+
+    @available(iOS 16.0, *)
+    private func makeItemGroups(_ groups: [NativeNavigationDockGroup]) -> [UIBarButtonItemGroup] {
+        groups.compactMap { group in
+            let items = barButtons(ids: group.ids)
+            guard !items.isEmpty else {
+                return nil
+            }
+            let representative = group.expandable ? actionlessRepresentative(for: items[0]) : nil
+            return UIBarButtonItemGroup.fixedGroup(representativeItem: representative, items: items)
+        }
+    }
+
+    private func barButtons(ids: [String]) -> [UIBarButtonItem] {
+        ids.compactMap { navbarButtonsById[$0] }
+    }
+
+    private func actionlessRepresentative(for item: UIBarButtonItem) -> UIBarButtonItem {
+        let copy: UIBarButtonItem
+        if let image = item.image {
+            copy = UIBarButtonItem(image: image, style: .plain, target: nil, action: nil)
+        } else {
+            copy = UIBarButtonItem(title: item.title, style: .plain, target: nil, action: nil)
+        }
+        copy.accessibilityLabel = item.accessibilityLabel
+        return copy
+    }
+
+    private func applyBarButtonDock(_ dock: String, to item: UIBarButtonItem) {
+        guard dock == "detached" else {
+            return
+        }
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            item.hidesSharedBackground = true
+            item.sharesBackground = false
+        }
+        #endif
+    }
+
+    private func applyBarButtonAxis(_ axis: String, to item: UIBarButtonItem) {
+        #if compiler(>=6.4)
+        guard #available(iOS 27.1, *) else {
+            return
+        }
+        switch axis {
+        case "horizontal":
+            item.axisBehavior = UIBarButtonItem.AxisBehavior.horizontalOnly
+        case "vertical":
+            item.axisBehavior = UIBarButtonItem.AxisBehavior.verticalPreferred
+        default:
+            break
+        }
+        #endif
+    }
+
+    private func applyVerticalBarCompression(to item: UINavigationItem) {
+        #if compiler(>=6.4)
+        guard #available(iOS 27.1, *) else {
+            return
+        }
+        switch navbarVerticalBarCompression {
+        case "preferItems":
+            item.verticalBarCompressionBehavior = UIVerticalBarCompressionBehavior.prefersBarItems
+        case "preferTabs":
+            item.verticalBarCompressionBehavior = UIVerticalBarCompressionBehavior.prefersTabBar
+        default:
+            item.verticalBarCompressionBehavior = UIVerticalBarCompressionBehavior.automatic
+        }
+        #endif
+    }
+
+    /// The placement button belongs to this navigation item. Do not reuse the
+    /// button from another item.
+    private func applyIntegratedSearchButton(to item: UINavigationItem, usesTrailingGroups: Bool) {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *), navbarSearchUsesButton, navbarUsesSystemRail {
+            let controller = ensureNavbarSearchController()
+            item.preferredSearchBarPlacement = UINavigationItem.SearchBarPlacement.integratedButton
+            item.searchController = controller
+            let button = item.searchBarPlacementBarButtonItem
+            button.hidesSharedBackground = true
+            button.sharesBackground = false
+            if usesTrailingGroups {
+                var groups = item.trailingItemGroups
+                groups.append(UIBarButtonItemGroup.fixedGroup(representativeItem: nil, items: [button]))
+                item.trailingItemGroups = groups
+            } else {
+                var right = item.rightBarButtonItems ?? []
+                if !right.contains(where: { $0 === button }) {
+                    right.append(button)
+                }
+                item.rightBarButtonItems = right
+            }
+            return
+        }
+        #endif
+        navbarSearchController?.isActive = false
+        item.searchController = nil
     }
 
     private func placeNavbarItemsOnSelectedContent() {
@@ -2922,7 +3196,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
     private func applyDuoNavbarVisibility() {
         let navigations = tabViewControllers.compactMap { $0 as? UINavigationController }
-        if navbarUsesSystemRail && navbarVisible {
+        let showRailNavbar = isEnabled && navbarUsesSystemRail && navbarVisible
+        if showRailNavbar {
             navigations.forEach { $0.setNavigationBarHidden(false, animated: false) }
             navBar?.isHidden = true
             navBlurView?.isHidden = true
@@ -2940,9 +3215,11 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         }
 
         navigations.forEach { $0.setNavigationBarHidden(true, animated: false) }
-        navBar?.isHidden = false
-        if navbarVisible {
+        navBar?.isHidden = !isEnabled || !navbarVisible
+        if isEnabled && navbarVisible {
             navContainer?.isHidden = false
+        } else if !isEnabled {
+            navContainer?.isHidden = true
         }
     }
 
