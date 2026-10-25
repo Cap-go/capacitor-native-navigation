@@ -3277,6 +3277,13 @@ public class NativeNavigationPlugin extends Plugin {
         }
         params.height = statusBarInset() + (navbarScrollCollapsed ? 0 : navbarBarHeight(navbarLargeProgress) + navbarAccessoryHeight());
         navbarContainer.setLayoutParams(params);
+        // Full layout places the search row once. These frames skip that path, so the row has to
+        // follow the large title or it stays overlapped or clipped after the animation.
+        if (navbarSearchField != null && navbarSearchField.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
+            ViewGroup.MarginLayoutParams searchParams = (ViewGroup.MarginLayoutParams) navbarSearchField.getLayoutParams();
+            searchParams.topMargin = statusBarInset() + navbarBarHeight(navbarLargeProgress) + dp(8);
+            navbarSearchField.setLayoutParams(searchParams);
+        }
         if (navbarSegments != null && navbarSegments.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
             ViewGroup.MarginLayoutParams segmentsParams = (ViewGroup.MarginLayoutParams) navbarSegments.getLayoutParams();
             segmentsParams.topMargin = statusBarInset() + navbarBarHeight(navbarLargeProgress) + navbarSearchHeight();
