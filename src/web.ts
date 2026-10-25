@@ -32,6 +32,9 @@ export class NativeNavigationWeb extends WebPlugin implements NativeNavigationPl
   private navbarScrollCollapsed = false;
   private navbarScrollSamples = new Map<string, number>();
   private navbarScrollListeners: { target: EventTarget; listener: () => void }[] = [];
+  private searchApplying = false;
+  /** Last `search.text` from `setNavbar`. Null after the row is removed. */
+  private lastSuppliedSearchText: string | null = null;
 
   async configure(options: NativeNavigationConfigureOptions = {}): Promise<NativeNavigationInsetsResult> {
     this.config = {
@@ -145,6 +148,142 @@ export class NativeNavigationWeb extends WebPlugin implements NativeNavigationPl
     return { id, direction, duration };
   }
 
+  private navbarContentHeight(): number {
+    return DEFAULT_NAVBAR_HEIGHT + this.searchRowHeight();
+  }
+
+  private searchRowHeight(): number {
+    const search = this.navbar.search;
+    if (!search || search.hidden) {
+      return 0;
+    }
+    return 52;
+  }
+
+  private tabbarEdges(): { left: number; right: number; bottom: number; cross: number } {
+    const placement = this.tabbar.style?.placement;
+    const shape = this.tabbar.style?.shape;
+    if (placement === 'sidebar' && shape !== 'curve') {
+      const rail = 96;
+      const rtl = this.tabbar.layoutDirection === 'rtl';
+      return { left: rtl ? rail : 0, right: rtl ? 0 : rail, bottom: 0, cross: rail };
+    }
+    return { left: 0, right: 0, bottom: this.currentTabbarHeight(), cross: 0 };
+  }
+
+  private ensureSearchStyles(): void {
+    if (document.getElementById('cap-native-navigation-search-style')) {
+      return;
+    }
+    const style = document.createElement('style');
+    style.id = 'cap-native-navigation-search-style';
+    style.textContent = `
+      #cap-native-navigation-search {
+        position: fixed;
+        z-index: 30;
+        display: flex;
+        align-items: center;
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        pointer-events: auto;
+      }
+      #cap-native-navigation-search input {
+        width: 100%;
+        height: 36px;
+        border: 0;
+        border-radius: 10px;
+        padding: 0 12px;
+        font: inherit;
+        font-size: 17px;
+        color-scheme: light dark;
+        color: #111827;
+        background: rgba(120, 120, 128, 0.16);
+        color: light-dark(#111827, #f8fafc);
+        background: light-dark(rgba(120, 120, 128, 0.16), rgba(120, 120, 128, 0.32));
+      }
+      #cap-native-navigation-search input:focus-visible {
+        outline: 2px solid #0a84ff;
+        outline-offset: 1px;
+      }
+    `;
+    document.head.append(style);
+  }
+
+  private syncSearchChrome(navbarHeight: number): void {
+    if (typeof document === 'undefined') {
+      return;
+    }
+    const existing = document.getElementById('cap-native-navigation-search');
+    const visible = navbarHeight > 0 && this.searchRowHeight() > 0;
+    if (!visible) {
+      existing?.remove();
+      this.lastSuppliedSearchText = null;
+      return;
+    }
+
+    this.ensureSearchStyles();
+    let form = existing;
+    if (!form) {
+      form = document.createElement('form');
+      form.id = 'cap-native-navigation-search';
+      form.setAttribute('role', 'search');
+      const input = document.createElement('input');
+      input.type = 'search';
+      input.enterKeyHint = 'search';
+      input.autocomplete = 'off';
+      input.setAttribute('aria-label', 'Search');
+      input.addEventListener('input', () => {
+        if (this.searchApplying) {
+          return;
+        }
+        this.emitSearch(input.value, 'input');
+      });
+      input.addEventListener('search', () => {
+        if (input.value === '') {
+          this.emitSearch('', 'cancel');
+        }
+      });
+      form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const field = form?.querySelector('input');
+        this.emitSearch(field?.value ?? '', 'submit');
+      });
+      form.append(input);
+      document.body.append(form);
+    }
+
+    const input = form.querySelector('input');
+    if (!input) {
+      return;
+    }
+    const search = this.navbar.search;
+    input.placeholder = search?.placeholder || 'Search';
+    input.disabled = search?.enabled === false;
+    const text = search?.text ?? '';
+    const focused = document.activeElement === input;
+    const suppliedChanged = text !== this.lastSuppliedSearchText;
+    this.lastSuppliedSearchText = text;
+    if (input.value !== text && (!focused || suppliedChanged)) {
+      this.searchApplying = true;
+      input.value = text;
+      this.searchApplying = false;
+    }
+    const row = this.searchRowHeight();
+    const tabbarVisible = this.config.enabled !== false && this.tabbar.hidden !== true;
+    const edges = tabbarVisible ? this.tabbarEdges() : { left: 0, right: 0, bottom: 0, cross: 0 };
+    form.style.top = `calc(env(safe-area-inset-top, 0px) + ${Math.max(0, navbarHeight - row)}px)`;
+    form.style.height = `${row}px`;
+    form.style.left = `${16 + edges.left}px`;
+    form.style.right = `${16 + edges.right}px`;
+  }
+
+  private emitSearch(text: string, reason: 'input' | 'submit' | 'cancel'): void {
+    const event = { text, reason };
+    this.notifyListeners('navbarSearch', event);
+    this.dispatchWindowEvent('navbarSearch', event);
+  }
+
   private currentTabbarHeight(): number {
     const style = this.tabbar.style;
     if (!style) {
@@ -242,18 +381,16 @@ export class NativeNavigationWeb extends WebPlugin implements NativeNavigationPl
     const enabled = this.config.enabled !== false;
     const navbarVisible = enabled && this.navbar.hidden !== true;
     const tabbarVisible = enabled && this.tabbar.hidden !== true;
-    const tabbarHeight = tabbarVisible ? this.currentTabbarHeight() : 0;
-    const systemTabbarHeight = tabbarHeight;
-    const navbarChromeHeight =
-      navbarVisible && !this.navbarScrollCollapsed ? DEFAULT_NAVBAR_HEIGHT : navbarVisible ? 0 : 0;
+    const navbarChromeHeight = navbarVisible && !this.navbarScrollCollapsed ? this.navbarContentHeight() : 0;
+    const tabbarEdges = tabbarVisible ? this.tabbarEdges() : { left: 0, right: 0, bottom: 0, cross: 0 };
     const insets: NativeNavigationInsets = {
-      top: navbarVisible ? (this.navbarScrollCollapsed ? 0 : DEFAULT_NAVBAR_HEIGHT) : 0,
-      right: 0,
-      bottom: tabbarHeight,
-      left: 0,
+      top: navbarChromeHeight,
+      right: tabbarEdges.right,
+      bottom: tabbarEdges.bottom,
+      left: tabbarEdges.left,
       navbarHeight: navbarChromeHeight,
-      tabbarHeight,
-      systemTabbarHeight,
+      tabbarHeight: tabbarEdges.cross || tabbarEdges.bottom,
+      systemTabbarHeight: tabbarEdges.cross || tabbarEdges.bottom,
       verticalBarEdge: null,
       reservedRegions: [],
       hinge: null,
@@ -278,6 +415,7 @@ export class NativeNavigationWeb extends WebPlugin implements NativeNavigationPl
       }
     }
 
+    this.syncSearchChrome(navbarChromeHeight);
     const event = { insets };
     this.notifyListeners('safeAreaChanged', event);
     this.dispatchWindowEvent('safeAreaChanged', event);

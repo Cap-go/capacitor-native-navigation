@@ -391,4 +391,114 @@ class NativeNavigationTests: XCTestCase {
         XCTAssertEqual(horizontal.bottom, 0)
         XCTAssertEqual(horizontal.systemTabbarHeight, 83)
     }
+
+    func testFocusedSearchKeepsKeystrokesUntilTheSuppliedTextChanges() {
+        XCTAssertFalse(
+            nativeNavigationShouldApplyNavbarSearchText(
+                focused: true,
+                fieldText: "he",
+                suppliedText: "h",
+                previousSuppliedText: "h"
+            )
+        )
+        XCTAssertTrue(
+            nativeNavigationShouldApplyNavbarSearchText(
+                focused: true,
+                fieldText: "hello",
+                suppliedText: "",
+                previousSuppliedText: "hello"
+            )
+        )
+        XCTAssertFalse(
+            nativeNavigationShouldApplyNavbarSearchText(
+                focused: true,
+                fieldText: "h",
+                suppliedText: "h",
+                previousSuppliedText: nil
+            )
+        )
+        XCTAssertTrue(
+            nativeNavigationShouldApplyNavbarSearchText(
+                focused: false,
+                fieldText: "he",
+                suppliedText: "h",
+                previousSuppliedText: "h"
+            )
+        )
+    }
+
+    func testNavbarSearchRowHeightCollapsesWithTheLargeTitle() {
+        XCTAssertEqual(
+            nativeNavigationNavbarSearchRowHeight(visible: false, hidesWhenCollapsed: true, largeCollapsed: false),
+            0
+        )
+        XCTAssertEqual(
+            nativeNavigationNavbarSearchRowHeight(visible: true, hidesWhenCollapsed: true, largeCollapsed: false),
+            52
+        )
+        XCTAssertEqual(
+            nativeNavigationNavbarSearchRowHeight(visible: true, hidesWhenCollapsed: true, largeCollapsed: true),
+            0
+        )
+        XCTAssertEqual(
+            nativeNavigationNavbarSearchRowHeight(visible: true, hidesWhenCollapsed: false, largeCollapsed: true),
+            52
+        )
+    }
+
+    func testResolvedTabbarPlacementKeepsCurveOnTheBottom() {
+        XCTAssertEqual(nativeNavigationResolvedTabbarPlacement(raw: "sidebar", shapeIsCurve: true), "bottom")
+        XCTAssertEqual(nativeNavigationResolvedTabbarPlacement(raw: "SIDEBAR", shapeIsCurve: false), "sidebar")
+        XCTAssertEqual(nativeNavigationResolvedTabbarPlacement(raw: "bottom", shapeIsCurve: false), "bottom")
+        XCTAssertEqual(nativeNavigationResolvedTabbarPlacement(raw: "nope", shapeIsCurve: false), "auto")
+        XCTAssertEqual(nativeNavigationResolvedTabbarPlacement(raw: nil, shapeIsCurve: false), "auto")
+    }
+
+    func testResolvedTabbarAlignment() {
+        XCTAssertEqual(nativeNavigationResolvedTabbarAlignment(raw: "START"), "start")
+        XCTAssertEqual(nativeNavigationResolvedTabbarAlignment(raw: "end"), "end")
+        XCTAssertEqual(nativeNavigationResolvedTabbarAlignment(raw: "middle"), "center")
+        XCTAssertEqual(nativeNavigationResolvedTabbarAlignment(raw: nil), "center")
+    }
+
+    func testFloatingBarOriginXFollowsAlignmentAndDirection() {
+        XCTAssertEqual(
+            nativeNavigationFloatingBarOriginX(containerWidth: 400, barWidth: 200, margin: 24, alignment: "center", layoutRtl: false),
+            100,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            nativeNavigationFloatingBarOriginX(containerWidth: 400, barWidth: 200, margin: 24, alignment: "start", layoutRtl: false),
+            24,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            nativeNavigationFloatingBarOriginX(containerWidth: 400, barWidth: 200, margin: 24, alignment: "end", layoutRtl: false),
+            176,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            nativeNavigationFloatingBarOriginX(containerWidth: 400, barWidth: 200, margin: 24, alignment: "start", layoutRtl: true),
+            176,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            nativeNavigationFloatingBarOriginX(containerWidth: 400, barWidth: 200, margin: 24, alignment: "end", layoutRtl: true),
+            24,
+            accuracy: 0.001
+        )
+    }
+
+    func testSidebarOriginXSitsOnTheTrailingEdge() {
+        XCTAssertEqual(
+            nativeNavigationSidebarOriginX(containerWidth: 400, railWidth: 84, margin: 12, layoutRtl: false),
+            304,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            nativeNavigationSidebarOriginX(containerWidth: 400, railWidth: 84, margin: 12, layoutRtl: true),
+            12,
+            accuracy: 0.001
+        )
+    }
 }

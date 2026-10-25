@@ -29,6 +29,31 @@ public final class TabbarLayoutSupport {
         return layoutRtl ? trailingDiameter + gap : 0;
     }
 
+    public static final int SIDEBAR_WIDTH_DP = 84;
+
+    /**
+     * Absolute left edge of a floating tab bar. `start` and `end` follow the layout direction.
+     * `margin` is the inset already used to size the bar.
+     */
+    public static int floatingBarOriginX(int containerWidth, int barWidth, int margin, String alignment, boolean layoutRtl) {
+        int remaining = Math.max(0, containerWidth - barWidth);
+        int start = Math.min(Math.max(margin, 0), remaining);
+        int end = Math.max(0, remaining - start);
+        if ("start".equals(alignment)) {
+            return layoutRtl ? end : start;
+        }
+        if ("end".equals(alignment)) {
+            return layoutRtl ? start : end;
+        }
+        return remaining / 2;
+    }
+
+    /** Absolute left edge of a trailing sidebar rail. */
+    public static int sidebarOriginX(int containerWidth, int railWidth, int margin, boolean layoutRtl) {
+        int remaining = Math.max(0, containerWidth - railWidth - margin);
+        return layoutRtl ? margin : remaining;
+    }
+
     public static int[] slotLefts(int rangeLeft, int rangeWidth, int[] childWidths, boolean layoutRtl) {
         int count = childWidths.length;
         int[] lefts = new int[count];

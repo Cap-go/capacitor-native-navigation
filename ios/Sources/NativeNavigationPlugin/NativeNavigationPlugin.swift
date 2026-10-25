@@ -24,7 +24,7 @@ private struct NativeNavigationZoomTransitionContext {
 
 // swiftlint:disable type_body_length
 @objc(NativeNavigationPlugin)
-public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarControllerDelegate, UITabBarDelegate {
+public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarControllerDelegate, UITabBarDelegate, UISearchBarDelegate {
     public let identifier = "NativeNavigationPlugin"
     public let jsName = "NativeNavigation"
     public let pluginMethods: [CAPPluginMethod] = [
@@ -44,6 +44,11 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var navBlurView: UIVisualEffectView?
     private var navBar: UINavigationBar?
     private var navSegmentsView: NativeNavigationSegmentRowsView?
+    private var navSearchBar: UISearchBar?
+    private var navbarSearchVisible = false
+    private var navbarSearchHidesWhenCollapsed = false
+    /// Last `search.text` passed to `setNavbar`. Nil after the row is hidden.
+    private var navbarSearchSuppliedText: String?
     private var tabContainer: UIView?
     private var tabEffectView: UIVisualEffectView?
     private var trailingTabEffectView: UIVisualEffectView?
@@ -107,6 +112,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var suppressTabSelectEvent = false
     private var tabSelectEmittedForReTap = false
     private var didOverrideSystemTabBarControllerSemanticContentAttribute = false
+    private var tabbarLayoutDirection: String?
     private var lastSetTabbarOptions: [String: Any] = [:]
     private var transitionSnapshot: UIView?
     private var activeTransitionId: String?
@@ -130,8 +136,17 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
     /// The iOS 26 system tab bar, unless the bar is a curve or minimizes on scroll. UIKit's own
     /// minimize cannot follow WebView scrolling, so minimize uses the plugin's glass capsule.
+    /// A requested sidebar uses the system tab bar on iOS 18+ so UIKit can place the rail.
     private var usesSystemTabBar: Bool {
-        usesSystemLiquidGlass && tabbarStyle.shape != .curve && !tabbarMinimizeOnScroll
+        if tabbarStyle.shape == .curve {
+            return false
+        }
+        if tabbarStyle.placement == "sidebar" {
+            if #available(iOS 18.0, *) {
+                return true
+            }
+        }
+        return usesSystemLiquidGlass && !tabbarMinimizeOnScroll
     }
 
     /// The capsule stands in for the iOS 26 system tab bar (minimize on scroll), so it copies the
@@ -240,6 +255,9 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             self.navbarLarge = large
 
             guard !hidden else {
+                self.navbarSearchVisible = false
+                self.navbarSearchSuppliedText = nil
+                self.navSearchBar?.isHidden = true
                 self.navContainer?.isHidden = true
                 self.navbarItemsNeedPlacement = false
                 self.hideSystemRailNavbar()
@@ -287,6 +305,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             self.navbarItemsNeedPlacement = true
             navBar.setItems([navItem], animated: animated)
             self.applyNavBarAppearance(navBar: navBar, options: call)
+            self.applyNavbarSearch(options: call)
             self.applyNavbarSegments(options: call)
             self.navContainer?.isHidden = false
             self.configureNavbarScrollBehavior(from: call)
@@ -422,7 +441,9 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                     self.lastSetTabbarOptions = options
                 }
                 self.applyTabBarAppearance(tabBar: tabBar, options: call)
-                self.applyTabBarLayoutDirection(call.getString("layoutDirection"), tabBar: tabBar)
+                self.tabbarLayoutDirection = call.getString("layoutDirection")
+                self.applySystemTabBarPlacement()
+                self.applyTabBarLayoutDirection(self.tabbarLayoutDirection, tabBar: tabBar)
                 if items.isEmpty {
                     self.tabbarVisible = false
                     self.tabbarSkipImmediateSystemReveal = false
@@ -431,6 +452,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                     self.showTabBarChrome(tabBar)
                 }
             } else {
+                self.tabbarLayoutDirection = call.getString("layoutDirection")
                 self.restoreWebViewFromSystemTabController()
                 self.tabBarController?.view.isHidden = true
                 let tabBar = self.ensureFloatingTabBar()
@@ -802,12 +824,112 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         return view.contentHeight
     }
 
+    /// Height of the stacked search row. Zero once a collapsing large title has folded it away.
+    private var navbarSearchHeight: CGFloat {
+        nativeNavigationNavbarSearchRowHeight(
+            visible: navbarSearchVisible,
+            hidesWhenCollapsed: navbarSearchHidesWhenCollapsed,
+            largeCollapsed: navbarLarge && navbarLargeCollapsed
+        )
+    }
+
+    private func applyNavbarSearch(options call: CAPPluginCall) {
+        guard let search = call.getObject("search"), search["hidden"] as? Bool != true else {
+            navbarSearchVisible = false
+            navbarSearchSuppliedText = nil
+            navSearchBar?.isHidden = true
+            navSearchBar?.text = nil
+            return
+        }
+
+        navbarSearchVisible = true
+        let large = call.getBool("large", false)
+        if let hides = search["hidesWhenCollapsed"] as? Bool {
+            navbarSearchHidesWhenCollapsed = hides
+        } else {
+            navbarSearchHidesWhenCollapsed = large
+        }
+
+        let bar = ensureNavbarSearchBar()
+        bar.placeholder = (search["placeholder"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "Search"
+        // UISearchBar.isEnabled arrived in iOS 16.4. The text field covers iOS 15.
+        let searchEnabled = search["enabled"] as? Bool ?? true
+        if #available(iOS 16.4, *) {
+            bar.isEnabled = searchEnabled
+        } else {
+            bar.searchTextField.isEnabled = searchEnabled
+            bar.isUserInteractionEnabled = searchEnabled
+        }
+        if let tint = colorValue(call.getObject("colors")?["tint"]) {
+            bar.tintColor = tint
+        }
+        let text = search["text"] as? String ?? ""
+        let applyText = nativeNavigationShouldApplyNavbarSearchText(
+            focused: bar.isFirstResponder,
+            fieldText: bar.text ?? "",
+            suppliedText: text,
+            previousSuppliedText: navbarSearchSuppliedText
+        )
+        navbarSearchSuppliedText = text
+        if applyText {
+            bar.text = text
+        }
+        bar.isHidden = navbarSearchHeight == 0
+    }
+
+    private func ensureNavbarSearchBar() -> UISearchBar {
+        if let navSearchBar {
+            return navSearchBar
+        }
+        let bar = UISearchBar()
+        bar.searchBarStyle = .minimal
+        bar.backgroundImage = UIImage()
+        bar.isTranslucent = true
+        bar.backgroundColor = .clear
+        bar.delegate = self
+        bar.autocapitalizationType = .none
+        bar.returnKeyType = .search
+        bar.showsCancelButton = false
+        navContainer?.addSubview(bar)
+        navSearchBar = bar
+        return bar
+    }
+
+    public func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+        notifyListeners("navbarSearch", data: ["text": searchText, "reason": "input"])
+    }
+
+    public func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+        searchBar.resignFirstResponder()
+        notifyListeners("navbarSearch", data: ["text": searchBar.text ?? "", "reason": "submit"])
+    }
+
+    public func searchBarCancelButtonClicked(_ searchBar: UISearchBar) {
+        notifyListeners("navbarSearch", data: ["text": "", "reason": "cancel"])
+    }
+
+    private func applySystemTabBarPlacement() {
+        guard let tabBarController else {
+            return
+        }
+        if #available(iOS 18.0, *) {
+            switch tabbarStyle.placement {
+            case "sidebar":
+                tabBarController.mode = .tabSidebar
+            case "bottom":
+                tabBarController.mode = .tabBar
+            default:
+                tabBarController.mode = .automatic
+            }
+        }
+    }
+
     public func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {
         notifyTabSelect(index: item.tag)
     }
 
     public func tabBarController(_ tabBarController: UITabBarController, shouldSelect viewController: UIViewController) -> Bool {
-        if usesSystemLiquidGlass {
+        if usesSystemTabBar {
             hostWebView(in: viewController)
         }
         tabSelectEmittedForReTap = false
@@ -963,7 +1085,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
 
     private func ensureTabBar() -> UITabBar {
-        if usesSystemLiquidGlass {
+        if usesSystemTabBar {
             return ensureSystemTabBar()
         }
 
@@ -1357,7 +1479,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
 
     private func hostWebView(in viewController: UIViewController?) {
-        guard usesSystemLiquidGlass,
+        guard usesSystemTabBar,
               let webView = webView,
               let selectedController = nativeNavigationTabContentController(from: viewController) else {
             return
@@ -1376,7 +1498,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
 
     private func liftWebViewOverlaysAboveSystemTabs() {
-        guard usesSystemLiquidGlass,
+        guard usesSystemTabBar,
               let webView = webView,
               let container = systemTabRootContainer else {
             return
@@ -1765,6 +1887,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         let cornerRadius = max(number(from: rawStyle["cornerRadius"]) ?? (isCurve ? 0 : height / 2), 0)
         let centerButtonColor = (rawStyle["centerButtonColor"] as? String).flatMap { UIColor(hexString: $0) }
         let centerButtonIconColor = (rawStyle["centerButtonIconColor"] as? String).flatMap { UIColor(hexString: $0) } ?? .white
+        let placement = nativeNavigationResolvedTabbarPlacement(raw: rawStyle["placement"] as? String, shapeIsCurve: isCurve)
+        let alignment = nativeNavigationResolvedTabbarAlignment(raw: rawStyle["alignment"] as? String)
 
         return NativeNavigationTabbarStyleConfig(
             shape: shape,
@@ -1777,7 +1901,9 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             centerButtonDiameter: centerDiameter,
             centerButtonLift: centerLift,
             centerButtonColor: centerButtonColor,
-            centerButtonIconColor: centerButtonIconColor
+            centerButtonIconColor: centerButtonIconColor,
+            alignment: alignment,
+            placement: placement
         )
     }
     /// Title with a subtitle line under it, for iOS versions without `UINavigationItem.subtitle`.
@@ -2256,11 +2382,15 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             return
         }
         navbarLargeCollapsed = collapsed
+        navSearchBar?.isHidden = navbarSearchHeight == 0
         UIView.animate(withDuration: 0.3, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction]) {
             navBar.prefersLargeTitles = !collapsed
             navBar.topItem?.largeTitleDisplayMode = collapsed ? .never : .always
             self.layoutChrome()
             navBar.layoutIfNeeded()
+        }
+        if navbarSearchVisible && navbarSearchHidesWhenCollapsed {
+            updateInsetsAndNotify()
         }
         applyNavbarEdgeBlur(navbarHeight: currentInsets()["navbarHeight"] as? CGFloat ?? 0)
     }
@@ -2347,7 +2477,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             return
         }
 
-        let hideDistance = navbarHeight + navbarSegmentsHeight
+        let hideDistance = navbarHeight + navbarSearchHeight + navbarSegmentsHeight
         let updates = {
             if self.navbarScrollCollapsed {
                 container.transform = CGAffineTransform(translationX: 0, y: -hideDistance)
@@ -2396,28 +2526,46 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         syncDuoRailChrome(rail: cachedRail)
 
         if let container = navContainer {
+            let searchHeight = navbarSearchHeight
             let segmentsHeight = navbarSegmentsHeight
             if navbarUsesSystemRail {
-                // The title and buttons live in the rail. Segment rows are a custom
-                // view, so they stay horizontal and clear the rail.
+                // The title and buttons live in the rail. Search and segment rows are custom
+                // views, so they stay horizontal and clear the rail.
                 navBar?.isHidden = true
                 navBlurView?.isHidden = true
-                if navbarVisible && segmentsHeight > 0 {
+                let accessoryHeight = searchHeight + segmentsHeight
+                if navbarVisible && accessoryHeight > 0 {
                     let barWidth = max(0, width - safeInsets.left - safeInsets.right)
                     container.isHidden = false
-                    container.frame = CGRect(x: safeInsets.left, y: safeInsets.top, width: barWidth, height: segmentsHeight)
-                    navSegmentsView?.frame = container.bounds
+                    container.frame = CGRect(x: safeInsets.left, y: safeInsets.top, width: barWidth, height: accessoryHeight)
+                    navSearchBar?.frame = CGRect(x: 0, y: 0, width: barWidth, height: searchHeight)
+                    navSearchBar?.isHidden = searchHeight == 0
+                    navSegmentsView?.frame = CGRect(x: 0, y: searchHeight, width: barWidth, height: segmentsHeight)
                 } else {
                     container.isHidden = true
+                    navSearchBar?.isHidden = true
                 }
             } else {
                 let topInset = navbarTopInset(safeInsets)
                 let visibleNavbarHeight = navbarLarge && navbarLargeCollapsed ? 44 : navbarHeight
-                container.frame = CGRect(x: 0, y: 0, width: width, height: topInset + visibleNavbarHeight + segmentsHeight)
+                container.frame = CGRect(
+                    x: 0,
+                    y: 0,
+                    width: width,
+                    height: topInset + visibleNavbarHeight + searchHeight + segmentsHeight
+                )
                 navBlurView?.frame = container.bounds
+                navBlurView?.isHidden = false
                 navBar?.isHidden = false
                 navBar?.frame = CGRect(x: 0, y: topInset, width: width, height: visibleNavbarHeight)
-                navSegmentsView?.frame = CGRect(x: 0, y: topInset + visibleNavbarHeight, width: width, height: segmentsHeight)
+                navSearchBar?.frame = CGRect(x: 0, y: topInset + visibleNavbarHeight, width: width, height: searchHeight)
+                navSearchBar?.isHidden = searchHeight == 0
+                navSegmentsView?.frame = CGRect(
+                    x: 0,
+                    y: topInset + visibleNavbarHeight + searchHeight,
+                    width: width,
+                    height: segmentsHeight
+                )
                 // The bar isn't hosted by a UINavigationController, so it starts with 8pt margins and the
                 // large title sits off the system content margin. Match the hosting controller's margins.
                 if let margins = bridge?.viewController?.systemMinimumLayoutMargins {
@@ -2446,7 +2594,13 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             let contentHeight = (systemLook ? Self.systemLookBarHeight : tabbarStyle.height) - 16 * minimizeProgress
             let barTop = tabbarStyle.shape == .curve ? tabbarStyle.centerButtonLift : 0
             let totalHeight = contentHeight + barTop
-            let originX = safeInsets.left + (safeSpan - tabbarWidth) / 2
+            let originX = safeInsets.left + nativeNavigationFloatingBarOriginX(
+                containerWidth: safeSpan,
+                barWidth: tabbarWidth,
+                margin: horizontalMargin + minimizedSideInset,
+                alignment: tabbarStyle.alignment,
+                layoutRtl: tabbarLayoutDirection == "rtl"
+            )
             // Keep the home-indicator fill inside the screen. The previous origin
             // pushed that extension below the bezel and left labels on the edge.
             let originY = systemLook
@@ -2772,7 +2926,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             navigations.forEach { $0.setNavigationBarHidden(false, animated: false) }
             navBar?.isHidden = true
             navBlurView?.isHidden = true
-            navContainer?.isHidden = navbarSegmentsHeight == 0
+            navContainer?.isHidden = navbarSearchHeight == 0 && navbarSegmentsHeight == 0
             if let source = navBar {
                 for navigation in navigations {
                     let bar = navigation.navigationBar
@@ -2901,12 +3055,12 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         let rootView = bridge?.viewController?.view
         let safeInsets = rootView?.safeAreaInsets ?? .zero
         let rootWidth = rootView?.bounds.width ?? 0
-        // In the rail the title is not a top bar. Only custom segment rows still
+        // In the rail the title is not a top bar. Search and segment rows still
         // occupy the top of the WebView.
         let topInset = navbarUsesSystemRail ? 0 : navbarTopInset(safeInsets)
         let barHeight: CGFloat = navbarUsesSystemRail
-            ? navbarSegmentsHeight
-            : (navbarScrollCollapsed ? 0 : navbarHeight + navbarSegmentsHeight)
+            ? navbarSearchHeight + navbarSegmentsHeight
+            : (navbarScrollCollapsed ? 0 : navbarHeight + navbarSearchHeight + navbarSegmentsHeight)
         let navHeight = isEnabled && navbarVisible ? barHeight + topInset : 0
         let usesSystemTabbar = usesSystemTabBar
         let nativeTabHeight = max(tabBar?.frame.height ?? 0, 49 + safeInsets.bottom)
@@ -3229,6 +3383,8 @@ private struct NativeNavigationTabbarStyleConfig {
     var centerButtonLift: CGFloat = 28
     var centerButtonColor: UIColor?
     var centerButtonIconColor: UIColor = .white
+    var alignment: String = "center"
+    var placement: String = "auto"
 
     var barTop: CGFloat {
         shape == .curve ? centerButtonLift : 0

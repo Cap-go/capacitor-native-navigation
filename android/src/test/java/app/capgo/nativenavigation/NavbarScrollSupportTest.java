@@ -1,6 +1,8 @@
 package app.capgo.nativenavigation;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
@@ -37,6 +39,22 @@ public class NavbarScrollSupportTest {
         assertEquals(
             NavbarScrollSupport.ScrollAction.NONE,
             NavbarScrollSupport.scrollAction(NavbarScrollSupport.ScrollBehavior.REVEAL_ON_SCROLL_UP, 120f, 20f, 8f, false)
+        );
+    }
+
+    @Test
+    public void collapsingSearchObservesScrollWithoutANavbarHideBehavior() {
+        assertTrue(
+            NavbarScrollSupport.shouldObserveScroll(NavbarScrollSupport.ScrollBehavior.NONE, true, true, true, true)
+        );
+        assertFalse(
+            NavbarScrollSupport.shouldObserveScroll(NavbarScrollSupport.ScrollBehavior.NONE, true, true, true, false)
+        );
+        assertFalse(
+            NavbarScrollSupport.shouldObserveScroll(NavbarScrollSupport.ScrollBehavior.NONE, false, true, true, true)
+        );
+        assertTrue(
+            NavbarScrollSupport.shouldObserveScroll(NavbarScrollSupport.ScrollBehavior.BOTH, true, false, false, false)
         );
     }
 }
