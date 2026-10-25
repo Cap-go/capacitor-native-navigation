@@ -310,6 +310,88 @@ class NativeNavigationTests: XCTestCase {
         XCTAssertEqual(path.bounds.width, 16, accuracy: 0.05)
     }
 
+    func testVerticalRailDetectsTheShortSide() {
+        let horizontal = nativeNavigationVerticalRail(
+            tabBarFrame: CGRect(x: 0, y: 700, width: 390, height: 83),
+            containerWidth: 390
+        )
+        XCTAssertFalse(horizontal.isVertical)
+        XCTAssertEqual(horizontal.width, 0)
+
+        let trailing = nativeNavigationVerticalRail(
+            tabBarFrame: CGRect(x: 720, y: 0, width: 84, height: 390),
+            containerWidth: 804
+        )
+        XCTAssertTrue(trailing.isVertical)
+        XCTAssertFalse(trailing.onLeft)
+        XCTAssertEqual(trailing.width, 84)
+
+        let leading = nativeNavigationVerticalRail(
+            tabBarFrame: CGRect(x: 0, y: 0, width: 84, height: 390),
+            containerWidth: 804
+        )
+        XCTAssertTrue(leading.onLeft)
+    }
+
+    func testVerticalBarEdgeFollowsLayoutDirection() {
+        XCTAssertEqual(nativeNavigationVerticalBarEdge(railOnLeft: false, layoutRtl: false), "trailing")
+        XCTAssertEqual(nativeNavigationVerticalBarEdge(railOnLeft: true, layoutRtl: false), "leading")
+        XCTAssertEqual(nativeNavigationVerticalBarEdge(railOnLeft: false, layoutRtl: true), "leading")
+        XCTAssertEqual(nativeNavigationVerticalBarEdge(railOnLeft: true, layoutRtl: true), "trailing")
+        let idleRail = NativeNavigationVerticalRail(isVertical: false, onLeft: false, width: 0)
+        let traitEdge = nativeNavigationResolvedVerticalBarEdge(traitEdge: "leading", rail: idleRail, layoutRtl: false)
+        XCTAssertEqual(traitEdge, "leading")
+        let unspecified = nativeNavigationResolvedVerticalBarEdge(traitEdge: nil, rail: idleRail, layoutRtl: false)
+        XCTAssertNil(unspecified)
+    }
+
+    func testDuoEdgeInsetsDoNotDoubleCountAHostedRail() {
+        let rail = NativeNavigationVerticalRail(isVertical: true, onLeft: false, width: 84)
+        let hosted = nativeNavigationDuoEdgeInsets(
+            rootSafe: UIEdgeInsets(top: 0, left: 0, bottom: 21, right: 84),
+            contentSafe: UIEdgeInsets(top: 0, left: 0, bottom: 12, right: 0),
+            rootWidth: 804,
+            contentWidth: 720,
+            rail: rail,
+            hosted: true,
+            horizontalTabbarHeight: 390,
+            horizontalSystemTabbarHeight: 390
+        )
+        XCTAssertEqual(hosted.left, 0)
+        XCTAssertEqual(hosted.right, 0)
+        XCTAssertEqual(hosted.bottom, 12)
+        XCTAssertEqual(hosted.tabbarHeight, 0)
+        XCTAssertEqual(hosted.systemTabbarHeight, 84)
+
+        let fullBleed = nativeNavigationDuoEdgeInsets(
+            rootSafe: UIEdgeInsets(top: 0, left: 0, bottom: 21, right: 0),
+            contentSafe: .zero,
+            rootWidth: 804,
+            contentWidth: 804,
+            rail: rail,
+            hosted: true,
+            horizontalTabbarHeight: 83,
+            horizontalSystemTabbarHeight: 83
+        )
+        XCTAssertEqual(fullBleed.right, 84)
+        XCTAssertEqual(fullBleed.tabbarHeight, 0)
+
+        let horizontal = nativeNavigationDuoEdgeInsets(
+            rootSafe: UIEdgeInsets(top: 59, left: 0, bottom: 34, right: 0),
+            contentSafe: .zero,
+            rootWidth: 390,
+            contentWidth: 390,
+            rail: NativeNavigationVerticalRail(isVertical: false, onLeft: false, width: 0),
+            hosted: true,
+            horizontalTabbarHeight: 0,
+            horizontalSystemTabbarHeight: 83
+        )
+        XCTAssertEqual(horizontal.left, 0)
+        XCTAssertEqual(horizontal.right, 0)
+        XCTAssertEqual(horizontal.bottom, 0)
+        XCTAssertEqual(horizontal.systemTabbarHeight, 83)
+    }
+
     func testFocusedSearchKeepsKeystrokesUntilTheSuppliedTextChanges() {
         XCTAssertFalse(
             nativeNavigationShouldApplyNavbarSearchText(
@@ -418,5 +500,49 @@ class NativeNavigationTests: XCTestCase {
             12,
             accuracy: 0.001
         )
+    }
+
+    func testBackButtonJoinsTheRailOnlyAsAnIcon() {
+        XCTAssertFalse(nativeNavigationBackButtonIsIcon(display: nil, title: nil, role: nil))
+        XCTAssertFalse(nativeNavigationBackButtonIsIcon(display: nil, title: "Back", role: "back"))
+        XCTAssertTrue(nativeNavigationBackButtonIsIcon(display: nil, title: "", role: "back"))
+        XCTAssertTrue(nativeNavigationBackButtonIsIcon(display: "icon", title: "Back", role: "back"))
+        XCTAssertFalse(nativeNavigationBackButtonIsIcon(display: "title", title: "", role: "close"))
+        XCTAssertTrue(nativeNavigationBackButtonIsIcon(display: nil, title: "Close", role: "close"))
+        XCTAssertEqual(nativeNavigationBackButtonAccessibilityLabel(title: nil, role: "close"), "Close")
+        XCTAssertEqual(nativeNavigationBackButtonAccessibilityLabel(title: "", role: "back"), "Back")
+        XCTAssertEqual(nativeNavigationBackButtonAccessibilityLabel(title: "Notes", role: "close"), "Notes")
+    }
+
+    func testDockPartitionKeepsSharedItemsAndCollapsesGroups() {
+        let left = [
+            NativeNavigationDockButton(id: "back", dock: "shared", group: nil),
+            NativeNavigationDockButton(id: "reply", dock: "shared", group: "message"),
+            NativeNavigationDockButton(id: "forward", dock: "shared", group: "message")
+        ]
+        let right = [
+            NativeNavigationDockButton(id: "done", dock: "prominent", group: nil),
+            NativeNavigationDockButton(id: "search", dock: "detached", group: "message"),
+            NativeNavigationDockButton(id: "solo", dock: "shared", group: "alone")
+        ]
+        let partition = nativeNavigationPartitionDock(left: left, right: right)
+
+        XCTAssertEqual(partition.plainLeft, ["back", "reply", "forward"])
+        XCTAssertEqual(partition.plainRight, ["done", "search", "solo"])
+        XCTAssertEqual(partition.pinned, ["done"])
+        XCTAssertTrue(partition.usesLeadingGroups)
+        XCTAssertFalse(partition.usesTrailingGroups)
+        XCTAssertEqual(partition.leadingGroups.map(\.ids), [["back"], ["reply", "forward"]])
+        XCTAssertEqual(partition.leadingGroups.map(\.expandable), [false, true])
+        XCTAssertEqual(partition.trailingGroups.map(\.ids), [["search"], ["solo"]])
+        XCTAssertEqual(nativeNavigationDockGroup("  "), nil)
+        XCTAssertEqual(nativeNavigationBarButtonDock("nope"), "shared")
+        XCTAssertEqual(nativeNavigationBarButtonAxis("vertical"), "vertical")
+        XCTAssertEqual(nativeNavigationVerticalBarCompression(nil), "automatic")
+        XCTAssertEqual(nativeNavigationVerticalBarCompression("preferItems"), "preferItems")
+        XCTAssertEqual(nativeNavigationVerticalBarCompression("preferTabs"), "preferTabs")
+        XCTAssertFalse(nativeNavigationSearchPlacementIsButton(nil))
+        XCTAssertFalse(nativeNavigationSearchPlacementIsButton("stacked"))
+        XCTAssertTrue(nativeNavigationSearchPlacementIsButton("button"))
     }
 }

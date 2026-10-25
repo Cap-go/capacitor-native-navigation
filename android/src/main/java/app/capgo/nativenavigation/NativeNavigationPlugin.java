@@ -262,9 +262,22 @@ public class NativeNavigationPlugin extends Plugin {
 
             JSObject backButton = call.getObject("backButton", null);
             if (backButton != null && Boolean.TRUE.equals(backButton.getBool("visible"))) {
-                nativeToolbar.setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material);
-                nativeToolbar.setNavigationContentDescription(backButton.getString("title", "Back"));
+                boolean close = "close".equals(backButton.getString("role", "back"));
+                String provided = backButton.getString("title", null);
+                if (provided == null || provided.isEmpty()) {
+                    provided = close ? "Close" : "Back";
+                }
+                // Android has no vertical dock. Close uses the clear icon; search `placement: button` stays stacked.
+                nativeToolbar.setNavigationIcon(
+                    close
+                        ? androidx.appcompat.R.drawable.abc_ic_clear_material
+                        : androidx.appcompat.R.drawable.abc_ic_ab_back_material
+                );
+                nativeToolbar.setNavigationContentDescription(provided);
                 nativeToolbar.setNavigationOnClickListener((v) -> notifyListeners("navbarBack", new JSObject().put("source", "navbar")));
+                if (Boolean.TRUE.equals(backButton.getBool("supplements"))) {
+                    addToolbarItems(nativeToolbar, call.getArray("leftItems", new JSArray()), "left");
+                }
             } else {
                 nativeToolbar.setNavigationIcon(null);
                 nativeToolbar.setNavigationOnClickListener(null);
@@ -3115,6 +3128,9 @@ public class NativeNavigationPlugin extends Plugin {
             "root.style.setProperty('--cap-native-system-tabbar-height','" +
             insets.getInteger("systemTabbarHeight", 0) +
             "px');" +
+            "root.style.setProperty('--cap-native-navigation-vertical-bar-edge','');" +
+            "root.style.setProperty('--cap-native-navigation-division-x','0px');" +
+            "root.style.setProperty('--cap-native-navigation-division-width','0px');" +
             "window.dispatchEvent(new CustomEvent('capNativeNavigation:safeAreaChanged',{detail:{insets:" +
             insets.toString() +
             "}}));" +
@@ -3346,6 +3362,9 @@ public class NativeNavigationPlugin extends Plugin {
         insets.put("navbarHeight", cssPx(top));
         insets.put("tabbarHeight", cssPx(sidebar ? rail : bottom));
         insets.put("systemTabbarHeight", cssPx(sidebar ? rail : bottom));
+        insets.put("verticalBarEdge", JSONObject.NULL);
+        insets.put("reservedRegions", new JSONArray());
+        insets.put("hinge", JSONObject.NULL);
         return insets;
     }
 

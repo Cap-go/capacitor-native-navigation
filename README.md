@@ -22,7 +22,7 @@
 
 Native navbar, tab bar, safe-area handling, and WebView snapshot transitions for Capacitor apps. Your web framework keeps routing and page rendering while this plugin owns the platform surfaces: a search field under the large title, a tab bar aligned to the start, center, or end, and a trailing sidebar rail.
 
-**iOS 27 and iPhone Duo.** System tab bars, Liquid Glass, and the curved center button follow the window when a Duo folds and unfolds. `style.placement: 'sidebar'` asks for that trailing rail on iOS 18 and newer. `style.alignment` places a floating bar on the start, center, or end.
+**iOS 27 and iPhone Duo.** On iPhone Duo, iOS moves the status bar and the system tab bar into one vertical rail on the folded outer display and on the open display in landscape. Open portrait keeps the horizontal bars. Navbar icon buttons join that rail, and the title stays horizontal. A back or close icon sits at the top. Search can be a detached button, prominent actions stay pinned, and buttons that share a `group` collapse into one control that expands. The curved center bar stays on the bottom. `configure({ verticalBarBehavior: 'disabled' })` keeps the horizontal bars for a screen that should not use the rail.
 
 ## Demo
 
@@ -38,16 +38,53 @@ The Android captures come from [Mimesis](https://github.com/Cap-go/mimesis) on A
 
 ### iPhone Duo
 
-Folded or open, iOS places the system tab bar as a vertical rail on the trailing edge. The curved center bar stays on the bottom, and its cradle stays a circle around the button when the window widens.
+Folded, and open in landscape, the system tab bar becomes a vertical rail. Open portrait stays a horizontal bar. Split View puts each window's rail on the outer edge. The rail stays on the camera's physical edge, so the semantic edge is trailing in landscape and can be leading or trailing in Split View and in right-to-left layout. The curved center bar stays on the bottom, and its cradle stays a circle around the button when the window widens.
 
-| Folded, center                                                                                                                                          | Open, center                                                                                                                                      | Open, system                                                                                                                               | Folded, system                                                                                                                    |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| <img src="./docs/iphone-duo-folded-center.webp" alt="iPhone Duo folded with a curved bottom tab bar and a circular center camera button" width="160" /> | <img src="./docs/iphone-duo-open-center.webp" alt="iPhone Duo open with the curved center camera button keeping a circular cradle" width="220" /> | <img src="./docs/iphone-duo-open-system.webp" alt="iPhone Duo open in landscape with the system tab bar as a vertical rail" width="220" /> | <img src="./docs/iphone-duo-folded-system.webp" alt="iPhone Duo folded with the system tab bar as a vertical rail" width="160" /> |
+Icon buttons from the navbar join that rail. A text title stays horizontal, so a back control needs `display: 'icon'` (or `role: 'close'`) before it sits at the top of the rail. `dock: 'detached'` draws a button on its own. `dock: 'prominent'` pins it past overflow and search. `axis: 'vertical'` puts a text button such as Done on the rail. Items that share `group` collapse to the first item, and the system expands the rest. `search.placement: 'button'` is a detached search button on the iPhone Duo rail in iOS 26 and later. A horizontal navbar, Android, and web keep the stacked field. `verticalBarCompression: 'preferItems'` keeps navbar buttons when the rail runs out of room. Segment rows stay horizontal and clear the rail. Curve and other custom capsules stay on the bottom, and the center button stays a circle. `configure({ verticalBarBehavior: 'disabled' })` opts that screen out and keeps the top and bottom bars. Omitting `verticalBarBehavior` later keeps the current choice. `safeAreaChanged` reports `verticalBarEdge`, fold `reservedRegions`, and the latest hinge sample. `verticalBarChanged` and `hingeChanged` fire when those change.
+
+```ts
+await NativeNavigation.configure({ verticalBarBehavior: 'automatic' });
+
+await NativeNavigation.setNavbar({
+  title: 'Notes',
+  verticalBarCompression: 'preferItems',
+  backButton: { visible: true, title: 'Back', display: 'icon' },
+  rightItems: [
+    { id: 'done', title: 'Done', dock: 'prominent', axis: 'vertical' },
+    { id: 'reply', title: 'Reply', icon: { ios: { sfSymbol: 'arrowshape.turn.up.left' } }, group: 'message' },
+    { id: 'forward', title: 'Forward', icon: { ios: { sfSymbol: 'arrowshape.turn.up.right' } }, group: 'message' },
+  ],
+  search: { placement: 'button', placeholder: 'Search' },
+});
+```
+
+```css
+.page {
+  padding-inline-start: var(--cap-native-navigation-left);
+  padding-inline-end: var(--cap-native-navigation-right);
+}
+```
+
+`--cap-native-navigation-division-x` and `--cap-native-navigation-division-width` mark the fold so a web layout can split around it. The plugin still uses one WebView. On a phone with no rail those inset variables are `0px`.
+
+Captured on the iPhone Duo simulator in iOS 27.1.
+
+| Folded, center                                                                                                                                                         | Open, center                                                                                                                                                              | Open, system                                                                                                                                                                                | Folded, system                                                                                                                                                                              |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <img src="./docs/iphone-duo-folded-center.webp" alt="iPhone Duo simulator, folded: curved tab bar and a circular camera button stay on the bottom" width="160" />     | <img src="./docs/iphone-duo-open-center.webp" alt="iPhone Duo simulator, open in landscape: the camera button stays a circle on the bottom bar" width="220" />            | <img src="./docs/iphone-duo-open-system.webp" alt="iPhone Duo simulator, open in landscape: system tab bar and navbar compose button in the vertical rail" width="220" />                  | <img src="./docs/iphone-duo-folded-system.webp" alt="iPhone Duo simulator, folded: system tab bar and navbar compose button in the vertical rail" width="160" />                            |
 
 <img
-  src="./docs/iphone-duo-unfold.webp"
-  alt="iPhone Duo unfolding while the center camera cradle stays a circle around the button"
-  width="280"
+  src="./docs/iphone-duo-open-portrait.webp"
+  alt="iPhone Duo simulator, open in portrait: navbar and system tab bar stay horizontal"
+  width="220"
+/>
+
+Open landscape with the navbar controls in the rail. The back icon sits under the status items, Done is a prominent text button, reply and forward share one group, and search is a detached button. The system tabs stay at the bottom of the rail.
+
+<img
+  src="./docs/iphone-duo-open-dock.webp"
+  alt="iPhone Duo simulator, open in landscape: back icon, prominent Done, grouped reply and forward, and a detached search button in the vertical rail"
+  width="220"
 />
 
 ### Navbar segment rows
@@ -85,6 +122,7 @@ NativeNavigation.addListener('pullToRefresh', async () => {
 - Capture WebView snapshots for native-feeling push, back, root, tab, and zoom transitions.
 - Configure tab labels, selected icons, badges, indicators, ripples, tint colors, and dynamic colors.
 - Write CSS inset variables so web content can scroll behind native bars without being hidden.
+- On iPhone Duo, follow the system vertical rail: navbar items join it, safe areas clear it, and a screen can opt out.
 - Stack multi-level native segment rows under the navbar (scope switcher plus section tabs) with `setNavbar({ segments })`.
 - Opt into native pull-to-refresh (system spinner and haptic on iOS, `SwipeRefreshLayout` on Android) with `setPullToRefresh()`.
 - Hide the navbar and tabbar while a web modal, sheet, or popover is open. An animated tabbar hide keeps the iOS tab controller and WebView in place.
@@ -584,7 +622,9 @@ Available variables:
 - `--cap-native-navigation-left`
 - `--cap-native-navbar-height`
 - `--cap-native-tabbar-height`
-- `--cap-native-system-tabbar-height` (nominal tab bar height; use on iOS when `--cap-native-tabbar-height` is `0` for hosted system bars)
+- `--cap-native-system-tabbar-height` (nominal tab bar height; use on iOS when `--cap-native-tabbar-height` is `0` for hosted system bars). On an iPhone Duo rail this is the rail thickness, and the overlap is `--cap-native-navigation-left` or `--cap-native-navigation-right`.
+- `--cap-native-navigation-vertical-bar-edge` (`leading`, `trailing`, or empty)
+- `--cap-native-navigation-division-x` and `--cap-native-navigation-division-width` (the fold, or `0px`)
 
 ## Web Components
 
@@ -674,6 +714,8 @@ npx cap sync
 * [`addListener('navbarSegmentSelect', ...)`](#addlistenernavbarsegmentselect-)
 * [`addListener('tabSelect', ...)`](#addlistenertabselect-)
 * [`addListener('safeAreaChanged', ...)`](#addlistenersafeareachanged-)
+* [`addListener('verticalBarChanged', ...)`](#addlistenerverticalbarchanged-)
+* [`addListener('hingeChanged', ...)`](#addlistenerhingechanged-)
 * [`addListener('transitionStart', ...)`](#addlistenertransitionstart-)
 * [`addListener('transitionEnd', ...)`](#addlistenertransitionend-)
 * [`addListener('pullToRefresh', ...)`](#addlistenerpulltorefresh-)
@@ -939,6 +981,48 @@ addListener(eventName: 'safeAreaChanged', listenerFunc: (event: NativeNavigation
 --------------------
 
 
+### addListener('verticalBarChanged', ...)
+
+```typescript
+addListener(eventName: 'verticalBarChanged', listenerFunc: (event: NativeNavigationVerticalBarChangedEvent) => void) => Promise<PluginListenerHandle>
+```
+
+Fired when the iPhone Duo vertical rail appears, disappears, or changes
+edge. `safeAreaChanged` carries the same edge on every inset update.
+
+| Param              | Type                                                                                                                            |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| **`eventName`**    | <code>'verticalBarChanged'</code>                                                                                               |
+| **`listenerFunc`** | <code>(event: <a href="#nativenavigationverticalbarchangedevent">NativeNavigationVerticalBarChangedEvent</a>) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+**Since:** 8.14.0
+
+--------------------
+
+
+### addListener('hingeChanged', ...)
+
+```typescript
+addListener(eventName: 'hingeChanged', listenerFunc: (event: NativeNavigationHingeChangedEvent) => void) => Promise<PluginListenerHandle>
+```
+
+Fired when the iPhone Duo hinge changes, or when hinge updates stop.
+Prefer `hinge.status` over `hinge.angle` when a coarse pose is enough.
+
+| Param              | Type                                                                                                                |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| **`eventName`**    | <code>'hingeChanged'</code>                                                                                         |
+| **`listenerFunc`** | <code>(event: <a href="#nativenavigationhingechangedevent">NativeNavigationHingeChangedEvent</a>) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+**Since:** 8.14.0
+
+--------------------
+
+
 ### addListener('transitionStart', ...)
 
 ```typescript
@@ -1008,29 +1092,57 @@ Returned by methods that may change safe content bounds.
 
 Insets exposed to web content.
 
-| Prop                     | Type                | Description                                                                                                                                                                                                  |
-| ------------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **`top`**                | <code>number</code> |                                                                                                                                                                                                              |
-| **`right`**              | <code>number</code> |                                                                                                                                                                                                              |
-| **`bottom`**             | <code>number</code> |                                                                                                                                                                                                              |
-| **`left`**               | <code>number</code> |                                                                                                                                                                                                              |
-| **`navbarHeight`**       | <code>number</code> |                                                                                                                                                                                                              |
-| **`tabbarHeight`**       | <code>number</code> | Bottom overlap inset for web layout when the WebView does not already reserve space for the native tab bar. On iOS 26+ with a system-hosted tab bar this stays `0` so content is not lifted twice.           |
-| **`systemTabbarHeight`** | <code>number</code> | Nominal native tab bar height (bar plus home-indicator padding on iOS) even when `tabbarHeight` is `0`. Stays available while the tab bar is soft-hidden with `setTabbar({ hidden: true, animated: true })`. |
+| Prop                     | Type                                                                                                | Description                                                                                                                                                                                                                                                              | Since  |
+| ------------------------ | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
+| **`top`**                | <code>number</code>                                                                                 |                                                                                                                                                                                                                                                                          |        |
+| **`right`**              | <code>number</code>                                                                                 |                                                                                                                                                                                                                                                                          |        |
+| **`bottom`**             | <code>number</code>                                                                                 |                                                                                                                                                                                                                                                                          |        |
+| **`left`**               | <code>number</code>                                                                                 |                                                                                                                                                                                                                                                                          |        |
+| **`navbarHeight`**       | <code>number</code>                                                                                 |                                                                                                                                                                                                                                                                          |        |
+| **`tabbarHeight`**       | <code>number</code>                                                                                 | Bottom overlap inset for web layout when the WebView does not already reserve space for the native tab bar. On iOS 26+ with a system-hosted tab bar this stays `0` so content is not lifted twice.                                                                       |        |
+| **`systemTabbarHeight`** | <code>number</code>                                                                                 | Nominal native tab bar height (bar plus home-indicator padding on iOS) even when `tabbarHeight` is `0`. Stays available while the tab bar is soft-hidden with `setTabbar({ hidden: true, animated: true })`.                                                             |        |
+| **`verticalBarEdge`**    | <code><a href="#nativenavigationverticalbaredge">NativeNavigationVerticalBarEdge</a> \| null</code> | Semantic edge of the vertical rail, or `null` when the bars are horizontal. On a rail, `left` or `right` carries the rail thickness and `tabbarHeight` stays `0` when the WebView is already beside it. `systemTabbarHeight` is that thickness rather than a bottom bar. | 8.14.0 |
+| **`reservedRegions`**    | <code>NativeNavigationReservedRegion[]</code>                                                       | Fold and occlusion rectangles reported by iOS, in the root view's points. Empty when the device has no reserved regions.                                                                                                                                                 | 8.14.0 |
+| **`hinge`**              | <code><a href="#nativenavigationhinge">NativeNavigationHinge</a> \| null</code>                     | Latest hinge sample. `null` when the device has no hinge. Angle updates are delivered on `hingeChanged` and are not pushed through this snapshot on every tick.                                                                                                          | 8.14.0 |
+
+
+#### NativeNavigationReservedRegion
+
+A region iOS reserves inside the window, such as the fold or an occlusion.
+
+| Prop         | Type                                   |
+| ------------ | -------------------------------------- |
+| **`kind`**   | <code>'division' \| 'occlusion'</code> |
+| **`x`**      | <code>number</code>                    |
+| **`y`**      | <code>number</code>                    |
+| **`width`**  | <code>number</code>                    |
+| **`height`** | <code>number</code>                    |
+| **`active`** | <code>boolean</code>                   |
+
+
+#### NativeNavigationHinge
+
+iPhone Duo hinge sample. `angle` is radians.
+
+| Prop         | Type                                                                 |
+| ------------ | -------------------------------------------------------------------- |
+| **`angle`**  | <code>number</code>                                                  |
+| **`status`** | <code>'unknown' \| 'closed' \| 'partiallyOpen' \| 'fullyOpen'</code> |
 
 
 #### NativeNavigationConfigureOptions
 
 Global plugin configuration.
 
-| Prop                    | Type                                                                                          | Description                                                                |
-| ----------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| **`enabled`**           | <code>boolean</code>                                                                          | Enables or disables the native chrome host.                                |
-| **`platformStyle`**     | <code><a href="#nativenavigationplatformstyle">NativeNavigationPlatformStyle</a></code>       | Native style preference. `auto` uses the current platform.                 |
-| **`contentInsetMode`**  | <code><a href="#nativenavigationcontentinsetmode">NativeNavigationContentInsetMode</a></code> | When `css`, the plugin writes CSS variables on `document.documentElement`. |
-| **`animationDuration`** | <code>number</code>                                                                           | Default native transition duration in milliseconds.                        |
-| **`colors`**            | <code><a href="#nativenavigationcolors">NativeNavigationColors</a></code>                     | Shared color hints for native bars.                                        |
-| **`glass`**             | <code><a href="#nativenavigationglassoptions">NativeNavigationGlassOptions</a></code>         | Shared glass background defaults for native bars.                          |
+| Prop                      | Type                                                                                                | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Since  |
+| ------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| **`enabled`**             | <code>boolean</code>                                                                                | Enables or disables the native chrome host.                                                                                                                                                                                                                                                                                                                                                                                                                                                  |        |
+| **`platformStyle`**       | <code><a href="#nativenavigationplatformstyle">NativeNavigationPlatformStyle</a></code>             | Native style preference. `auto` uses the current platform.                                                                                                                                                                                                                                                                                                                                                                                                                                   |        |
+| **`contentInsetMode`**    | <code><a href="#nativenavigationcontentinsetmode">NativeNavigationContentInsetMode</a></code>       | When `css`, the plugin writes CSS variables on `document.documentElement`.                                                                                                                                                                                                                                                                                                                                                                                                                   |        |
+| **`animationDuration`**   | <code>number</code>                                                                                 | Default native transition duration in milliseconds.                                                                                                                                                                                                                                                                                                                                                                                                                                          |        |
+| **`colors`**              | <code><a href="#nativenavigationcolors">NativeNavigationColors</a></code>                           | Shared color hints for native bars.                                                                                                                                                                                                                                                                                                                                                                                                                                                          |        |
+| **`glass`**               | <code><a href="#nativenavigationglassoptions">NativeNavigationGlassOptions</a></code>               | Shared glass background defaults for native bars.                                                                                                                                                                                                                                                                                                                                                                                                                                            |        |
+| **`verticalBarBehavior`** | <code><a href="#nativenavigationverticalbarbehavior">NativeNavigationVerticalBarBehavior</a></code> | iPhone Duo vertical rail. `automatic` lets iOS move the status bar, the system tab bar, and navbar icon buttons into the rail. The title stays horizontal. `disabled` keeps the horizontal bars for a screen that should stay put, such as video or a calculator. The preference starts as `automatic`. Omitting this option on a later `configure` call keeps the current preference, so a screen that selected `disabled` stays disabled until another call passes `automatic`. iOS 27.1+. | 8.14.0 |
 
 
 #### NativeNavigationColors
@@ -1065,48 +1177,55 @@ Native glass background configuration.
 
 Native navbar state.
 
-| Prop                       | Type                                                                                                  | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Since  |
-| -------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
-| **`hidden`**               | <code>boolean</code>                                                                                  | Hide the native navbar. A web modal, sheet, dialog, or popover renders inside the WebView and stays under this bar, so hide the navbar while that overlay is open. Send the same options again with `hidden: false` when it closes. The hide is immediate on iOS and Android.                                                                                                                                                                                |        |
-| **`title`**                | <code>string</code>                                                                                   | Main title.                                                                                                                                                                                                                                                                                                                                                                                                                                                  |        |
-| **`subtitle`**             | <code>string</code>                                                                                   | Secondary title where supported by the platform.                                                                                                                                                                                                                                                                                                                                                                                                             |        |
-| **`large`**                | <code>boolean</code>                                                                                  | Show a large title under the bar, like iOS large titles. On Android the bar grows by 52dp and the title moves into its own row. Send `large: false` with the same title to collapse it to the inline title (animated on Android), e.g. once the page scrolls.                                                                                                                                                                                                |        |
-| **`transparent`**          | <code>boolean</code>                                                                                  | Prefer transparent/scroll-edge style.                                                                                                                                                                                                                                                                                                                                                                                                                        |        |
-| **`blurEffect`**           | <code><a href="#nativenavigationblureffect">NativeNavigationBlurEffect</a></code>                     | iOS blur/material effect for the navbar background when glass is not available. Defaults to `systemChromeMaterial` for transparent bars.                                                                                                                                                                                                                                                                                                                     |        |
-| **`glass`**                | <code><a href="#nativenavigationglassoptions">NativeNavigationGlassOptions</a></code>                 | Optional glass background behavior. Overrides `configure({ glass })` for this navbar update.                                                                                                                                                                                                                                                                                                                                                                 |        |
-| **`edgeBlur`**             | <code>boolean</code>                                                                                  | Progressive blur that fades out below the navbar, drawn by the page with CSS `backdrop-filter` so it follows web scrolling. Not drawn on Android 11 and older. Defaults to `true` on iOS 26+, where the clear Liquid Glass navbar needs it to match the system scroll edge effect, and `false` elsewhere.                                                                                                                                                    |        |
-| **`backButton`**           | <code><a href="#nativenavigationbackbutton">NativeNavigationBackButton</a></code>                     | Back button state.                                                                                                                                                                                                                                                                                                                                                                                                                                           |        |
-| **`leftItems`**            | <code>NativeNavigationBarButton[]</code>                                                              | Left-side action buttons.                                                                                                                                                                                                                                                                                                                                                                                                                                    |        |
-| **`rightItems`**           | <code>NativeNavigationBarButton[]</code>                                                              | Right-side action buttons.                                                                                                                                                                                                                                                                                                                                                                                                                                   |        |
-| **`search`**               | <code><a href="#nativenavigationnavbarsearch">NativeNavigationNavbarSearch</a></code>                 | Search field under the title. The row adds 52pt (iOS) or 52dp (Android) to the navbar and to the reported top inset while it is visible. Pass `hidden: true` to remove it. Typing fires `navbarSearch`.                                                                                                                                                                                                                                                      | 8.14.0 |
-| **`segments`**             | <code>NativeNavigationNavbarSegmentGroup[]</code>                                                     | Rows of native segments drawn under the bar, top to bottom. Each row adds 44pt (iOS) or 48dp (Android) to the navbar and to the reported insets. Selecting an item fires `navbarSegmentSelect` and moves the selection natively. Each `setNavbar` call applies `selectedId` again, so store the selected id from the event and pass it on every later `setNavbar` call. To reject a selection, send the previous `selectedId`.                               | 8.13.0 |
-| **`colors`**               | <code><a href="#nativenavigationcolors">NativeNavigationColors</a></code>                             | Navbar color hints.                                                                                                                                                                                                                                                                                                                                                                                                                                          |        |
-| **`animated`**             | <code>boolean</code>                                                                                  | Animate navbar title and item changes while the bar is visible. Hiding the bar with `hidden: true` does not use this flag.                                                                                                                                                                                                                                                                                                                                   |        |
-| **`scrollBehavior`**       | <code><a href="#nativenavigationnavbarscrollbehavior">NativeNavigationNavbarScrollBehavior</a></code> | Hide or reveal the navbar while web content scrolls. When enabled, iOS and Android inject scroll listeners on `window`, `#app`, and any existing `[data-cap-native-navigation-scroll]` elements, and rescan marked elements on each `setNavbar` call. The web fallback binds the same roots when `setNavbar` runs (`window`, `#app`, and matching marked elements). Do not call `reportNavbarScroll()` for a root that is already bound. Defaults to `none`. |        |
-| **`scrollThreshold`**      | <code>number</code>                                                                                   | Minimum vertical scroll delta (CSS px) before `scrollBehavior` reacts. Defaults to `8`.                                                                                                                                                                                                                                                                                                                                                                      |        |
-| **`resetScrollCollapsed`** | <code>boolean</code>                                                                                  | When `true`, clears any scroll-collapsed navbar state before applying this update. Use on route changes; omit for same-screen chrome tweaks.                                                                                                                                                                                                                                                                                                                 |        |
+| Prop                         | Type                                                                                                      | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Since  |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
+| **`hidden`**                 | <code>boolean</code>                                                                                      | Hide the native navbar. A web modal, sheet, dialog, or popover renders inside the WebView and stays under this bar, so hide the navbar while that overlay is open. Send the same options again with `hidden: false` when it closes. The hide is immediate on iOS and Android.                                                                                                                                                                                |        |
+| **`title`**                  | <code>string</code>                                                                                       | Main title.                                                                                                                                                                                                                                                                                                                                                                                                                                                  |        |
+| **`subtitle`**               | <code>string</code>                                                                                       | Secondary title where supported by the platform.                                                                                                                                                                                                                                                                                                                                                                                                             |        |
+| **`large`**                  | <code>boolean</code>                                                                                      | Show a large title under the bar, like iOS large titles. On Android the bar grows by 52dp and the title moves into its own row. Send `large: false` with the same title to collapse it to the inline title (animated on Android), e.g. once the page scrolls.                                                                                                                                                                                                |        |
+| **`transparent`**            | <code>boolean</code>                                                                                      | Prefer transparent/scroll-edge style.                                                                                                                                                                                                                                                                                                                                                                                                                        |        |
+| **`blurEffect`**             | <code><a href="#nativenavigationblureffect">NativeNavigationBlurEffect</a></code>                         | iOS blur/material effect for the navbar background when glass is not available. Defaults to `systemChromeMaterial` for transparent bars.                                                                                                                                                                                                                                                                                                                     |        |
+| **`glass`**                  | <code><a href="#nativenavigationglassoptions">NativeNavigationGlassOptions</a></code>                     | Optional glass background behavior. Overrides `configure({ glass })` for this navbar update.                                                                                                                                                                                                                                                                                                                                                                 |        |
+| **`edgeBlur`**               | <code>boolean</code>                                                                                      | Progressive blur that fades out below the navbar, drawn by the page with CSS `backdrop-filter` so it follows web scrolling. Not drawn on Android 11 and older. Defaults to `true` on iOS 26+, where the clear Liquid Glass navbar needs it to match the system scroll edge effect, and `false` elsewhere.                                                                                                                                                    |        |
+| **`backButton`**             | <code><a href="#nativenavigationbackbutton">NativeNavigationBackButton</a></code>                         | Back button state.                                                                                                                                                                                                                                                                                                                                                                                                                                           |        |
+| **`verticalBarCompression`** | <code><a href="#nativenavigationverticalbarcompression">NativeNavigationVerticalBarCompression</a></code> | Which side of the iPhone Duo rail compresses first when space runs out. Omitted means `automatic`. This is separate from `configure({ verticalBarBehavior })`. iOS 27.1+.                                                                                                                                                                                                                                                                                    | 8.14.0 |
+| **`leftItems`**              | <code>NativeNavigationBarButton[]</code>                                                                  | Left-side action buttons.                                                                                                                                                                                                                                                                                                                                                                                                                                    |        |
+| **`rightItems`**             | <code>NativeNavigationBarButton[]</code>                                                                  | Right-side action buttons.                                                                                                                                                                                                                                                                                                                                                                                                                                   |        |
+| **`search`**                 | <code><a href="#nativenavigationnavbarsearch">NativeNavigationNavbarSearch</a></code>                     | Search field under the title. The row adds 52pt (iOS) or 52dp (Android) to the navbar and to the reported top inset while it is visible. Pass `hidden: true` to remove it. Typing fires `navbarSearch`.                                                                                                                                                                                                                                                      | 8.14.0 |
+| **`segments`**               | <code>NativeNavigationNavbarSegmentGroup[]</code>                                                         | Rows of native segments drawn under the bar, top to bottom. Each row adds 44pt (iOS) or 48dp (Android) to the navbar and to the reported insets. Selecting an item fires `navbarSegmentSelect` and moves the selection natively. Each `setNavbar` call applies `selectedId` again, so store the selected id from the event and pass it on every later `setNavbar` call. To reject a selection, send the previous `selectedId`.                               | 8.13.0 |
+| **`colors`**                 | <code><a href="#nativenavigationcolors">NativeNavigationColors</a></code>                                 | Navbar color hints.                                                                                                                                                                                                                                                                                                                                                                                                                                          |        |
+| **`animated`**               | <code>boolean</code>                                                                                      | Animate navbar title and item changes while the bar is visible. Hiding the bar with `hidden: true` does not use this flag.                                                                                                                                                                                                                                                                                                                                   |        |
+| **`scrollBehavior`**         | <code><a href="#nativenavigationnavbarscrollbehavior">NativeNavigationNavbarScrollBehavior</a></code>     | Hide or reveal the navbar while web content scrolls. When enabled, iOS and Android inject scroll listeners on `window`, `#app`, and any existing `[data-cap-native-navigation-scroll]` elements, and rescan marked elements on each `setNavbar` call. The web fallback binds the same roots when `setNavbar` runs (`window`, `#app`, and matching marked elements). Do not call `reportNavbarScroll()` for a root that is already bound. Defaults to `none`. |        |
+| **`scrollThreshold`**        | <code>number</code>                                                                                       | Minimum vertical scroll delta (CSS px) before `scrollBehavior` reacts. Defaults to `8`.                                                                                                                                                                                                                                                                                                                                                                      |        |
+| **`resetScrollCollapsed`**   | <code>boolean</code>                                                                                      | When `true`, clears any scroll-collapsed navbar state before applying this update. Use on route changes; omit for same-screen chrome tweaks.                                                                                                                                                                                                                                                                                                                 |        |
 
 
 #### NativeNavigationBackButton
 
 Native back button configuration.
 
-| Prop          | Type                 | Description                      |
-| ------------- | -------------------- | -------------------------------- |
-| **`visible`** | <code>boolean</code> | Show the native back affordance. |
-| **`title`**   | <code>string</code>  | Optional back title.             |
+| Prop              | Type                                                                                            | Description                                                                                                                                                                                                                                                                 | Since  |
+| ----------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| **`visible`**     | <code>boolean</code>                                                                            | Show the native back affordance.                                                                                                                                                                                                                                            |        |
+| **`title`**       | <code>string</code>                                                                             | Optional back title. This is the accessibility label when the control is an icon. When `display` is omitted, a non-empty title (including the default `Back`) is drawn as text and stays off the iPhone Duo rail.                                                           |        |
+| **`role`**        | <code><a href="#nativenavigationbackbuttonrole">NativeNavigationBackButtonRole</a></code>       | `back` (the default) is a chevron. `close` is an xmark. An icon sits at the top of the iPhone Duo rail. Android uses the back arrow, or a close icon when `role` is `close`.                                                                                                | 8.14.0 |
+| **`display`**     | <code><a href="#nativenavigationbackbuttondisplay">NativeNavigationBackButtonDisplay</a></code> | `icon` draws a symbol and can join the iPhone Duo rail. `title` draws text and stays horizontal. When omitted, `close` is an icon, an empty title is an icon, and any other title is text.                                                                                  | 8.14.0 |
+| **`supplements`** | <code>boolean</code>                                                                            | When `true`, `leftItems` are kept beside the system back button. Omitted means `false`. The plugin's back control is its own leading item, so this does not hide `leftItems` on iOS. On Android, `leftItems` are shown with a visible back button only when this is `true`. | 8.14.0 |
 
 
 #### NativeNavigationBarButton
 
 A button shown in the native navbar.
 
-| Prop          | Type                                                                  | Description                                        |
-| ------------- | --------------------------------------------------------------------- | -------------------------------------------------- |
-| **`id`**      | <code>string</code>                                                   | Stable id returned in `navbarItemTap`.             |
-| **`title`**   | <code>string</code>                                                   | Visible text label.                                |
-| **`icon`**    | <code><a href="#nativenavigationicon">NativeNavigationIcon</a></code> | Native icon descriptor.                            |
-| **`enabled`** | <code>boolean</code>                                                  | Whether the action is enabled. Defaults to `true`. |
+| Prop          | Type                                                                                    | Description                                                                                                                                                                                                                                                               | Since  |
+| ------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| **`id`**      | <code>string</code>                                                                     | Stable id returned in `navbarItemTap`.                                                                                                                                                                                                                                    |        |
+| **`title`**   | <code>string</code>                                                                     | Visible text label.                                                                                                                                                                                                                                                       |        |
+| **`icon`**    | <code><a href="#nativenavigationicon">NativeNavigationIcon</a></code>                   | Native icon descriptor.                                                                                                                                                                                                                                                   |        |
+| **`enabled`** | <code>boolean</code>                                                                    | Whether the action is enabled. Defaults to `true`.                                                                                                                                                                                                                        |        |
+| **`dock`**    | <code><a href="#nativenavigationbarbuttondock">NativeNavigationBarButtonDock</a></code> | How the button sits in the bar. `shared` (the default) joins the system group. `detached` draws it alone, outside that group, on iOS 26 and later. `prominent` pins it past overflow and search, such as Done. Android keeps every dock value in the normal toolbar menu. | 8.14.0 |
+| **`group`**   | <code>string</code>                                                                     | Items that share a group id collapse into one control. The first item is what you see; the system expands the rest. One item stays a normal button. Detached and prominent buttons ignore `group`. iOS 16 and later. Older systems show every item.                       | 8.14.0 |
+| **`axis`**    | <code><a href="#nativenavigationbarbuttonaxis">NativeNavigationBarButtonAxis</a></code> | Axis on the iPhone Duo rail. `automatic` (the default) lets iOS put icon buttons on the rail and keep text buttons horizontal. `vertical` asks for the rail, including a text button such as Done. `horizontal` keeps the button off the rail. iOS 27.1+.                 | 8.14.0 |
 
 
 #### NativeNavigationIcon
@@ -1129,14 +1248,14 @@ because icons are rendered by native UI.
 
 Native search field drawn with the navbar, like the iOS 27 Settings search.
 
-| Prop                     | Type                                                                                                    | Description                                                                                                                                                         |
-| ------------------------ | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`hidden`**             | <code>boolean</code>                                                                                    | Remove the field. Pass `hidden: true` to show no field.                                                                                                             |
-| **`placeholder`**        | <code>string</code>                                                                                     | Placeholder text. Defaults to `Search`.                                                                                                                             |
-| **`text`**               | <code>string</code>                                                                                     | Query to show. While the field is focused, native edits are kept until this value changes.                                                                          |
-| **`enabled`**            | <code>boolean</code>                                                                                    | Whether the field accepts input. Defaults to `true`.                                                                                                                |
-| **`placement`**          | <code><a href="#nativenavigationnavbarsearchplacement">NativeNavigationNavbarSearchPlacement</a></code> | Field placement. Only `stacked` is drawn today: a row under the title and above `segments`.                                                                         |
-| **`hidesWhenCollapsed`** | <code>boolean</code>                                                                                    | Hide the row once a large title collapses on scroll. Defaults to `true` when `large` is `true`, and `false` otherwise. The reported top inset shrinks with the row. |
+| Prop                     | Type                                                                                                    | Description                                                                                                                                                                                                                                                                                                     |
+| ------------------------ | ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`hidden`**             | <code>boolean</code>                                                                                    | Remove the field. Pass `hidden: true` to show no field.                                                                                                                                                                                                                                                         |
+| **`placeholder`**        | <code>string</code>                                                                                     | Placeholder text. Defaults to `Search`.                                                                                                                                                                                                                                                                         |
+| **`text`**               | <code>string</code>                                                                                     | Query to show. While the field is focused, native edits are kept until this value changes.                                                                                                                                                                                                                      |
+| **`enabled`**            | <code>boolean</code>                                                                                    | Whether the field accepts input. Defaults to `true`.                                                                                                                                                                                                                                                            |
+| **`placement`**          | <code><a href="#nativenavigationnavbarsearchplacement">NativeNavigationNavbarSearchPlacement</a></code> | `stacked` (the default) is a row under the title and above `segments`. `button` is a detached search button on the iPhone Duo rail on iOS 26+. A horizontal navbar, Android, and web keep the stacked row. Below iOS 26 the button is also the stacked row. `hidesWhenCollapsed` does not hide the rail button. |
+| **`hidesWhenCollapsed`** | <code>boolean</code>                                                                                    | Hide the row once a large title collapses on scroll. Defaults to `true` when `large` is `true`, and `false` otherwise. The reported top inset shrinks with the row.                                                                                                                                             |
 
 
 #### NativeNavigationNavbarSegmentGroup
@@ -1368,6 +1487,25 @@ Plugin version payload.
 | **`insets`** | <code><a href="#nativenavigationinsets">NativeNavigationInsets</a></code> |
 
 
+#### NativeNavigationVerticalBarChangedEvent
+
+iPhone Duo vertical rail edge change.
+
+| Prop         | Type                                                                                                | Description                                                |
+| ------------ | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| **`edge`**   | <code><a href="#nativenavigationverticalbaredge">NativeNavigationVerticalBarEdge</a> \| null</code> |                                                            |
+| **`active`** | <code>boolean</code>                                                                                | True when the system tab bar is currently a vertical rail. |
+
+
+#### NativeNavigationHingeChangedEvent
+
+iPhone Duo hinge update. `hinge` is `null` when updates stop.
+
+| Prop        | Type                                                                            |
+| ----------- | ------------------------------------------------------------------------------- |
+| **`hinge`** | <code><a href="#nativenavigationhinge">NativeNavigationHinge</a> \| null</code> |
+
+
 #### NativeNavigationTransitionEvent
 
 | Prop            | Type                                                                                                |
@@ -1378,6 +1516,17 @@ Plugin version payload.
 
 
 ### Type Aliases
+
+
+#### NativeNavigationVerticalBarEdge
+
+Semantic edge of the iPhone Duo vertical rail.
+
+The rail stays on the camera's physical edge. This value flips with
+right-to-left layout. `null` when the system is not using a rail, including
+iPhone Duo open in portrait.
+
+<code>'leading' | 'trailing'</code>
 
 
 #### NativeNavigationPlatformStyle
@@ -1401,6 +1550,13 @@ Native glass background rendering preference.
 <code>'none' | 'liquidGlass'</code>
 
 
+#### NativeNavigationVerticalBarBehavior
+
+Whether iPhone Duo uses the vertical rail.
+
+<code>'automatic' | 'disabled'</code>
+
+
 #### NativeNavigationBlurEffect
 
 Native material/blur effect preference.
@@ -1408,13 +1564,54 @@ Native material/blur effect preference.
 <code>'none' | 'systemDefault' | 'extraLight' | 'light' | 'dark' | 'regular' | 'prominent' | 'systemUltraThinMaterial' | 'systemThinMaterial' | 'systemMaterial' | 'systemThickMaterial' | 'systemChromeMaterial' | 'systemUltraThinMaterialLight' | 'systemThinMaterialLight' | 'systemMaterialLight' | 'systemThickMaterialLight' | 'systemChromeMaterialLight' | 'systemUltraThinMaterialDark' | 'systemThinMaterialDark' | 'systemMaterialDark' | 'systemThickMaterialDark' | 'systemChromeMaterialDark'</code>
 
 
+#### NativeNavigationBackButtonRole
+
+Symbol used for the navbar back control.
+
+<code>'back' | 'close'</code>
+
+
+#### NativeNavigationBackButtonDisplay
+
+Whether the navbar back control draws a symbol or a text title.
+
+<code>'icon' | 'title'</code>
+
+
+#### NativeNavigationVerticalBarCompression
+
+Which side of the iPhone Duo rail gives up space first.
+
+`automatic` is the system default and prefers the tab bar. `preferItems`
+compresses the tab bar first so navbar buttons stay. `preferTabs`
+compresses navbar buttons first. iOS 27.1+.
+
+<code>'automatic' | 'preferItems' | 'preferTabs'</code>
+
+
+#### NativeNavigationBarButtonDock
+
+How a navbar button joins the system bar group.
+
+<code>'shared' | 'detached' | 'prominent'</code>
+
+
+#### NativeNavigationBarButtonAxis
+
+Which bar axis a navbar button prefers on iPhone Duo.
+
+<code>'automatic' | 'horizontal' | 'vertical'</code>
+
+
 #### NativeNavigationNavbarSearchPlacement
 
-Where the navbar search field is drawn. `stacked` sits under the title,
-the iOS 27 Settings field. The field is always stacked today; the value is
-reserved so a later release can fold it into the bar.
+Where the navbar search field is drawn.
 
-<code>'stacked'</code>
+`stacked` sits under the title, the iOS 27 Settings field. `button` is a
+detached search button on the iPhone Duo rail on iOS 26+. A horizontal
+navbar, Android, and web keep the stacked row.
+
+<code>'stacked' | 'button'</code>
 
 
 #### NativeNavigationNavbarSegmentStyle

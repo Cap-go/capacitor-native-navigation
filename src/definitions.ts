@@ -113,11 +113,15 @@ export type NativeNavigationTabbarAlignment = 'start' | 'center' | 'end';
 export type NativeNavigationTabbarPlacement = 'auto' | 'bottom' | 'sidebar';
 
 /**
- * Where the navbar search field is drawn. `stacked` sits under the title,
- * the iOS 27 Settings field. The field is always stacked today; the value is
- * reserved so a later release can fold it into the bar.
+ * Where the navbar search field is drawn.
+ *
+ * `stacked` sits under the title, the iOS 27 Settings field. `button` is a
+ * detached search button on the iPhone Duo rail on iOS 26+. A horizontal
+ * navbar, Android, and web keep the stacked row.
+ *
+ * @since 8.14.0
  */
-export type NativeNavigationNavbarSearchPlacement = 'stacked';
+export type NativeNavigationNavbarSearchPlacement = 'stacked' | 'button';
 
 /**
  * Native tab role for Liquid Glass tab bars.
@@ -293,7 +297,38 @@ export interface NativeNavigationConfigureOptions {
    * Shared glass background defaults for native bars.
    */
   glass?: NativeNavigationGlassOptions;
+
+  /**
+   * iPhone Duo vertical rail. `automatic` lets iOS move the status bar, the
+   * system tab bar, and navbar icon buttons into the rail. The title stays
+   * horizontal. `disabled` keeps the horizontal bars for a screen that should
+   * stay put, such as video or a calculator. The preference starts as
+   * `automatic`. Omitting this option on a later `configure` call keeps the
+   * current preference, so a screen that selected `disabled` stays disabled
+   * until another call passes `automatic`. iOS 27.1+.
+   *
+   * @since 8.14.0
+   */
+  verticalBarBehavior?: NativeNavigationVerticalBarBehavior;
 }
+
+/**
+ * Whether iPhone Duo uses the vertical rail.
+ *
+ * @since 8.14.0
+ */
+export type NativeNavigationVerticalBarBehavior = 'automatic' | 'disabled';
+
+/**
+ * Semantic edge of the iPhone Duo vertical rail.
+ *
+ * The rail stays on the camera's physical edge. This value flips with
+ * right-to-left layout. `null` when the system is not using a rail, including
+ * iPhone Duo open in portrait.
+ *
+ * @since 8.14.0
+ */
+export type NativeNavigationVerticalBarEdge = 'leading' | 'trailing';
 
 /**
  * A button shown in the native navbar.
@@ -318,7 +353,51 @@ export interface NativeNavigationBarButton {
    * Whether the action is enabled. Defaults to `true`.
    */
   enabled?: boolean;
+
+  /**
+   * How the button sits in the bar. `shared` (the default) joins the system
+   * group. `detached` draws it alone, outside that group, on iOS 26 and
+   * later. `prominent` pins it past overflow and search, such as Done.
+   * Android keeps every dock value in the normal toolbar menu.
+   *
+   * @since 8.14.0
+   */
+  dock?: NativeNavigationBarButtonDock;
+
+  /**
+   * Items that share a group id collapse into one control. The first item is
+   * what you see; the system expands the rest. One item stays a normal
+   * button. Detached and prominent buttons ignore `group`. iOS 16 and later.
+   * Older systems show every item.
+   *
+   * @since 8.14.0
+   */
+  group?: string;
+
+  /**
+   * Axis on the iPhone Duo rail. `automatic` (the default) lets iOS put icon
+   * buttons on the rail and keep text buttons horizontal. `vertical` asks
+   * for the rail, including a text button such as Done. `horizontal` keeps
+   * the button off the rail. iOS 27.1+.
+   *
+   * @since 8.14.0
+   */
+  axis?: NativeNavigationBarButtonAxis;
 }
+
+/**
+ * How a navbar button joins the system bar group.
+ *
+ * @since 8.14.0
+ */
+export type NativeNavigationBarButtonDock = 'shared' | 'detached' | 'prominent';
+
+/**
+ * Which bar axis a navbar button prefers on iPhone Duo.
+ *
+ * @since 8.14.0
+ */
+export type NativeNavigationBarButtonAxis = 'automatic' | 'horizontal' | 'vertical';
 
 /**
  * Native back button configuration.
@@ -330,10 +409,65 @@ export interface NativeNavigationBackButton {
   visible?: boolean;
 
   /**
-   * Optional back title.
+   * Optional back title. This is the accessibility label when the control is
+   * an icon. When `display` is omitted, a non-empty title (including the
+   * default `Back`) is drawn as text and stays off the iPhone Duo rail.
    */
   title?: string;
+
+  /**
+   * `back` (the default) is a chevron. `close` is an xmark. An icon sits at
+   * the top of the iPhone Duo rail. Android uses the back arrow, or a close
+   * icon when `role` is `close`.
+   *
+   * @since 8.14.0
+   */
+  role?: NativeNavigationBackButtonRole;
+
+  /**
+   * `icon` draws a symbol and can join the iPhone Duo rail. `title` draws
+   * text and stays horizontal. When omitted, `close` is an icon, an empty
+   * title is an icon, and any other title is text.
+   *
+   * @since 8.14.0
+   */
+  display?: NativeNavigationBackButtonDisplay;
+
+  /**
+   * When `true`, `leftItems` are kept beside the system back button.
+   * Omitted means `false`. The plugin's back control is its own leading
+   * item, so this does not hide `leftItems` on iOS. On Android, `leftItems`
+   * are shown with a visible back button only when this is `true`.
+   *
+   * @since 8.14.0
+   */
+  supplements?: boolean;
 }
+
+/**
+ * Symbol used for the navbar back control.
+ *
+ * @since 8.14.0
+ */
+export type NativeNavigationBackButtonRole = 'back' | 'close';
+
+/**
+ * Whether the navbar back control draws a symbol or a text title.
+ *
+ * @since 8.14.0
+ */
+export type NativeNavigationBackButtonDisplay = 'icon' | 'title';
+
+/**
+ * Which side of the iPhone Duo rail gives up space first.
+ *
+ * `automatic` is the system default and prefers the tab bar. `preferItems`
+ * compresses the tab bar first so navbar buttons stay. `preferTabs`
+ * compresses navbar buttons first. iOS 27.1+.
+ *
+ * @since 8.14.0
+ */
+export type NativeNavigationVerticalBarCompression = 'automatic' | 'preferItems' | 'preferTabs';
 
 /**
  * How the native navbar reacts to WebView scroll direction.
@@ -400,8 +534,11 @@ export interface NativeNavigationNavbarSearch {
   enabled?: boolean;
 
   /**
-   * Field placement. Only `stacked` is drawn today: a row under the title and
-   * above `segments`.
+   * `stacked` (the default) is a row under the title and above `segments`.
+   * `button` is a detached search button on the iPhone Duo rail on iOS 26+.
+   * A horizontal navbar, Android, and web keep the stacked row. Below iOS 26
+   * the button is also the stacked row. `hidesWhenCollapsed` does not hide
+   * the rail button.
    */
   placement?: NativeNavigationNavbarSearchPlacement;
 
@@ -511,6 +648,15 @@ export interface NativeNavigationNavbarOptions {
    * Back button state.
    */
   backButton?: NativeNavigationBackButton;
+
+  /**
+   * Which side of the iPhone Duo rail compresses first when space runs out.
+   * Omitted means `automatic`. This is separate from
+   * `configure({ verticalBarBehavior })`. iOS 27.1+.
+   *
+   * @since 8.14.0
+   */
+  verticalBarCompression?: NativeNavigationVerticalBarCompression;
 
   /**
    * Left-side action buttons.
@@ -937,6 +1083,57 @@ export interface NativeNavigationInsets {
    * soft-hidden with `setTabbar({ hidden: true, animated: true })`.
    */
   systemTabbarHeight: number;
+
+  /**
+   * Semantic edge of the vertical rail, or `null` when the bars are horizontal.
+   * On a rail, `left` or `right` carries the rail thickness and `tabbarHeight`
+   * stays `0` when the WebView is already beside it. `systemTabbarHeight` is
+   * that thickness rather than a bottom bar.
+   *
+   * @since 8.14.0
+   */
+  verticalBarEdge?: NativeNavigationVerticalBarEdge | null;
+
+  /**
+   * Fold and occlusion rectangles reported by iOS, in the root view's points.
+   * Empty when the device has no reserved regions.
+   *
+   * @since 8.14.0
+   */
+  reservedRegions?: NativeNavigationReservedRegion[];
+
+  /**
+   * Latest hinge sample. `null` when the device has no hinge. Angle updates
+   * are delivered on `hingeChanged` and are not pushed through this snapshot
+   * on every tick.
+   *
+   * @since 8.14.0
+   */
+  hinge?: NativeNavigationHinge | null;
+}
+
+/**
+ * A region iOS reserves inside the window, such as the fold or an occlusion.
+ *
+ * @since 8.14.0
+ */
+export interface NativeNavigationReservedRegion {
+  kind: 'division' | 'occlusion';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  active: boolean;
+}
+
+/**
+ * iPhone Duo hinge sample. `angle` is radians.
+ *
+ * @since 8.14.0
+ */
+export interface NativeNavigationHinge {
+  angle: number;
+  status: 'unknown' | 'closed' | 'partiallyOpen' | 'fullyOpen';
 }
 
 /**
@@ -1056,6 +1253,28 @@ export interface NativeNavigationTabSelectEvent {
 
 export interface NativeNavigationSafeAreaChangedEvent {
   insets: NativeNavigationInsets;
+}
+
+/**
+ * iPhone Duo vertical rail edge change.
+ *
+ * @since 8.14.0
+ */
+export interface NativeNavigationVerticalBarChangedEvent {
+  edge: NativeNavigationVerticalBarEdge | null;
+  /**
+   * True when the system tab bar is currently a vertical rail.
+   */
+  active: boolean;
+}
+
+/**
+ * iPhone Duo hinge update. `hinge` is `null` when updates stop.
+ *
+ * @since 8.14.0
+ */
+export interface NativeNavigationHingeChangedEvent {
+  hinge: NativeNavigationHinge | null;
 }
 
 export interface NativeNavigationTransitionEvent {
@@ -1191,6 +1410,28 @@ export interface NativeNavigationPlugin {
   addListener(
     eventName: 'safeAreaChanged',
     listenerFunc: (event: NativeNavigationSafeAreaChangedEvent) => void,
+  ): Promise<PluginListenerHandle>;
+
+  /**
+   * Fired when the iPhone Duo vertical rail appears, disappears, or changes
+   * edge. `safeAreaChanged` carries the same edge on every inset update.
+   *
+   * @since 8.14.0
+   */
+  addListener(
+    eventName: 'verticalBarChanged',
+    listenerFunc: (event: NativeNavigationVerticalBarChangedEvent) => void,
+  ): Promise<PluginListenerHandle>;
+
+  /**
+   * Fired when the iPhone Duo hinge changes, or when hinge updates stop.
+   * Prefer `hinge.status` over `hinge.angle` when a coarse pose is enough.
+   *
+   * @since 8.14.0
+   */
+  addListener(
+    eventName: 'hingeChanged',
+    listenerFunc: (event: NativeNavigationHingeChangedEvent) => void,
   ): Promise<PluginListenerHandle>;
 
   addListener(

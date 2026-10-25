@@ -38,7 +38,15 @@ export function defineNativeNavigationElements(): void {
 
   class CapNativeNavigationProvider extends HTMLElement {
     static get observedAttributes(): string[] {
-      return ['enabled', 'platform-style', 'content-inset-mode', 'animation-duration', 'colors', 'glass'];
+      return [
+        'enabled',
+        'platform-style',
+        'content-inset-mode',
+        'animation-duration',
+        'colors',
+        'glass',
+        'vertical-bar-behavior',
+      ];
     }
 
     connectedCallback(): void {
@@ -65,6 +73,10 @@ export function defineNativeNavigationElements(): void {
           ) ?? 'css',
         colors: parseJsonAttribute(this, 'colors', undefined as NativeNavigationConfigureOptions['colors']),
         glass: parseJsonAttribute(this, 'glass', undefined as NativeNavigationConfigureOptions['glass']),
+        verticalBarBehavior: typedAttribute<NonNullable<NativeNavigationConfigureOptions['verticalBarBehavior']>>(
+          this,
+          'vertical-bar-behavior',
+        ),
       };
 
       if (duration) {
@@ -87,6 +99,10 @@ export function defineNativeNavigationElements(): void {
         'blur-effect',
         'back-button',
         'back-title',
+        'back-role',
+        'back-display',
+        'back-supplements',
+        'vertical-bar-compression',
         'left-items',
         'right-items',
         'colors',
@@ -116,10 +132,11 @@ export function defineNativeNavigationElements(): void {
         large: parseBoolean(this.getAttribute('large')),
         transparent: parseBoolean(this.getAttribute('transparent')),
         blurEffect: typedAttribute<NonNullable<NativeNavigationNavbarOptions['blurEffect']>>(this, 'blur-effect'),
-        backButton: {
-          visible: parseBoolean(this.getAttribute('back-button')),
-          title: normalizeAttribute(this.getAttribute('back-title')),
-        },
+        backButton: this.backButtonOptions(),
+        verticalBarCompression: typedAttribute<NonNullable<NativeNavigationNavbarOptions['verticalBarCompression']>>(
+          this,
+          'vertical-bar-compression',
+        ),
         leftItems: parseJsonAttribute(this, 'left-items', []),
         rightItems: parseJsonAttribute(this, 'right-items', []),
         colors: parseJsonAttribute(this, 'colors', undefined as NativeNavigationNavbarOptions['colors']),
@@ -141,6 +158,19 @@ export function defineNativeNavigationElements(): void {
 
       const NativeNavigation = await getNativeNavigation();
       await NativeNavigation.setNavbar(options);
+    }
+
+    private backButtonOptions(): NativeNavigationNavbarOptions['backButton'] {
+      const backButton: NonNullable<NativeNavigationNavbarOptions['backButton']> = {
+        visible: parseBoolean(this.getAttribute('back-button')),
+        title: normalizeAttribute(this.getAttribute('back-title')),
+        role: typedAttribute(this, 'back-role'),
+        display: typedAttribute(this, 'back-display'),
+      };
+      if (this.hasAttribute('back-supplements')) {
+        backButton.supplements = parseBoolean(this.getAttribute('back-supplements'));
+      }
+      return backButton;
     }
   }
 
