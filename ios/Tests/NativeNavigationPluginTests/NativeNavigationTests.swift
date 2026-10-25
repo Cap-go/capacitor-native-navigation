@@ -310,6 +310,41 @@ class NativeNavigationTests: XCTestCase {
         XCTAssertEqual(path.bounds.width, 16, accuracy: 0.05)
     }
 
+    func testFocusedSearchKeepsKeystrokesUntilTheSuppliedTextChanges() {
+        XCTAssertFalse(
+            nativeNavigationShouldApplyNavbarSearchText(
+                focused: true,
+                fieldText: "he",
+                suppliedText: "h",
+                previousSuppliedText: "h"
+            )
+        )
+        XCTAssertTrue(
+            nativeNavigationShouldApplyNavbarSearchText(
+                focused: true,
+                fieldText: "hello",
+                suppliedText: "",
+                previousSuppliedText: "hello"
+            )
+        )
+        XCTAssertFalse(
+            nativeNavigationShouldApplyNavbarSearchText(
+                focused: true,
+                fieldText: "h",
+                suppliedText: "h",
+                previousSuppliedText: nil
+            )
+        )
+        XCTAssertTrue(
+            nativeNavigationShouldApplyNavbarSearchText(
+                focused: false,
+                fieldText: "he",
+                suppliedText: "h",
+                previousSuppliedText: "h"
+            )
+        )
+    }
+
     func testNavbarSearchRowHeightCollapsesWithTheLargeTitle() {
         XCTAssertEqual(
             nativeNavigationNavbarSearchRowHeight(visible: false, hidesWhenCollapsed: true, largeCollapsed: false),

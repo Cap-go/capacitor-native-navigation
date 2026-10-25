@@ -14,6 +14,23 @@ func nativeNavigationNavbarSearchRowHeight(
     return nativeNavigationNavbarSearchRowPoints
 }
 
+/// Apply `setNavbar({ search: { text } })` while the field is focused only when that
+/// supplied value changed. An unchanged echo would otherwise move the caret.
+func nativeNavigationShouldApplyNavbarSearchText(
+    focused: Bool,
+    fieldText: String,
+    suppliedText: String,
+    previousSuppliedText: String?
+) -> Bool {
+    if fieldText == suppliedText {
+        return false
+    }
+    if !focused {
+        return true
+    }
+    return previousSuppliedText != suppliedText
+}
+
 /// Curve bars stay on the bottom. Unknown values follow the system (`auto`).
 func nativeNavigationResolvedTabbarPlacement(raw: String?, shapeIsCurve: Bool) -> String {
     if shapeIsCurve {

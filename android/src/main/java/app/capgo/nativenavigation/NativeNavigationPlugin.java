@@ -110,6 +110,8 @@ public class NativeNavigationPlugin extends Plugin {
     private boolean navbarSearchHidesWhenCollapsed = false;
     private boolean navbarSearchCollapsed = false;
     private boolean navbarSearchApplying = false;
+    /** Last {@code search.text} from {@code setNavbar}. Null after the row is hidden. */
+    private String navbarSearchSuppliedText;
     private boolean navbarLarge = false;
     private float navbarLargeProgress = 0f;
     private ValueAnimator navbarLargeAnimator;
@@ -225,6 +227,7 @@ public class NativeNavigationPlugin extends Plugin {
             if (hidden) {
                 navbarSearchVisible = false;
                 navbarSearchCollapsed = false;
+                navbarSearchSuppliedText = null;
                 if (navbarSearchField != null) {
                     navbarSearchField.setVisibility(View.GONE);
                 }
@@ -775,6 +778,7 @@ public class NativeNavigationPlugin extends Plugin {
         }
         if (search == null || search.optBoolean("hidden", false)) {
             navbarSearchVisible = false;
+            navbarSearchSuppliedText = null;
             navbarSearchField.setVisibility(View.GONE);
             return;
         }
@@ -789,11 +793,19 @@ public class NativeNavigationPlugin extends Plugin {
         navbarSearchField.setTextColor(navbarForegroundColor);
         navbarSearchField.setHintTextColor(withAlpha(navbarForegroundColor, 140));
         String text = search.optString("text", "");
-        if (!navbarSearchField.hasFocus() && !text.equals(navbarSearchField.getText().toString())) {
+        if (
+            NavbarSearchSupport.shouldApplyText(
+                navbarSearchField.hasFocus(),
+                navbarSearchField.getText().toString(),
+                text,
+                navbarSearchSuppliedText
+            )
+        ) {
             navbarSearchApplying = true;
             navbarSearchField.setText(text);
             navbarSearchApplying = false;
         }
+        navbarSearchSuppliedText = text;
         navbarSearchField.setVisibility(navbarSearchHeight() > 0 ? View.VISIBLE : View.GONE);
     }
 
@@ -1140,7 +1152,7 @@ public class NativeNavigationPlugin extends Plugin {
                     return;
                 }
                 setTabbarMinimized(false, true);
-                if (!tabbarStyle.isCurve() && !detachedTrailing) {
+                if (!tabbarStyle.isCurve() && !tabbarStyle.isSidebar() && !detachedTrailing) {
                     tabbar.slideIndicator(selectedTabIndex, itemIndex);
                 }
                 selectTab(itemIndex);
@@ -1189,7 +1201,7 @@ public class NativeNavigationPlugin extends Plugin {
     }
 
     private boolean tabbarMinimizeEnabled() {
-        return tabbarMinimizeOnScroll && !tabbarStyle.isCurve() && tabbarIconsVisible;
+        return tabbarMinimizeOnScroll && !tabbarStyle.isCurve() && !tabbarStyle.isSidebar() && tabbarIconsVisible;
     }
 
     private void handleTabbarMinimizeScroll(float offsetY, float deltaY) {
@@ -3145,12 +3157,20 @@ public class NativeNavigationPlugin extends Plugin {
             navbarScrollThreshold = threshold.floatValue();
         }
 
+        boolean observeScroll = NavbarScrollSupport.shouldObserveScroll(
+            navbarScrollBehavior,
+            navbarVisible,
+            navbarLarge,
+            navbarSearchVisible,
+            navbarSearchHidesWhenCollapsed
+        );
+        // Hide/reveal is off, but a collapsing search row still needs the same samples.
         if (navbarScrollBehavior == NavbarScrollSupport.ScrollBehavior.NONE || !navbarVisible) {
             stopNavbarScrollObservation(true);
-            return;
         }
-
-        startNavbarScrollObservation();
+        if (observeScroll) {
+            startNavbarScrollObservation();
+        }
     }
 
     private void startNavbarScrollObservation() {

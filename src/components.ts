@@ -164,7 +164,7 @@ export function defineNativeNavigationElements(): void {
         'experimental-baked-tint-colors',
         'animated',
         'layout-direction',
-        'style',
+        'tabbar-style',
       ];
     }
 
@@ -204,8 +204,8 @@ export function defineNativeNavigationElements(): void {
           'layout-direction',
         ),
       };
-      if (this.hasAttribute('style')) {
-        options.style = parseJsonAttribute(this, 'style', undefined as NativeNavigationTabbarOptions['style']);
+      if (this.hasAttribute('tabbar-style')) {
+        options.style = parseJsonAttribute(this, 'tabbar-style', undefined as NativeNavigationTabbarOptions['style']);
       }
 
       const NativeNavigation = await getNativeNavigation();

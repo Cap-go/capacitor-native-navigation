@@ -613,6 +613,12 @@ pre {
   background: light-dark(rgba(17, 24, 39, 0.06), rgba(255, 255, 255, 0.08));
 }
 
+.settings select option,
+.settings-row select option {
+  color: light-dark(#111827, #f8fafc);
+  background: light-dark(#ffffff, #141821);
+}
+
 .library-header {
   max-width: 680px;
   margin: 0 auto 18px;
@@ -714,32 +720,4 @@ pre {
   background: #0a84ff;
 }
 
-@media (prefers-color-scheme: dark) {
-  .scroll-header-list li {
-    color: #f8fafc;
-    background: rgba(20, 24, 33, 0.78);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
-  }
 
-  .scroll-header-list span,
-  .scroll-header-demo p,
-  .scroll-header-demo .eyebrow,
-  .settings .eyebrow {
-    color: #a8b3c4;
-  }
-
-  .settings select {
-    color: #f8fafc;
-    background: rgba(255, 255, 255, 0.1);
-  }
-
-  .settings select option {
-    color: #f8fafc;
-    background: #141821;
-  }
-
-  pre {
-    background: #0b0e14;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
-  }
-}

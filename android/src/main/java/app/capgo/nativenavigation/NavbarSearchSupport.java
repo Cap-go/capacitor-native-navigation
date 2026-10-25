@@ -21,4 +21,18 @@ public final class NavbarSearchSupport {
     public static boolean hidesWhenCollapsed(Boolean requested, boolean largeTitle) {
         return requested == null ? largeTitle : requested;
     }
+
+    /**
+     * Replace the field when its text differs from the supplied value. While it is focused, do that
+     * only after {@code setNavbar} sends a new value, so a re-render of the same text leaves the caret.
+     */
+    public static boolean shouldApplyText(boolean focused, String fieldText, String suppliedText, String previousSuppliedText) {
+        if (suppliedText.equals(fieldText)) {
+            return false;
+        }
+        if (!focused) {
+            return true;
+        }
+        return previousSuppliedText == null || !previousSuppliedText.equals(suppliedText);
+    }
 }

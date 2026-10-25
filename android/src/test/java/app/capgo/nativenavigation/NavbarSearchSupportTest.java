@@ -24,4 +24,12 @@ public class NavbarSearchSupportTest {
         assertFalse(NavbarSearchSupport.hidesWhenCollapsed(Boolean.FALSE, true));
         assertTrue(NavbarSearchSupport.hidesWhenCollapsed(Boolean.TRUE, false));
     }
+
+    @Test
+    public void focusedSearchKeepsKeystrokesUntilTheSuppliedTextChanges() {
+        assertFalse(NavbarSearchSupport.shouldApplyText(true, "he", "h", "h"));
+        assertTrue(NavbarSearchSupport.shouldApplyText(true, "hello", "", "hello"));
+        assertFalse(NavbarSearchSupport.shouldApplyText(true, "h", "h", null));
+        assertTrue(NavbarSearchSupport.shouldApplyText(false, "he", "h", "h"));
+    }
 }

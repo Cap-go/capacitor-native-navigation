@@ -60,4 +60,24 @@ public final class NavbarScrollSupport {
 
         return ScrollAction.NONE;
     }
+
+    /**
+     * Navbar hide/reveal needs samples, and so does a search row that collapses with the large
+     * title while {@code scrollBehavior} stays {@code none}.
+     */
+    public static boolean shouldObserveScroll(
+        ScrollBehavior behavior,
+        boolean navbarVisible,
+        boolean largeTitle,
+        boolean searchVisible,
+        boolean searchHidesWhenCollapsed
+    ) {
+        if (!navbarVisible) {
+            return false;
+        }
+        if (behavior != ScrollBehavior.NONE) {
+            return true;
+        }
+        return largeTitle && searchVisible && searchHidesWhenCollapsed;
+    }
 }

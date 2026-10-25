@@ -405,7 +405,7 @@ The example app route **Scroll header demo** (home tile) shows a long list with 
 
 | At rest                                                                                                                                      | Hide, then reveal                                                                                                                                                                              |
 | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| <img src="./docs/media/scroll-header.webp" alt="Navbar stays visible over the top of a long list" width="160" />                             | <img src="./docs/media/scroll-header-demo.webp" alt="The navbar hides while the list scrolls down and returns when the list scrolls up" width="160" />                                       |
+| <img src="./docs/media/scroll-header.webp" alt="iPhone 17 simulator: navbar stays visible over the top of a long list" width="160" />                             | <img src="./docs/media/scroll-header-demo.webp" alt="iPhone 17 simulator: the navbar is hidden after the list scrolls down" width="160" />                                       |
 
 ## Navbar search
 
@@ -441,6 +441,11 @@ Send the latest `text` on the next `setNavbar` so the field stays in sync. While
 
 The example **Settings** tab uses this field to filter an inset grouped list, and its appearance control switches the demo between light, dark, and the system scheme. The **Navbar** playground has a **Search field** toggle.
 
+iPhone 17 simulator, iOS 27.0.
+
+<img src="./docs/navbar-search-light.webp" alt="Settings search under the large title, light appearance" width="180" />
+<img src="./docs/navbar-search-dark.webp" alt="Settings search under the large title, dark appearance" width="180" />
+
 ## Tab bar placement and alignment
 
 `style.alignment` places a floating bar inside the horizontal margin: `start`, `center` (the default), or `end`. `start` and `end` follow `layoutDirection`. Curve bars and sidebar rails ignore alignment.
@@ -449,7 +454,7 @@ The example **Settings** tab uses this field to filter an inset grouped list, an
 
 - `auto` lets iOS 18 and newer decide. Compact iPhone stays on the bottom. iPad and iPhone Duo can use the trailing sidebar.
 - `bottom` keeps a bottom bar.
-- `sidebar` asks for the trailing rail. On iOS 18 and newer that is the system tab bar in sidebar mode, including on iOS 18 through 25. A compact iPhone may stay on the bottom when UIKit does not offer a sidebar. Android draws an 84dp rail, inset 12dp from the trailing edge, starting below the navbar. The navbar stays full width. The web preview reports the same left or right inset.
+- `sidebar` asks for the trailing rail. On iOS 18 and newer that is the system tab bar in sidebar mode, including on iOS 18 through 25. iPad portrait shows that mode as a top tab bar with the sidebar button. A compact iPhone may stay on the bottom when UIKit does not offer a sidebar. Android draws an 84dp rail, inset 12dp from the trailing edge, starting below the navbar. The navbar stays full width. The web preview reports the same left or right inset.
 
 `curve` always stays on the bottom. `sidebar` ignores `minimizeBehavior` and drag-to-select.
 
@@ -475,6 +480,11 @@ await NativeNavigation.setTabbar({
 ```
 
 The example **Tabbar** playground and the **Settings** tab both expose alignment and placement. Pad page content with `--cap-native-navigation-left` and `--cap-native-navigation-right` so a rail does not cover it.
+
+iPad Pro 11-inch simulator, iOS 27.0. Alignment moves the floating capsule; the iOS 26 system tab bar does not. Sidebar placement uses UIKit's top tab bar and sidebar button.
+
+<img src="./docs/tabbar-alignment-start.webp" alt="iPad: floating tab bar aligned to the start" width="240" />
+<img src="./docs/tabbar-sidebar.webp" alt="iPad: sidebar placement shows the system top tab bar and sidebar button" width="240" />
 
 ## Navbar segment rows (multi-level top bar)
 
@@ -598,7 +608,7 @@ defineNativeNavigationElements();
 <cap-native-tabbar
   selected-id="home"
   tabs='[{"id":"home","title":"Home","icon":{"ios":{"sfSymbol":"house.fill"}}}]'
-  style='{"shape":"floating","alignment":"center","placement":"auto"}'
+  tabbar-style='{"shape":"floating","alignment":"center","placement":"auto"}'
 ></cap-native-tabbar>
 ```
 

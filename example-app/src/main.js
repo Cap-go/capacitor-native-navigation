@@ -6,7 +6,8 @@ import { NativeNavigation } from '@capgo/capacitor-native-navigation';
 
 const app = document.getElementById('app');
 const isWebPreview = Capacitor.getPlatform() === 'web';
-const screenshotMode = import.meta.env.VITE_SCREENSHOT_MODE === 'floating-tabbar';
+const screenshotPreset = import.meta.env.VITE_SCREENSHOT_MODE || '';
+const screenshotMode = screenshotPreset !== '';
 const topButtonStorageKey = 'native-navigation-top-button-visible';
 
 const readTopButtonPreference = () => {
@@ -323,13 +324,40 @@ const applyScreenshotMode = () => {
   if (!screenshotMode) {
     return;
   }
-  appearance = 'light';
+  appearance = screenshotPreset === 'settings-dark' ? 'dark' : 'light';
   tabbarPreset = 'system';
   shapeOverride = null;
-  route = 'home';
-  activeTab = 'home';
-  stack = ['home'];
-  document.documentElement.classList.add('screenshot-floating-tabbar');
+  minimizeEnabled = false;
+  if (screenshotPreset === 'settings' || screenshotPreset === 'settings-dark') {
+    route = 'settings';
+    activeTab = 'settings';
+    stack = ['settings'];
+    tabbarDemo.placement = 'bottom';
+    tabbarDemo.alignment = 'center';
+  } else if (screenshotPreset === 'alignment-start') {
+    route = 'home';
+    activeTab = 'home';
+    stack = ['home'];
+    tabbarDemo.alignment = 'start';
+    tabbarDemo.placement = 'bottom';
+    // The iOS 26 system tab bar ignores alignment. Minimize keeps the custom capsule,
+    // which is the bar `alignment` actually moves.
+    minimizeEnabled = true;
+  } else if (screenshotPreset === 'sidebar') {
+    route = 'settings';
+    activeTab = 'settings';
+    stack = ['settings'];
+    tabbarDemo.placement = 'sidebar';
+  } else if (screenshotPreset === 'scroll-header' || screenshotPreset === 'scroll-header-hidden') {
+    route = 'scrollHeader';
+    activeTab = 'home';
+    stack = ['home', 'scrollHeader'];
+  } else {
+    route = 'home';
+    activeTab = 'home';
+    stack = ['home'];
+    document.documentElement.classList.add('screenshot-floating-tabbar');
+  }
 };
 
 const markScreenshotReady = () => {
@@ -717,6 +745,22 @@ const configureChrome = async () => {
         window.setTimeout(() => reject(new Error('Timed out waiting for native chrome')), 120000);
       }),
     ]);
+    if (screenshotPreset === 'scroll-header-hidden') {
+      const scroller = document.getElementById('app');
+      if (scroller) {
+        // The scroll bridge treats the first sample as delta 0, so one jump never hides the bar.
+        scroller.scrollTo(0, 0);
+        await new Promise((resolve) => {
+          window.setTimeout(resolve, 200);
+        });
+        for (const top of [140, 320, 520, 760, 980]) {
+          scroller.scrollTo({ top, behavior: 'instant' });
+          await new Promise((resolve) => {
+            window.setTimeout(resolve, 180);
+          });
+        }
+      }
+    }
     markScreenshotReady();
     return;
   }

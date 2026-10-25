@@ -46,6 +46,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var navSearchBar: UISearchBar?
     private var navbarSearchVisible = false
     private var navbarSearchHidesWhenCollapsed = false
+    /// Last `search.text` passed to `setNavbar`. Nil after the row is hidden.
+    private var navbarSearchSuppliedText: String?
     private var tabContainer: UIView?
     private var tabEffectView: UIVisualEffectView?
     private var trailingTabEffectView: UIVisualEffectView?
@@ -230,6 +232,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
             guard !hidden else {
                 self.navbarSearchVisible = false
+                self.navbarSearchSuppliedText = nil
                 self.navSearchBar?.isHidden = true
                 self.navContainer?.isHidden = true
                 self.stopNavbarScrollObservation(resetCollapsed: true)
@@ -801,6 +804,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private func applyNavbarSearch(options call: CAPPluginCall) {
         guard let search = call.getObject("search"), search["hidden"] as? Bool != true else {
             navbarSearchVisible = false
+            navbarSearchSuppliedText = nil
             navSearchBar?.isHidden = true
             navSearchBar?.text = nil
             return
@@ -828,7 +832,14 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             bar.tintColor = tint
         }
         let text = search["text"] as? String ?? ""
-        if !bar.isFirstResponder, bar.text != text {
+        let applyText = nativeNavigationShouldApplyNavbarSearchText(
+            focused: bar.isFirstResponder,
+            fieldText: bar.text ?? "",
+            suppliedText: text,
+            previousSuppliedText: navbarSearchSuppliedText
+        )
+        navbarSearchSuppliedText = text
+        if applyText {
             bar.text = text
         }
         bar.isHidden = navbarSearchHeight == 0
@@ -886,7 +897,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
 
     public func tabBarController(_ tabBarController: UITabBarController, shouldSelect viewController: UIViewController) -> Bool {
-        if usesSystemLiquidGlass {
+        if usesSystemTabBar {
             hostWebView(in: viewController)
         }
         tabSelectEmittedForReTap = false
@@ -1040,7 +1051,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
 
     private func ensureTabBar() -> UITabBar {
-        if usesSystemLiquidGlass {
+        if usesSystemTabBar {
             return ensureSystemTabBar()
         }
 
@@ -1426,7 +1437,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
 
     private func hostWebView(in viewController: UIViewController?) {
-        guard usesSystemLiquidGlass,
+        guard usesSystemTabBar,
               let webView = webView,
               let selectedController = viewController as? NativeNavigationTabContentController else {
             return
@@ -1445,7 +1456,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
 
     private func liftWebViewOverlaysAboveSystemTabs() {
-        guard usesSystemLiquidGlass,
+        guard usesSystemTabBar,
               let webView = webView,
               let container = systemTabRootContainer else {
             return

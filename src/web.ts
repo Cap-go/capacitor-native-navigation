@@ -33,6 +33,8 @@ export class NativeNavigationWeb extends WebPlugin implements NativeNavigationPl
   private navbarScrollSamples = new Map<string, number>();
   private navbarScrollListeners: { target: EventTarget; listener: () => void }[] = [];
   private searchApplying = false;
+  /** Last `search.text` from `setNavbar`. Null after the row is removed. */
+  private lastSuppliedSearchText: string | null = null;
 
   async configure(options: NativeNavigationConfigureOptions = {}): Promise<NativeNavigationInsetsResult> {
     this.config = {
@@ -194,6 +196,9 @@ export class NativeNavigationWeb extends WebPlugin implements NativeNavigationPl
         padding: 0 12px;
         font: inherit;
         font-size: 17px;
+        color-scheme: light dark;
+        color: #111827;
+        background: rgba(120, 120, 128, 0.16);
         color: light-dark(#111827, #f8fafc);
         background: light-dark(rgba(120, 120, 128, 0.16), rgba(120, 120, 128, 0.32));
       }
@@ -213,6 +218,7 @@ export class NativeNavigationWeb extends WebPlugin implements NativeNavigationPl
     const visible = navbarHeight > 0 && this.searchRowHeight() > 0;
     if (!visible) {
       existing?.remove();
+      this.lastSuppliedSearchText = null;
       return;
     }
 
@@ -255,7 +261,10 @@ export class NativeNavigationWeb extends WebPlugin implements NativeNavigationPl
     input.placeholder = search?.placeholder || 'Search';
     input.disabled = search?.enabled === false;
     const text = search?.text ?? '';
-    if (document.activeElement !== input && input.value !== text) {
+    const focused = document.activeElement === input;
+    const suppliedChanged = text !== this.lastSuppliedSearchText;
+    this.lastSuppliedSearchText = text;
+    if (input.value !== text && (!focused || suppliedChanged)) {
       this.searchApplying = true;
       input.value = text;
       this.searchApplying = false;
