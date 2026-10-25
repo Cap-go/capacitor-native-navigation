@@ -94,6 +94,7 @@ export function defineNativeNavigationElements(): void {
         'animated',
         'scroll-behavior',
         'scroll-threshold',
+        'search',
       ];
     }
 
@@ -134,6 +135,9 @@ export function defineNativeNavigationElements(): void {
             ? Number(this.getAttribute('scroll-threshold'))
             : undefined,
       };
+      if (this.hasAttribute('search')) {
+        options.search = parseJsonAttribute(this, 'search', undefined as NativeNavigationNavbarOptions['search']);
+      }
 
       const NativeNavigation = await getNativeNavigation();
       await NativeNavigation.setNavbar(options);
@@ -160,6 +164,7 @@ export function defineNativeNavigationElements(): void {
         'experimental-baked-tint-colors',
         'animated',
         'layout-direction',
+        'tabbar-style',
       ];
     }
 
@@ -199,6 +204,9 @@ export function defineNativeNavigationElements(): void {
           'layout-direction',
         ),
       };
+      if (this.hasAttribute('tabbar-style')) {
+        options.style = parseJsonAttribute(this, 'tabbar-style', undefined as NativeNavigationTabbarOptions['style']);
+      }
 
       const NativeNavigation = await getNativeNavigation();
       await NativeNavigation.setTabbar(options);

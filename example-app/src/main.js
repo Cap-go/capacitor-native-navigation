@@ -6,7 +6,8 @@ import { NativeNavigation } from '@capgo/capacitor-native-navigation';
 
 const app = document.getElementById('app');
 const isWebPreview = Capacitor.getPlatform() === 'web';
-const screenshotMode = import.meta.env.VITE_SCREENSHOT_MODE === 'floating-tabbar';
+const screenshotPreset = import.meta.env.VITE_SCREENSHOT_MODE || '';
+const screenshotMode = screenshotPreset !== '';
 const topButtonStorageKey = 'native-navigation-top-button-visible';
 
 const readTopButtonPreference = () => {
@@ -101,6 +102,7 @@ const navbarDemo = {
   animated: true,
   hidden: false,
   segments: true,
+  search: false,
   glass: '',
   scrollBehavior: 'none',
   blurEffect: 'systemChromeMaterial',
@@ -120,6 +122,7 @@ const navbarToggles = [
   ['animated', 'Animate changes'],
   ['hidden', 'Hide navbar'],
   ['segments', 'Segment rows'],
+  ['search', 'Search field'],
 ];
 const segmentSelection = { scope: 'account', section: 'general' };
 const segmentSections = {
@@ -142,6 +145,8 @@ const tabbarDemo = {
   blurEffect: '',
   glass: '',
   surfaceAlpha: '',
+  alignment: 'center',
+  placement: 'auto',
 };
 const tabbarToggles = [
   ['dragToSelect', 'Drag to select'],
@@ -156,6 +161,8 @@ const tabbarToggles = [
   ['disableIndicator', 'Hide indicator (Android)'],
 ];
 const tabbarSelects = [
+  ['alignment', 'Alignment', ['start', 'center', 'end']],
+  ['placement', 'Placement', ['auto', 'bottom', 'sidebar']],
   ['labelVisibilityMode', 'Label visibility', ['', 'auto', 'selected', 'labeled', 'unlabeled']],
   ['trailingRole', 'Trailing tab role (Trailing layout)', ['search', 'prominent', 'normal']],
   [
@@ -260,16 +267,97 @@ const currentTabs = () => {
 let topButtonVisible = readTopButtonPreference();
 let chromeConfigured = false;
 
+const appearanceStorageKey = 'native-navigation-appearance';
+
+const readAppearance = () => {
+  try {
+    const stored = window.localStorage.getItem(appearanceStorageKey);
+    return stored === 'light' || stored === 'dark' ? stored : 'system';
+  } catch {
+    return 'system';
+  }
+};
+
+const writeAppearance = (value) => {
+  try {
+    if (value === 'system') {
+      window.localStorage.removeItem(appearanceStorageKey);
+      return;
+    }
+    window.localStorage.setItem(appearanceStorageKey, value);
+  } catch {
+    // Ignore storage failures in restricted webviews.
+  }
+};
+
+let appearance = readAppearance();
+let settingsQuery = '';
+let navbarSearchText = '';
+
+const systemIsDark = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+const resolvedAppearanceDark = () => {
+  if (appearance === 'dark') {
+    return true;
+  }
+  if (appearance === 'light') {
+    return false;
+  }
+  return systemIsDark();
+};
+
+const applyAppearance = () => {
+  const meta = document.querySelector('meta[name="color-scheme"]');
+  if (meta) {
+    meta.setAttribute('content', appearance === 'dark' ? 'dark' : appearance === 'light' ? 'light' : 'light dark');
+  }
+  const theme = document.querySelector('meta[name="theme-color"]');
+  if (theme) {
+    theme.setAttribute('content', resolvedAppearanceDark() ? '#05070b' : '#f7f8fb');
+  }
+};
+
+const escapeHtml = (value) =>
+  value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+
 const applyScreenshotMode = () => {
   if (!screenshotMode) {
     return;
   }
+  appearance = screenshotPreset === 'settings-dark' ? 'dark' : 'light';
   tabbarPreset = 'system';
   shapeOverride = null;
-  route = 'home';
-  activeTab = 'home';
-  stack = ['home'];
-  document.documentElement.classList.add('screenshot-floating-tabbar');
+  minimizeEnabled = false;
+  if (screenshotPreset === 'settings' || screenshotPreset === 'settings-dark') {
+    route = 'settings';
+    activeTab = 'settings';
+    stack = ['settings'];
+    tabbarDemo.placement = 'bottom';
+    tabbarDemo.alignment = 'center';
+  } else if (screenshotPreset === 'alignment-start') {
+    route = 'home';
+    activeTab = 'home';
+    stack = ['home'];
+    tabbarDemo.alignment = 'start';
+    tabbarDemo.placement = 'bottom';
+    // The iOS 26 system tab bar ignores alignment. Minimize keeps the custom capsule,
+    // which is the bar `alignment` actually moves.
+    minimizeEnabled = true;
+  } else if (screenshotPreset === 'sidebar') {
+    route = 'settings';
+    activeTab = 'settings';
+    stack = ['settings'];
+    tabbarDemo.placement = 'sidebar';
+  } else if (screenshotPreset === 'scroll-header' || screenshotPreset === 'scroll-header-hidden') {
+    route = 'scrollHeader';
+    activeTab = 'home';
+    stack = ['home', 'scrollHeader'];
+  } else {
+    route = 'home';
+    activeTab = 'home';
+    stack = ['home'];
+    document.documentElement.classList.add('screenshot-floating-tabbar');
+  }
 };
 
 const markScreenshotReady = () => {
@@ -290,6 +378,10 @@ const pages = {
     title: 'Layouts',
     subtitle: 'Switch the native tab bar',
     body: `
+      <header class="library-header">
+        <p class="eyebrow">Library</p>
+        <p>Settings searches under the large title. The tab bar can sit at the start, center, or end, or move to a trailing rail.</p>
+      </header>
       <section class="layout-presets" aria-label="Tab bar layouts"></section>
       <section class="venue-strip" aria-label="Curved tabbar demo content">
         <article class="venue-card venue-card-bar">
@@ -394,18 +486,7 @@ const pages = {
   settings: {
     title: 'Settings',
     subtitle: 'Runtime configuration',
-    body: `
-      <section class="settings">
-        <label><input id="labels-toggle" type="checkbox" /> Tab labels</label>
-        <label><input id="icons-toggle" type="checkbox" /> Tab icons</label>
-        <label><input id="minimize-toggle" type="checkbox" /> Minimize tabbar on scroll</label>
-        <label><input id="edge-blur-toggle" type="checkbox" /> Blur behind tabbar</label>
-        <div class="layout-presets" aria-label="Tab bar layouts"></div>
-        <label><input id="top-button-toggle" type="checkbox" /> Top button</label>
-        <button data-action="refresh-version">Read native version</button>
-        <pre id="version-output">Ready.</pre>
-      </section>
-    `,
+    body: '',
   },
   profile: {
     title: 'Profile',
@@ -531,11 +612,24 @@ const pages = {
   },
 };
 
-const tabbarColors = () => ({
-  tint: tabbarShape() === 'curve' ? '#ff5b45' : '#0a84ff',
-  inactiveTint: '#8b8f96',
-  background: '#ffffff',
-});
+const chromePalette = () => {
+  const dark = resolvedAppearanceDark();
+  return {
+    tint: tabbarShape() === 'curve' ? '#ff5b45' : '#0a84ff',
+    inactiveTint: dark ? '#9aa3b2' : '#8b8f96',
+    background: dark ? '#10131a' : '#ffffff',
+    foreground: dark ? '#f8fafc' : '#111827',
+  };
+};
+
+const tabbarColors = () => {
+  const palette = chromePalette();
+  return {
+    tint: palette.tint,
+    inactiveTint: palette.inactiveTint,
+    background: palette.background,
+  };
+};
 
 const tabsForNative = () =>
   currentTabs().map((tab) => {
@@ -575,6 +669,8 @@ const tabbarStyle = () => {
         centerButtonLift: 28,
         centerButtonColor: '#ff5b45',
         centerButtonIconColor: '#ffffff',
+        alignment: 'center',
+        placement: 'bottom',
       }
     : {
         shape: 'floating',
@@ -582,6 +678,8 @@ const tabbarStyle = () => {
         horizontalMargin: 24,
         maxWidth: 430,
         bottomGap: 10,
+        alignment: tabbarDemo.alignment || 'center',
+        placement: tabbarDemo.placement || 'auto',
       };
 };
 const topButtonItems = [
@@ -612,8 +710,10 @@ const applyConfigure = async () => {
     contentInsetMode: configDemo.contentInsetMode,
     animationDuration: Number(configDemo.animationDuration),
     colors: {
-      tint: '#0a84ff',
-      inactiveTint: '#6b7280',
+      tint: chromePalette().tint,
+      inactiveTint: chromePalette().inactiveTint,
+      background: chromePalette().background,
+      foreground: chromePalette().foreground,
     },
     glass:
       screenshotMode || configDemo.glass === 'none'
@@ -645,6 +745,22 @@ const configureChrome = async () => {
         window.setTimeout(() => reject(new Error('Timed out waiting for native chrome')), 120000);
       }),
     ]);
+    if (screenshotPreset === 'scroll-header-hidden') {
+      const scroller = document.getElementById('app');
+      if (scroller) {
+        // The scroll bridge treats the first sample as delta 0, so one jump never hides the bar.
+        scroller.scrollTo(0, 0);
+        await new Promise((resolve) => {
+          window.setTimeout(resolve, 200);
+        });
+        for (const top of [140, 320, 520, 760, 980]) {
+          scroller.scrollTo({ top, behavior: 'instant' });
+          await new Promise((resolve) => {
+            window.setTimeout(resolve, 180);
+          });
+        }
+      }
+    }
     markScreenshotReady();
     return;
   }
@@ -675,6 +791,7 @@ const navbarDemoOptions = (resetScrollCollapsed) => {
   if (navbarDemo.disabledItem) {
     rightItems.push({ id: 'disabled', title: 'Off', enabled: false });
   }
+  const palette = chromePalette();
   return {
     hidden: navbarDemo.hidden,
     title: 'Navbar',
@@ -708,14 +825,21 @@ const navbarDemoOptions = (resetScrollCollapsed) => {
           },
         ]
       : [],
+    search: navbarDemo.search
+      ? {
+          hidden: false,
+          placeholder: 'Search',
+          text: navbarSearchText,
+          hidesWhenCollapsed: navbarDemo.large,
+        }
+      : { hidden: true },
     glass: navbarDemo.glass ? { effect: navbarDemo.glass } : undefined,
-    colors:
-      navbarDemo.tint || navbarDemo.background
-        ? {
-            ...(navbarDemo.tint ? { tint: '#ff7a1a', foreground: '#ff7a1a' } : {}),
-            ...(navbarDemo.background ? { background: '#cce4ffee' } : {}),
-          }
-        : undefined,
+    colors: {
+      tint: navbarDemo.tint ? '#ff7a1a' : palette.tint,
+      inactiveTint: palette.inactiveTint,
+      foreground: navbarDemo.tint ? '#ff7a1a' : palette.foreground,
+      background: navbarDemo.background ? '#cce4ffee' : palette.background,
+    },
   };
 };
 
@@ -726,11 +850,19 @@ const updateNavbar = async (resetScrollCollapsed = false) => {
   }
   const page = pageFor(route);
   const scrollHeaderDemo = route === 'scrollHeader';
+  const settingsRoute = route === 'settings';
+  const palette = chromePalette();
   await NativeNavigation.setNavbar({
     hidden: !scrollHeaderDemo && route === 'home' && tabbarShape() === 'curve',
     title: page.title,
-    subtitle: scrollHeaderDemo ? page.subtitle : route === 'home' ? tabbarPresets[tabbarPreset].detail : page.subtitle,
-    large: !scrollHeaderDemo && route === 'home' && tabbarShape() !== 'curve',
+    subtitle: settingsRoute
+      ? undefined
+      : scrollHeaderDemo
+        ? page.subtitle
+        : route === 'home'
+          ? tabbarPresets[tabbarPreset].detail
+          : page.subtitle,
+    large: settingsRoute || (!scrollHeaderDemo && route === 'home' && tabbarShape() !== 'curve'),
     transparent: true,
     scrollBehavior: scrollHeaderDemo ? 'both' : 'none',
     scrollThreshold: 8,
@@ -740,6 +872,21 @@ const updateNavbar = async (resetScrollCollapsed = false) => {
       title: 'Back',
     },
     rightItems: shouldShowTopButton() ? topButtonItems : [],
+    segments: [],
+    search: settingsRoute
+      ? {
+          hidden: false,
+          placeholder: 'Search',
+          text: settingsQuery,
+          hidesWhenCollapsed: true,
+        }
+      : { hidden: true },
+    colors: {
+      tint: palette.tint,
+      inactiveTint: palette.inactiveTint,
+      background: palette.background,
+      foreground: palette.foreground,
+    },
   });
 };
 
@@ -795,6 +942,8 @@ const clearNavbarActions = () => {
     backButton: { visible: false },
     leftItems: [],
     rightItems: [],
+    segments: [],
+    search: { hidden: true },
   }).catch((error) => {
     console.warn('Native navbar cleanup failed', error);
   });
@@ -894,6 +1043,126 @@ const syncControls = () => {
   });
 };
 
+const libraryRows = [
+  ['Playlists', 'Collections you saved or shared'],
+  ['Artists', 'People and groups in the library'],
+  ['Albums', 'Releases, singles, and live sets'],
+  ['Songs', 'Every track available on this device'],
+  ['Downloaded', 'Music stored for offline play'],
+  ['Compilations', 'Soundtracks and multi-artist albums'],
+];
+
+const matchesSettingsQuery = (...parts) => {
+  const query = settingsQuery.trim().toLowerCase();
+  if (!query) {
+    return true;
+  }
+  return parts.join(' ').toLowerCase().includes(query);
+};
+
+const settingsSwitch = (id, label) =>
+  `<label class="settings-row"><span>${label}</span><input id="${id}" type="checkbox" /></label>`;
+
+const settingsSelect = (key, label, values) => `
+  <label class="settings-row">${label}
+    <select data-tab-opt="${key}">
+      ${values.map((value) => `<option value="${value}">${value}</option>`).join('')}
+    </select>
+  </label>`;
+
+const settingsMarkup = () => {
+  const groups = [];
+  if (matchesSettingsQuery('Appearance', 'Light', 'Dark', 'System', 'theme', 'color', 'mode')) {
+    groups.push(`
+      <section class="settings-group">
+        <h2>Appearance</h2>
+        <div class="settings-card">
+          <div class="appearance-picker" role="group" aria-label="Appearance">
+            ${[
+              ['light', 'Light'],
+              ['dark', 'Dark'],
+              ['system', 'System'],
+            ]
+              .map(
+                ([value, label]) =>
+                  `<button type="button" data-appearance="${value}" aria-pressed="${appearance === value}">${label}</button>`,
+              )
+              .join('')}
+          </div>
+          <p class="settings-note">System follows the device, currently ${systemIsDark() ? 'dark' : 'light'}.</p>
+        </div>
+      </section>
+    `);
+  }
+
+  const visibleLibrary = libraryRows.filter(([title, detail]) => matchesSettingsQuery('Library', title, detail));
+  if (visibleLibrary.length > 0) {
+    groups.push(`
+      <section class="settings-group">
+        <h2>Library</h2>
+        <div class="settings-card">
+          ${visibleLibrary
+            .map(
+              ([title, detail]) => `
+                <div class="settings-row">
+                  <span><strong>${title}</strong><small>${detail}</small></span>
+                </div>
+              `,
+            )
+            .join('')}
+        </div>
+      </section>
+    `);
+  }
+
+  const chromeRows = [
+    matchesSettingsQuery('Tab labels', 'labels') ? settingsSwitch('labels-toggle', 'Tab labels') : '',
+    matchesSettingsQuery('Tab icons', 'icons') ? settingsSwitch('icons-toggle', 'Tab icons') : '',
+    matchesSettingsQuery('Minimize on scroll') ? settingsSwitch('minimize-toggle', 'Minimize on scroll') : '',
+    matchesSettingsQuery('Edge blur') ? settingsSwitch('edge-blur-toggle', 'Blur behind tabbar') : '',
+    matchesSettingsQuery('Alignment', 'start', 'center', 'end')
+      ? settingsSelect('alignment', 'Alignment', ['start', 'center', 'end'])
+      : '',
+    matchesSettingsQuery('Placement', 'auto', 'bottom', 'sidebar', 'rail')
+      ? settingsSelect('placement', 'Placement', ['auto', 'bottom', 'sidebar'])
+      : '',
+    matchesSettingsQuery('Top button', 'compose') ? settingsSwitch('top-button-toggle', 'Top button') : '',
+  ].filter(Boolean);
+  if (chromeRows.length > 0) {
+    groups.push(`
+      <section class="settings-group">
+        <h2>Tab bar</h2>
+        <div class="settings-card">${chromeRows.join('')}</div>
+        <p class="settings-note">Sidebar is a trailing rail. A curve bar stays on the bottom. A compact iPhone may stay on the bottom.</p>
+      </section>
+    `);
+  }
+
+  if (matchesSettingsQuery('Layouts', 'System', 'Trailing', 'Center', 'tab bar')) {
+    groups.push(`
+      <section class="settings-group">
+        <h2>Layouts</h2>
+        <div class="layout-presets" aria-label="Tab bar layouts"></div>
+      </section>
+    `);
+  }
+
+  if (matchesSettingsQuery('Version', 'plugin', 'native')) {
+    groups.push(`
+      <section class="settings-group">
+        <h2>About</h2>
+        <button class="settings-action" data-action="refresh-version">Read native version</button>
+        <pre id="version-output">Ready.</pre>
+      </section>
+    `);
+  }
+
+  if (groups.length === 0) {
+    return `<p class="settings-empty">No matches for “${escapeHtml(settingsQuery.trim())}”.</p>`;
+  }
+  return `<div class="settings-screen">${groups.join('')}</div>`;
+};
+
 const visiblePreviewTabs = () => tabsForNative().filter((tab) => !tab.hidden);
 
 const renderWebTabbarPreview = () => {
@@ -901,9 +1170,12 @@ const renderWebTabbarPreview = () => {
     return '';
   }
 
+  const style = tabbarStyle();
+  const sidebar = style.placement === 'sidebar' && tabbarShape() !== 'curve';
   const visibleTabs = visiblePreviewTabs();
   const trailingCandidates = visibleTabs.filter((tab) => tab.role === 'search' || tab.role === 'prominent');
-  const trailingTab = tabbarShape() === 'floating' ? (trailingCandidates[trailingCandidates.length - 1] ?? null) : null;
+  const trailingTab =
+    !sidebar && tabbarShape() === 'floating' ? (trailingCandidates[trailingCandidates.length - 1] ?? null) : null;
   const capsuleTabs = trailingTab
     ? visibleTabs.filter((tab) => !(tab.role === 'search' || tab.role === 'prominent'))
     : visibleTabs;
@@ -925,12 +1197,24 @@ const renderWebTabbarPreview = () => {
     .join('');
   const trailingMarkup = trailingTab ? renderTab(trailingTab, { detached: true }) : '';
 
-  return `<nav class="web-tabbar-preview ${tabbarShape()}${trailingTab ? ' has-trailing' : ''}" style="--web-tab-count: ${capsuleTabs.length}" aria-label="Tabbar preview"><div class="web-tabbar-capsule">${capsuleItems}</div>${trailingMarkup}</nav>`;
+  const alignClass = !sidebar && tabbarShape() === 'floating' ? ` align-${style.alignment}` : '';
+  const shapeClass = sidebar ? 'sidebar' : tabbarShape();
+  return `<nav class="web-tabbar-preview ${shapeClass}${alignClass}${trailingTab ? ' has-trailing' : ''}" style="--web-tab-count: ${capsuleTabs.length}" aria-label="Tabbar preview"><div class="web-tabbar-capsule">${capsuleItems}</div>${trailingMarkup}</nav>`;
 };
+
+const applyPageSearchFilter = () => {
+  const query = route === 'navbar' && navbarDemo.search ? navbarSearchText.trim().toLowerCase() : '';
+  document.querySelectorAll('.scroll-header-list li').forEach((item) => {
+    item.hidden = query.length > 0 && !item.textContent.toLowerCase().includes(query);
+  });
+};
+
 const render = () => {
   const page = pageFor(route);
-  app.innerHTML = `<div class="page" data-route="${route}">${page.body}</div>${renderWebTabbarPreview()}`;
+  const body = route === 'settings' ? settingsMarkup() : page.body;
+  app.innerHTML = `<div class="page" data-route="${route}">${body}</div>${renderWebTabbarPreview()}`;
   syncControls();
+  applyPageSearchFilter();
 };
 
 const navigate = async (nextRoute, direction = 'forward', extra = {}) => {
@@ -957,6 +1241,18 @@ const navigate = async (nextRoute, direction = 'forward', extra = {}) => {
 app.addEventListener('click', async (event) => {
   const target = event.target.closest('button');
   if (!target) {
+    return;
+  }
+  if (target.dataset.appearance) {
+    appearance = target.dataset.appearance;
+    if (!screenshotMode) {
+      writeAppearance(appearance);
+    }
+    applyAppearance();
+    render();
+    await applyConfigure();
+    await updateNavbar();
+    await updateTabbar();
     return;
   }
   const previewTab = target.dataset.webTab;
@@ -1089,12 +1385,19 @@ app.addEventListener('change', async (event) => {
   const navOption = event.target.dataset.navOpt;
   if (navOption) {
     navbarDemo[navOption] = event.target.type === 'checkbox' ? event.target.checked : event.target.value;
+    if (navOption === 'search' && !navbarDemo.search) {
+      navbarSearchText = '';
+    }
     await updateNavbar(true);
+    applyPageSearchFilter();
     return;
   }
   const tabOption = event.target.dataset.tabOpt;
   if (tabOption) {
     tabbarDemo[tabOption] = event.target.type === 'checkbox' ? event.target.checked : event.target.value;
+    if (tabOption === 'alignment' || tabOption === 'placement') {
+      render();
+    }
     await updateTabbar();
     return;
   }
@@ -1137,6 +1440,30 @@ app.addEventListener('change', async (event) => {
 
 NativeNavigation.addListener('navbarBack', async () => {
   await navigate(stack[stack.length - 2] ?? activeTab, 'back');
+});
+
+NativeNavigation.addListener('navbarSearch', async (event) => {
+  const text = event.reason === 'cancel' ? '' : event.text;
+  if (route === 'settings') {
+    if (text === settingsQuery) {
+      return;
+    }
+    settingsQuery = text;
+    const scrollTop = app.scrollTop;
+    render();
+    app.scrollTop = scrollTop;
+    await updateNavbar();
+    return;
+  }
+  if (route === 'navbar' && navbarDemo.search) {
+    navbarSearchText = text;
+    applyPageSearchFilter();
+    const output = document.getElementById('version-output');
+    if (output) {
+      output.textContent = `Search ${event.reason}: ${text}`;
+    }
+    await updateNavbar();
+  }
 });
 
 NativeNavigation.addListener('navbarItemTap', async (event) => {
@@ -1196,7 +1523,29 @@ window.addEventListener('pageshow', () => {
 });
 
 applyScreenshotMode();
+applyAppearance();
 render();
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  if (appearance !== 'system') {
+    return;
+  }
+  applyAppearance();
+  render();
+  void applyConfigure()
+    .then(() => updateNavbar())
+    .then(() => updateTabbar());
+});
+window.addEventListener('storage', (event) => {
+  if (event.key !== appearanceStorageKey || screenshotMode) {
+    return;
+  }
+  appearance = event.newValue === 'light' || event.newValue === 'dark' ? event.newValue : 'system';
+  applyAppearance();
+  render();
+  void applyConfigure()
+    .then(() => updateNavbar())
+    .then(() => updateTabbar());
+});
 if (screenshotMode) {
   void SplashScreen.hide({ fadeOutDuration: 0 });
 }

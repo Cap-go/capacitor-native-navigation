@@ -2,6 +2,17 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      try {
+        var storedAppearance = localStorage.getItem('native-navigation-appearance');
+        if (storedAppearance === 'light' || storedAppearance === 'dark') {
+          document.querySelector('meta[name="color-scheme"]').content = storedAppearance;
+        }
+      } catch (error) {
+        // Storage can be blocked. The page then follows the system scheme.
+      }
+    </script>
 
 
     <meta
