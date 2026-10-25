@@ -1,4 +1,13 @@
 import type { NativeNavigationPlugin } from './definitions';
 
-export const createNativeNavigationWeb = (): Promise<NativeNavigationPlugin> =>
-  import('./web').then((m) => new m.NativeNavigationWeb());
+let webPlugin: Promise<NativeNavigationPlugin> | null = null;
+
+/**
+ * One web implementation for every concurrent `registerPlugin` call.
+ * Capacitor can invoke this factory twice before the first import settles,
+ * and a second instance would drop `addListener` events from `setNavbar`.
+ */
+export const createNativeNavigationWeb = (): Promise<NativeNavigationPlugin> => {
+  webPlugin ??= import('./web').then((m) => new m.NativeNavigationWeb());
+  return webPlugin;
+};

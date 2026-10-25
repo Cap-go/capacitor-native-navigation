@@ -98,6 +98,28 @@ export interface NativeNavigationRect {
 export type NativeNavigationTabbarShape = 'floating' | 'curve';
 
 /**
+ * Horizontal alignment of a floating tab bar inside the safe area.
+ * `start` and `end` follow `layoutDirection`.
+ */
+export type NativeNavigationTabbarAlignment = 'start' | 'center' | 'end';
+
+/**
+ * Where the native tab bar sits.
+ *
+ * `auto` lets iOS 18+ choose: a bottom bar on compact iPhone, a trailing
+ * sidebar on iPad and iPhone Duo. `bottom` keeps a bottom bar. `sidebar`
+ * asks for that trailing rail. Curve-shaped bars stay on the bottom.
+ */
+export type NativeNavigationTabbarPlacement = 'auto' | 'bottom' | 'sidebar';
+
+/**
+ * Where the navbar search field is drawn. `stacked` sits under the title,
+ * the iOS 27 Settings field. The field is always stacked today; the value is
+ * reserved so a later release can fold it into the bar.
+ */
+export type NativeNavigationNavbarSearchPlacement = 'stacked';
+
+/**
  * Native tab role for Liquid Glass tab bars.
  *
  * `search` (and `prominent` when the OS supports it) renders as a detached
@@ -353,6 +375,45 @@ export interface NativeNavigationNavbarSegmentItem {
 }
 
 /**
+ * Native search field drawn with the navbar, like the iOS 27 Settings search.
+ */
+export interface NativeNavigationNavbarSearch {
+  /**
+   * Remove the field. Pass `hidden: true` to show no field.
+   */
+  hidden?: boolean;
+
+  /**
+   * Placeholder text. Defaults to `Search`.
+   */
+  placeholder?: string;
+
+  /**
+   * Query to show. While the field is focused, native edits are kept until
+   * this value changes.
+   */
+  text?: string;
+
+  /**
+   * Whether the field accepts input. Defaults to `true`.
+   */
+  enabled?: boolean;
+
+  /**
+   * Field placement. Only `stacked` is drawn today: a row under the title and
+   * above `segments`.
+   */
+  placement?: NativeNavigationNavbarSearchPlacement;
+
+  /**
+   * Hide the row once a large title collapses on scroll. Defaults to `true`
+   * when `large` is `true`, and `false` otherwise. The reported top inset
+   * shrinks with the row.
+   */
+  hidesWhenCollapsed?: boolean;
+}
+
+/**
  * How a navbar segment row draws its items.
  *
  * - `segmented`: equal-width control that fills the row (`UISegmentedControl` on iOS).
@@ -460,6 +521,15 @@ export interface NativeNavigationNavbarOptions {
    * Right-side action buttons.
    */
   rightItems?: NativeNavigationBarButton[];
+
+  /**
+   * Search field under the title. The row adds 52pt (iOS) or 52dp (Android)
+   * to the navbar and to the reported top inset while it is visible. Pass
+   * `hidden: true` to remove it. Typing fires `navbarSearch`.
+   *
+   * @since 8.14.0
+   */
+  search?: NativeNavigationNavbarSearch;
 
   /**
    * Rows of native segments drawn under the bar, top to bottom. Each row adds
@@ -649,6 +719,27 @@ export interface NativeNavigationTabbarStyle {
    * Included center button icon color. Defaults to white.
    */
   centerButtonIconColor?: string;
+
+  /**
+   * Horizontal alignment of a floating bar. Defaults to `center`. Ignored for
+   * `curve` and for `sidebar` placement. `start` and `end` follow
+   * `layoutDirection`.
+   *
+   * @since 8.14.0
+   */
+  alignment?: NativeNavigationTabbarAlignment;
+
+  /**
+   * `auto` lets iOS 18+ place the system tab bar (bottom on compact iPhone,
+   * trailing sidebar on iPad and iPhone Duo). `bottom` keeps a bottom bar.
+   * `sidebar` requests the trailing rail: the system tab bar on iOS 18+, and
+   * a vertical rail of the same tabs on Android. Compact iPhone may stay on
+   * the bottom when UIKit does not offer a sidebar. `curve` stays on the
+   * bottom. `sidebar` ignores `minimizeBehavior` and drag-to-select.
+   *
+   * @since 8.14.0
+   */
+  placement?: NativeNavigationTabbarPlacement;
 }
 
 /**
@@ -927,6 +1018,19 @@ export interface NativeNavigationBarItemTapEvent {
   placement: 'left' | 'right';
 }
 
+export interface NativeNavigationNavbarSearchEvent {
+  /**
+   * Current field text.
+   */
+  text: string;
+
+  /**
+   * `input` while typing, `submit` from the search key, `cancel` when the
+   * field is cleared from the platform cancel action.
+   */
+  reason: 'input' | 'submit' | 'cancel';
+}
+
 export interface NativeNavigationNavbarSegmentSelectEvent {
   /**
    * Id of the segment row.
@@ -1057,6 +1161,16 @@ export interface NativeNavigationPlugin {
   addListener(
     eventName: 'navbarItemTap',
     listenerFunc: (event: NativeNavigationBarItemTapEvent) => void,
+  ): Promise<PluginListenerHandle>;
+
+  /**
+   * Fired when the navbar search field changes.
+   *
+   * @since 8.14.0
+   */
+  addListener(
+    eventName: 'navbarSearch',
+    listenerFunc: (event: NativeNavigationNavbarSearchEvent) => void,
   ): Promise<PluginListenerHandle>;
 
   /**

@@ -20,9 +20,9 @@
 
 > 🤖 **Building with an AI coding agent?** Install [Capgo skills](https://capgo.app/skills/?ref=plugin_native_navigation) so Claude Code, Codex, Cursor, Copilot, or Gemini CLI know how to install and use `@capgo/capacitor-native-navigation` in your Capacitor app: `npx skills add Cap-go/capgo-skills`. Then ask your agent: _"Add @capgo/capacitor-native-navigation to my Capacitor app and wire it up."_ [Agent setup guides](https://capgo.app/agents/?ref=plugin_native_navigation) · [Hosted MCP](https://capgo.app/docs/ai/mcp/?ref=plugin_native_navigation)
 
-Native navbar, tabbar, safe-area handling, and WebView snapshot transitions for Capacitor apps. Your web framework keeps routing and page rendering while this plugin owns the platform surfaces users expect to feel native.
+Native navbar, tab bar, safe-area handling, and WebView snapshot transitions for Capacitor apps. Your web framework keeps routing and page rendering while this plugin owns the platform surfaces: a search field under the large title, a tab bar aligned to the start, center, or end, and a trailing sidebar rail.
 
-**iOS 27 and iPhone Duo.** System tab bars, Liquid Glass, and the curved center button follow the window when a Duo folds and unfolds.
+**iOS 27 and iPhone Duo.** System tab bars, Liquid Glass, and the curved center button follow the window when a Duo folds and unfolds. `style.placement: 'sidebar'` asks for that trailing rail on iOS 18 and newer. `style.alignment` places a floating bar on the start, center, or end.
 
 ## Demo
 
@@ -77,8 +77,10 @@ NativeNavigation.addListener('pullToRefresh', async () => {
 ## Features
 
 - Drive native top navigation and bottom tabs from JavaScript state.
+- Show a native search field under the navbar with `setNavbar({ search })`. It collapses with a large title and reports `navbarSearch`.
+- Align a floating tab bar to the start, center, or end, and place the same tabs in a trailing sidebar rail.
 - Use system-owned iOS navigation bars, tab bars, tab gestures, and Liquid Glass rendering.
-- Emit native intent events such as `navbarBack`, `navbarItemTap`, and `tabSelect`.
+- Emit native intent events such as `navbarBack`, `navbarItemTap`, `navbarSearch`, and `tabSelect`.
 - Enable an optional Android Liquid Glass-style translucent surface for native bars (pair it with a CSS `backdrop-filter` for blur).
 - Capture WebView snapshots for native-feeling push, back, root, tab, and zoom transitions.
 - Configure tab labels, selected icons, badges, indicators, ripples, tint colors, and dynamic colors.
@@ -87,6 +89,17 @@ NativeNavigation.addListener('pullToRefresh', async () => {
 - Opt into native pull-to-refresh (system spinner and haptic on iOS, `SwipeRefreshLayout` on Android) with `setPullToRefresh()`.
 - Hide the navbar and tabbar while a web modal, sheet, or popover is open. An animated tabbar hide keeps the iOS tab controller and WebView in place.
 - Work with React, Vue, Angular, Svelte, Solid, vanilla JS, and any router that exposes imperative navigation.
+
+## Choose a surface
+
+| Surface | Use it for |
+| --- | --- |
+| Navbar search | Filter the page under a large title, as in Settings or a library. |
+| Segment rows | Switch scope and section on the current screen. |
+| Floating bar, center | The default phone tab bar. |
+| Floating bar, start or end | A short bar sitting toward one side. |
+| Sidebar | The same tabs as a trailing rail on iPad, iPhone Duo, and Android. |
+| Curve | A bottom bar with a raised center action. It stays on the bottom. |
 
 ## How It Fits
 
@@ -388,17 +401,80 @@ Pick one animation layer per navigation. For normal route pushes, let `@capgo/ca
 
 Opt in per screen with `setNavbar({ scrollBehavior: 'both' })`. Defaults stay `none`, so existing apps keep static chrome. Native iOS and Android listen to scroll on `window`, `#app`, and any element marked with `data-cap-native-navigation-scroll`. Use `reportNavbarScroll()` only for custom scroll roots.
 
-The example app route **Scroll header demo** (home tile) shows a long list with `scrollBehavior: 'both'`.
+The example app route **Scroll header demo** (home tile) shows a long list with `scrollBehavior: 'both'`. Scroll down to hide the bar. Scroll up to bring it back before the list reaches the top.
 
-Placeholder media (Martin adds before release):
+| At rest                                                                                                                                      | Hide, then reveal                                                                                                                                                                              |
+| -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <img src="./docs/media/scroll-header.webp" alt="Navbar stays visible over the top of a long list" width="160" />                             | <img src="./docs/media/scroll-header-demo.webp" alt="The navbar hides while the list scrolls down and returns when the list scrolls up" width="160" />                                       |
 
-<!-- MARTIN_MEDIA: scroll-header.webp -->
+## Navbar search
 
-![Scroll-driven native navbar (screenshot placeholder)](docs/media/scroll-header.webp)
+Pass `search` to `setNavbar` to draw a native field under the bar and above any segment rows. The row is 52pt on iOS and 52dp on Android, and that height is included in the top inset. iOS uses a `UISearchBar`. Android uses a text field. The web preview draws the same field above the page.
 
-<!-- MARTIN_MEDIA: scroll-header-demo.webp -->
+`hidesWhenCollapsed` defaults to `true` when the navbar is a large title. Once that title collapses, the row height becomes 0 and the top inset shrinks with it. On the web preview the field hides with the navbar when scroll behavior collapses the bar. Large-title collapse itself is native.
 
-![Scroll-driven native navbar (animated demo placeholder)](docs/media/scroll-header-demo.webp)
+```typescript
+import { NativeNavigation } from '@capgo/capacitor-native-navigation';
+
+let query = '';
+
+const renderNavbar = () =>
+  NativeNavigation.setNavbar({
+    title: 'Settings',
+    large: true,
+    search: {
+      placeholder: 'Search',
+      text: query,
+      hidesWhenCollapsed: true,
+    },
+  });
+
+await NativeNavigation.addListener('navbarSearch', async ({ text, reason }) => {
+  query = reason === 'cancel' ? '' : text;
+  await renderNavbar();
+});
+
+await renderNavbar();
+```
+
+Send the latest `text` on the next `setNavbar` so the field stays in sync. While the field is focused, an unchanged `text` is left alone. On iOS and Android, omitting `search` removes the field. The web implementation keeps the previous `search` object when the call omits it, so pass `search: { hidden: true }` to clear it there too.
+
+The example **Settings** tab uses this field to filter an inset grouped list, and its appearance control switches the demo between light, dark, and the system scheme. The **Navbar** playground has a **Search field** toggle.
+
+## Tab bar placement and alignment
+
+`style.alignment` places a floating bar inside the horizontal margin: `start`, `center` (the default), or `end`. `start` and `end` follow `layoutDirection`. Curve bars and sidebar rails ignore alignment.
+
+`style.placement` chooses the chrome:
+
+- `auto` lets iOS 18 and newer decide. Compact iPhone stays on the bottom. iPad and iPhone Duo can use the trailing sidebar.
+- `bottom` keeps a bottom bar.
+- `sidebar` asks for the trailing rail. On iOS 18 and newer that is the system tab bar in sidebar mode, including on iOS 18 through 25. A compact iPhone may stay on the bottom when UIKit does not offer a sidebar. Android draws an 84dp rail, inset 12dp from the trailing edge, starting below the navbar. The navbar stays full width. The web preview reports the same left or right inset.
+
+`curve` always stays on the bottom. `sidebar` ignores `minimizeBehavior` and drag-to-select.
+
+```typescript
+await NativeNavigation.setTabbar({
+  tabs,
+  selectedId: 'home',
+  style: {
+    shape: 'floating',
+    alignment: 'end',
+    placement: 'bottom',
+  },
+});
+
+await NativeNavigation.setTabbar({
+  tabs,
+  selectedId: 'home',
+  style: {
+    shape: 'floating',
+    placement: 'sidebar',
+  },
+});
+```
+
+The example **Tabbar** playground and the **Settings** tab both expose alignment and placement. Pad page content with `--cap-native-navigation-left` and `--cap-native-navigation-right` so a rail does not cover it.
 
 ## Navbar segment rows (multi-level top bar)
 
@@ -479,6 +555,8 @@ With `contentInsetMode: 'css'`, the plugin updates these variables on `document.
   height: 100dvh;
   overflow: auto;
   padding-top: calc(var(--cap-native-navigation-top) + 24px);
+  padding-left: var(--cap-native-navigation-left);
+  padding-right: var(--cap-native-navigation-right);
   scroll-padding-bottom: calc(var(--cap-native-navigation-bottom) + 24px);
 }
 
@@ -512,15 +590,15 @@ defineNativeNavigationElements();
 <cap-native-navigation-provider enabled="true" content-inset-mode="css"></cap-native-navigation-provider>
 
 <cap-native-navbar
-  title="Home"
-  subtitle="Native chrome"
-  transparent
-  right-items='[{"id":"compose","title":"Compose","icon":{"ios":{"sfSymbol":"square.and.pencil"}}}]'
+  title="Settings"
+  large
+  search='{"placeholder":"Search","hidesWhenCollapsed":true}'
 ></cap-native-navbar>
 
 <cap-native-tabbar
   selected-id="home"
   tabs='[{"id":"home","title":"Home","icon":{"ios":{"sfSymbol":"house.fill"}}}]'
+  style='{"shape":"floating","alignment":"center","placement":"auto"}'
 ></cap-native-tabbar>
 ```
 
@@ -550,9 +628,9 @@ Inline SVG supports the icon-focused subset used by common sets such as Lucide a
 
 ## Platform Notes
 
-- iOS uses UIKit `UINavigationBar`, `UITabBar`, and `UITabBarController` so the system owns tab interaction, Liquid Glass rendering, and safe-area behavior.
-- Android uses an AppCompat `Toolbar` and a native bottom tab surface with edge-to-edge placement.
-- Web mirrors inset variables and events for local development.
+- iOS uses UIKit `UINavigationBar`, `UISearchBar`, `UITabBar`, and `UITabBarController` so the system owns tab interaction, Liquid Glass rendering, sidebar placement on iOS 18+, and safe-area behavior.
+- Android uses an AppCompat `Toolbar`, a text field under that toolbar, and a native tab surface. Sidebar placement is a trailing rail. The navbar stays full width.
+- Web mirrors inset variables, the search field, sidebar insets, floating-bar alignment, and events for local development.
 
 ## Example App
 
@@ -582,6 +660,7 @@ npx cap sync
 * [`getPluginVersion()`](#getpluginversion)
 * [`addListener('navbarBack', ...)`](#addlistenernavbarback-)
 * [`addListener('navbarItemTap', ...)`](#addlistenernavbaritemtap-)
+* [`addListener('navbarSearch', ...)`](#addlistenernavbarsearch-)
 * [`addListener('navbarSegmentSelect', ...)`](#addlistenernavbarsegmentselect-)
 * [`addListener('tabSelect', ...)`](#addlistenertabselect-)
 * [`addListener('safeAreaChanged', ...)`](#addlistenersafeareachanged-)
@@ -778,6 +857,26 @@ addListener(eventName: 'navbarItemTap', listenerFunc: (event: NativeNavigationBa
 --------------------
 
 
+### addListener('navbarSearch', ...)
+
+```typescript
+addListener(eventName: 'navbarSearch', listenerFunc: (event: NativeNavigationNavbarSearchEvent) => void) => Promise<PluginListenerHandle>
+```
+
+Fired when the navbar search field changes.
+
+| Param              | Type                                                                                                                |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| **`eventName`**    | <code>'navbarSearch'</code>                                                                                         |
+| **`listenerFunc`** | <code>(event: <a href="#nativenavigationnavbarsearchevent">NativeNavigationNavbarSearchEvent</a>) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+**Since:** 8.14.0
+
+--------------------
+
+
 ### addListener('navbarSegmentSelect', ...)
 
 ```typescript
@@ -969,6 +1068,7 @@ Native navbar state.
 | **`backButton`**           | <code><a href="#nativenavigationbackbutton">NativeNavigationBackButton</a></code>                     | Back button state.                                                                                                                                                                                                                                                                                                                                                                                                                                           |        |
 | **`leftItems`**            | <code>NativeNavigationBarButton[]</code>                                                              | Left-side action buttons.                                                                                                                                                                                                                                                                                                                                                                                                                                    |        |
 | **`rightItems`**           | <code>NativeNavigationBarButton[]</code>                                                              | Right-side action buttons.                                                                                                                                                                                                                                                                                                                                                                                                                                   |        |
+| **`search`**               | <code><a href="#nativenavigationnavbarsearch">NativeNavigationNavbarSearch</a></code>                 | Search field under the title. The row adds 52pt (iOS) or 52dp (Android) to the navbar and to the reported top inset while it is visible. Pass `hidden: true` to remove it. Typing fires `navbarSearch`.                                                                                                                                                                                                                                                      | 8.14.0 |
 | **`segments`**             | <code>NativeNavigationNavbarSegmentGroup[]</code>                                                     | Rows of native segments drawn under the bar, top to bottom. Each row adds 44pt (iOS) or 48dp (Android) to the navbar and to the reported insets. Selecting an item fires `navbarSegmentSelect` and moves the selection natively. Each `setNavbar` call applies `selectedId` again, so store the selected id from the event and pass it on every later `setNavbar` call. To reject a selection, send the previous `selectedId`.                               | 8.13.0 |
 | **`colors`**               | <code><a href="#nativenavigationcolors">NativeNavigationColors</a></code>                             | Navbar color hints.                                                                                                                                                                                                                                                                                                                                                                                                                                          |        |
 | **`animated`**             | <code>boolean</code>                                                                                  | Animate navbar title and item changes while the bar is visible. Hiding the bar with `hidden: true` does not use this flag.                                                                                                                                                                                                                                                                                                                                   |        |
@@ -1013,6 +1113,20 @@ because icons are rendered by native UI.
 | **`template`** | <code>boolean</code>                                              | When `true`, native tint colors are applied to the rendered SVG/image. Defaults to `true`.                                                                                                                                         |
 | **`ios`**      | <code>{ sfSymbol?: string; image?: string; svg?: string; }</code> | iOS-specific SF Symbol, bundled image name, or inline SVG.                                                                                                                                                                         |
 | **`android`**  | <code>{ resource?: string; image?: string; svg?: string; }</code> | Android-specific drawable resource, asset name, or inline SVG.                                                                                                                                                                     |
+
+
+#### NativeNavigationNavbarSearch
+
+Native search field drawn with the navbar, like the iOS 27 Settings search.
+
+| Prop                     | Type                                                                                                    | Description                                                                                                                                                         |
+| ------------------------ | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`hidden`**             | <code>boolean</code>                                                                                    | Remove the field. Pass `hidden: true` to show no field.                                                                                                             |
+| **`placeholder`**        | <code>string</code>                                                                                     | Placeholder text. Defaults to `Search`.                                                                                                                             |
+| **`text`**               | <code>string</code>                                                                                     | Query to show. While the field is focused, native edits are kept until this value changes.                                                                          |
+| **`enabled`**            | <code>boolean</code>                                                                                    | Whether the field accepts input. Defaults to `true`.                                                                                                                |
+| **`placement`**          | <code><a href="#nativenavigationnavbarsearchplacement">NativeNavigationNavbarSearchPlacement</a></code> | Field placement. Only `stacked` is drawn today: a row under the title and above `segments`.                                                                         |
+| **`hidesWhenCollapsed`** | <code>boolean</code>                                                                                    | Hide the row once a large title collapses on scroll. Defaults to `true` when `large` is `true`, and `false` otherwise. The reported top inset shrinks with the row. |
 
 
 #### NativeNavigationNavbarSegmentGroup
@@ -1111,19 +1225,21 @@ A native tab item.
 
 Native tabbar layout and background shape options.
 
-| Prop                        | Type                                                                                | Description                                                                                                                                                                                                                                                                                                                      |
-| --------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`shape`**                 | <code><a href="#nativenavigationtabbarshape">NativeNavigationTabbarShape</a></code> | `floating` keeps the capsule tabbar. On iOS 26+ this uses the system-owned Liquid Glass `UITabBarController` unless a custom capsule path is required; earlier iOS and the custom capsule path use `UIGlassEffect` on iOS 26+ (blur material fallback otherwise). `curve` draws a full-width bar with an included center action. |
-| **`height`**                | <code>number</code>                                                                 | Bar height in native points/dp, not including the system bottom inset. Curve defaults to `49` on iOS (83pt once the home indicator is added) and `80` on Android (Material navigation bar). Floating defaults to `64`. Pass `height` to override either platform.                                                                |
-| **`horizontalMargin`**      | <code>number</code>                                                                 | Horizontal margin in native points/dp. Defaults to `24` for `floating` and `0` for `curve`.                                                                                                                                                                                                                                      |
-| **`maxWidth`**              | <code>number</code>                                                                 | Maximum tabbar width in native points/dp. Defaults to `430` for `floating`; `curve` uses the available width unless this is set.                                                                                                                                                                                                 |
-| **`bottomGap`**             | <code>number</code>                                                                 | Bottom gap above the platform safe area in native points/dp. Defaults to `10` for `floating` and `0` for `curve`.                                                                                                                                                                                                                |
-| **`cornerRadius`**          | <code>number</code>                                                                 | Background corner radius in native points/dp. Defaults to a capsule radius for `floating` and `0` for `curve`.                                                                                                                                                                                                                   |
-| **`centerItemId`**          | <code>string</code>                                                                 | Tab id promoted into the included center button for `curve`. Defaults to the middle tab.                                                                                                                                                                                                                                         |
-| **`centerButtonDiameter`**  | <code>number</code>                                                                 | Included center button diameter in native points/dp. Defaults to `56`.                                                                                                                                                                                                                                                           |
-| **`centerButtonLift`**      | <code>number</code>                                                                 | Distance from the top of the center button to the top edge of the bar in native points/dp. Defaults to half of `centerButtonDiameter`.                                                                                                                                                                                           |
-| **`centerButtonColor`**     | <code>string</code>                                                                 | Included center button color. Defaults to the active tint color.                                                                                                                                                                                                                                                                 |
-| **`centerButtonIconColor`** | <code>string</code>                                                                 | Included center button icon color. Defaults to white.                                                                                                                                                                                                                                                                            |
+| Prop                        | Type                                                                                        | Description                                                                                                                                                                                                                                                                                                                                                                                                                           | Since  |
+| --------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| **`shape`**                 | <code><a href="#nativenavigationtabbarshape">NativeNavigationTabbarShape</a></code>         | `floating` keeps the capsule tabbar. On iOS 26+ this uses the system-owned Liquid Glass `UITabBarController` unless a custom capsule path is required; earlier iOS and the custom capsule path use `UIGlassEffect` on iOS 26+ (blur material fallback otherwise). `curve` draws a full-width bar with an included center action.                                                                                                      |        |
+| **`height`**                | <code>number</code>                                                                         | Bar height in native points/dp, not including the system bottom inset. Curve defaults to `49` on iOS (83pt once the home indicator is added) and `80` on Android (Material navigation bar). Floating defaults to `64`. Pass `height` to override either platform.                                                                                                                                                                     |        |
+| **`horizontalMargin`**      | <code>number</code>                                                                         | Horizontal margin in native points/dp. Defaults to `24` for `floating` and `0` for `curve`.                                                                                                                                                                                                                                                                                                                                           |        |
+| **`maxWidth`**              | <code>number</code>                                                                         | Maximum tabbar width in native points/dp. Defaults to `430` for `floating`; `curve` uses the available width unless this is set.                                                                                                                                                                                                                                                                                                      |        |
+| **`bottomGap`**             | <code>number</code>                                                                         | Bottom gap above the platform safe area in native points/dp. Defaults to `10` for `floating` and `0` for `curve`.                                                                                                                                                                                                                                                                                                                     |        |
+| **`cornerRadius`**          | <code>number</code>                                                                         | Background corner radius in native points/dp. Defaults to a capsule radius for `floating` and `0` for `curve`.                                                                                                                                                                                                                                                                                                                        |        |
+| **`centerItemId`**          | <code>string</code>                                                                         | Tab id promoted into the included center button for `curve`. Defaults to the middle tab.                                                                                                                                                                                                                                                                                                                                              |        |
+| **`centerButtonDiameter`**  | <code>number</code>                                                                         | Included center button diameter in native points/dp. Defaults to `56`.                                                                                                                                                                                                                                                                                                                                                                |        |
+| **`centerButtonLift`**      | <code>number</code>                                                                         | Distance from the top of the center button to the top edge of the bar in native points/dp. Defaults to half of `centerButtonDiameter`.                                                                                                                                                                                                                                                                                                |        |
+| **`centerButtonColor`**     | <code>string</code>                                                                         | Included center button color. Defaults to the active tint color.                                                                                                                                                                                                                                                                                                                                                                      |        |
+| **`centerButtonIconColor`** | <code>string</code>                                                                         | Included center button icon color. Defaults to white.                                                                                                                                                                                                                                                                                                                                                                                 |        |
+| **`alignment`**             | <code><a href="#nativenavigationtabbaralignment">NativeNavigationTabbarAlignment</a></code> | Horizontal alignment of a floating bar. Defaults to `center`. Ignored for `curve` and for `sidebar` placement. `start` and `end` follow `layoutDirection`.                                                                                                                                                                                                                                                                            | 8.14.0 |
+| **`placement`**             | <code><a href="#nativenavigationtabbarplacement">NativeNavigationTabbarPlacement</a></code> | `auto` lets iOS 18+ place the system tab bar (bottom on compact iPhone, trailing sidebar on iPad and iPhone Duo). `bottom` keeps a bottom bar. `sidebar` requests the trailing rail: the system tab bar on iOS 18+, and a vertical rail of the same tabs on Android. Compact iPhone may stay on the bottom when UIKit does not offer a sidebar. `curve` stays on the bottom. `sidebar` ignores `minimizeBehavior` and drag-to-select. | 8.14.0 |
 
 
 #### NativeNavigationTransitionResult
@@ -1209,6 +1325,14 @@ Plugin version payload.
 | **`placement`** | <code>'left' \| 'right'</code> |
 
 
+#### NativeNavigationNavbarSearchEvent
+
+| Prop         | Type                                         | Description                                                                                                             |
+| ------------ | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **`text`**   | <code>string</code>                          | Current field text.                                                                                                     |
+| **`reason`** | <code>'input' \| 'submit' \| 'cancel'</code> | `input` while typing, `submit` from the search key, `cancel` when the field is cleared from the platform cancel action. |
+
+
 #### NativeNavigationNavbarSegmentSelectEvent
 
 | Prop          | Type                | Description                            |
@@ -1274,6 +1398,15 @@ Native material/blur effect preference.
 <code>'none' | 'systemDefault' | 'extraLight' | 'light' | 'dark' | 'regular' | 'prominent' | 'systemUltraThinMaterial' | 'systemThinMaterial' | 'systemMaterial' | 'systemThickMaterial' | 'systemChromeMaterial' | 'systemUltraThinMaterialLight' | 'systemThinMaterialLight' | 'systemMaterialLight' | 'systemThickMaterialLight' | 'systemChromeMaterialLight' | 'systemUltraThinMaterialDark' | 'systemThinMaterialDark' | 'systemMaterialDark' | 'systemThickMaterialDark' | 'systemChromeMaterialDark'</code>
 
 
+#### NativeNavigationNavbarSearchPlacement
+
+Where the navbar search field is drawn. `stacked` sits under the title,
+the iOS 27 Settings field. The field is always stacked today; the value is
+reserved so a later release can fold it into the bar.
+
+<code>'stacked'</code>
+
+
 #### NativeNavigationNavbarSegmentStyle
 
 How a navbar segment row draws its items.
@@ -1319,6 +1452,25 @@ Native tab label visibility behavior.
 Native tabbar background shape.
 
 <code>'floating' | 'curve'</code>
+
+
+#### NativeNavigationTabbarAlignment
+
+Horizontal alignment of a floating tab bar inside the safe area.
+`start` and `end` follow `layoutDirection`.
+
+<code>'start' | 'center' | 'end'</code>
+
+
+#### NativeNavigationTabbarPlacement
+
+Where the native tab bar sits.
+
+`auto` lets iOS 18+ choose: a bottom bar on compact iPhone, a trailing
+sidebar on iPad and iPhone Duo. `bottom` keeps a bottom bar. `sidebar`
+asks for that trailing rail. Curve-shaped bars stay on the bottom.
+
+<code>'auto' | 'bottom' | 'sidebar'</code>
 
 
 #### NativeNavigationTabbarMinimizeBehavior

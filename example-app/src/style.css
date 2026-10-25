@@ -13,12 +13,27 @@ body {
 
 :root {
   color-scheme: light dark;
+  accent-color: #0a84ff;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #f7f8fb;
-  color: #111827;
+  background: light-dark(#f7f8fb, #05070b);
+  color: light-dark(#111827, #f8fafc);
   --cap-native-navigation-top: 0px;
+  --cap-native-navigation-right: 0px;
   --cap-native-navigation-bottom: 0px;
+  --cap-native-navigation-left: 0px;
+  --surface: light-dark(rgba(255, 255, 255, 0.8), rgba(20, 24, 33, 0.78));
+  --surface-strong: light-dark(rgba(255, 255, 255, 0.94), rgba(20, 24, 33, 0.9));
+  --surface-line: light-dark(rgba(17, 24, 39, 0.08), rgba(255, 255, 255, 0.08));
+  --muted: light-dark(#667085, #a8b3c4);
+}
+
+:root:has(> head > meta[name="color-scheme"][content="dark"]) {
+  color-scheme: dark;
+}
+
+:root:has(> head > meta[name="color-scheme"][content="light"]) {
+  color-scheme: light;
 }
 
 * {
@@ -30,7 +45,11 @@ body {
   min-height: 100dvh;
   margin: 0;
   overflow: hidden;
-  background: linear-gradient(180deg, #ffffff 0%, #f3f7fb 48%, #e9eef6 100%);
+  background-color: light-dark(#f7f8fb, #05070b);
+  background-image: light-dark(
+    linear-gradient(180deg, #ffffff 0%, #f3f7fb 48%, #e9eef6 100%),
+    linear-gradient(180deg, #10131a 0%, #05070b 100%)
+  );
 }
 
 .app-shell {
@@ -38,14 +57,14 @@ body {
   overflow: auto;
   padding:
     calc(var(--cap-native-navigation-top) + 30px)
-    max(18px, env(safe-area-inset-right))
+    max(18px, env(safe-area-inset-right), var(--cap-native-navigation-right))
     max(22px, env(safe-area-inset-bottom))
-    max(18px, env(safe-area-inset-left));
+    max(18px, env(safe-area-inset-left), var(--cap-native-navigation-left));
   scroll-padding:
     calc(var(--cap-native-navigation-top) + 30px)
-    max(18px, env(safe-area-inset-right))
+    max(18px, env(safe-area-inset-right), var(--cap-native-navigation-right))
     calc(var(--cap-native-navigation-bottom) + 24px)
-    max(18px, env(safe-area-inset-left));
+    max(18px, env(safe-area-inset-left), var(--cap-native-navigation-left));
 }
 
 .page {
@@ -117,7 +136,8 @@ body {
 }
 
 html.screenshot-floating-tabbar .layout-presets,
-html.screenshot-floating-tabbar .demo-actions {
+html.screenshot-floating-tabbar .demo-actions,
+html.screenshot-floating-tabbar .library-header {
   display: none;
 }
 
@@ -168,14 +188,15 @@ html.screenshot-floating-tabbar .venue-card-bar {
 
 .tile,
 .settings button,
-.detail button {
+.detail button,
+.settings-action {
   width: 100%;
   border: 0;
   border-radius: 8px;
   padding: 18px;
-  color: #111827;
-  background: rgba(255, 255, 255, 0.78);
-  box-shadow: inset 0 0 0 1px rgba(17, 24, 39, 0.08);
+  color: light-dark(#111827, #f8fafc);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--surface-line);
   text-align: left;
   cursor: pointer;
 }
@@ -205,7 +226,7 @@ html.screenshot-floating-tabbar .venue-card-bar {
 .tile small {
   display: block;
   margin-top: 7px;
-  color: #6b7280;
+  color: var(--muted);
   font-size: 0.9rem;
   line-height: 1.35;
 }
@@ -222,8 +243,9 @@ html.screenshot-floating-tabbar .venue-card-bar {
 .detail {
   border-radius: 8px;
   padding: 18px;
-  background: rgba(255, 255, 255, 0.8);
-  box-shadow: inset 0 0 0 1px rgba(17, 24, 39, 0.08);
+  color: light-dark(#111827, #f8fafc);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--surface-line);
 }
 
 .list strong,
@@ -233,7 +255,7 @@ html.screenshot-floating-tabbar .venue-card-bar {
 
 .list span {
   margin-top: 4px;
-  color: #667085;
+  color: var(--muted);
 }
 
 .settings {
@@ -279,7 +301,7 @@ html.screenshot-floating-tabbar .venue-card-bar {
 
 .capture-panel p {
   max-width: 28rem;
-  color: #526070;
+  color: var(--muted);
   line-height: 1.5;
 }
 
@@ -305,6 +327,50 @@ html.screenshot-floating-tabbar .venue-card-bar {
   transform: translateX(-50%);
 }
 
+.web-tabbar-preview.floating.align-start {
+  left: max(24px, env(safe-area-inset-left));
+  right: auto;
+  transform: none;
+}
+
+.web-tabbar-preview.floating.align-end {
+  left: auto;
+  right: max(24px, env(safe-area-inset-right));
+  transform: none;
+}
+
+.web-tabbar-preview.sidebar {
+  top: calc(env(safe-area-inset-top, 0px) + var(--cap-native-navigation-top, 0px) + 8px);
+  right: 12px;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: auto;
+  width: 84px;
+  height: auto;
+  display: flex;
+  transform: none;
+}
+
+.web-tabbar-preview.sidebar .web-tabbar-capsule {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-height: 0;
+  padding: 8px;
+  border-radius: 28px;
+  background: var(--surface-strong);
+  box-shadow:
+    0 16px 40px rgba(15, 23, 42, 0.16),
+    inset 0 0 0 1px var(--surface-line);
+}
+
+.web-tabbar-preview.sidebar .web-tabbar-item {
+  height: auto;
+  min-height: 52px;
+  border-radius: 16px;
+}
+
 .web-tabbar-preview.floating .web-tabbar-capsule {
   flex: 1;
   min-width: 0;
@@ -312,7 +378,7 @@ html.screenshot-floating-tabbar .venue-card-bar {
   grid-template-columns: repeat(var(--web-tab-count, 5), minmax(0, 1fr));
   padding: 7px;
   border-radius: 33px;
-  background: rgba(255, 255, 255, 0.94);
+  background: var(--surface-strong);
   box-shadow:
     0 20px 48px rgba(15, 23, 42, 0.16),
     inset 0 0 0 1px rgba(17, 24, 39, 0.06);
@@ -326,7 +392,7 @@ html.screenshot-floating-tabbar .venue-card-bar {
   min-height: 66px;
   border-radius: 50%;
   color: #0a84ff;
-  background: rgba(255, 255, 255, 0.94);
+  background: var(--surface-strong);
   box-shadow:
     0 20px 48px rgba(15, 23, 42, 0.16),
     inset 0 0 0 1px rgba(17, 24, 39, 0.06);
@@ -354,7 +420,7 @@ html.screenshot-floating-tabbar .venue-card-bar {
   position: absolute;
   inset: 40px 0 0;
   border-radius: 0;
-  background: rgba(255, 255, 255, 0.96);
+  background: light-dark(rgba(255, 255, 255, 0.96), #141821);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
@@ -366,7 +432,7 @@ html.screenshot-floating-tabbar .venue-card-bar {
   width: 56px;
   height: 56px;
   border-radius: 50% 50% 0 0;
-  background: rgba(255, 255, 255, 0.96);
+  background: light-dark(rgba(255, 255, 255, 0.96), #141821);
   clip-path: inset(0 0 28px 0);
   transform: translateX(-50%);
   z-index: 0;
@@ -461,6 +527,7 @@ pre {
   overflow: auto;
   border-radius: 8px;
   padding: 12px;
+  color-scheme: dark;
   background: #111827;
   color: #e5e7eb;
 }
@@ -478,43 +545,9 @@ pre {
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    background: #05070b;
-    color: #f8fafc;
-  }
-
-  body {
-    background: linear-gradient(180deg, #10131a 0%, #05070b 100%);
-  }
-
-  .tile,
-  .settings .tile:not(.is-selected),
-  .list article,
-  .settings,
-  .capture-panel,
-  .detail {
-    color: #f8fafc;
-    background: rgba(20, 24, 33, 0.78);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
-  }
-
-  .hero p:last-child,
-  .capture-panel p,
-  .detail p,
-  .tile small,
-  .list span {
-    color: #a8b3c4;
-  }
-
-  .web-tabbar-preview.floating .web-tabbar-capsule,
-  .web-tabbar-preview.floating .web-tabbar-item.is-detached {
-    background: rgba(20, 24, 33, 0.9);
-  }
-
-  .web-tabbar-preview.curve::before {
-    background: #141821;
-  }
+.detail p,
+.hero p:last-child {
+  color: var(--muted);
 }
 
 .scroll-header-demo {
@@ -522,12 +555,13 @@ pre {
   gap: 16px;
 }
 
-.scroll-header-demo .eyebrow {
+.scroll-header-demo .eyebrow,
+.library-header .eyebrow {
   margin: 0;
   font-size: 0.75rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #6b7280;
+  color: var(--muted);
 }
 
 .scroll-header-list {
@@ -548,24 +582,26 @@ pre {
   gap: 4px;
   padding: 16px 18px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.8);
-  box-shadow: inset 0 0 0 1px rgba(17, 24, 39, 0.08);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--surface-line);
 }
 
 .scroll-header-list span {
-  color: #667085;
+  color: var(--muted);
   font-size: 0.92rem;
 }
 
-.settings .eyebrow {
+.settings .eyebrow,
+.settings-group h2 {
   margin: 4px 0 0;
   font-size: 0.75rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #6b7280;
+  color: var(--muted);
 }
 
-.settings select {
+.settings select,
+.settings-row select {
   margin-left: auto;
   max-width: 55%;
   border: 0;
@@ -573,8 +609,109 @@ pre {
   padding: 8px 10px;
   font: inherit;
   font-weight: 500;
-  color: #111827;
-  background: rgba(17, 24, 39, 0.06);
+  color: inherit;
+  background: light-dark(rgba(17, 24, 39, 0.06), rgba(255, 255, 255, 0.08));
+}
+
+.library-header {
+  max-width: 680px;
+  margin: 0 auto 18px;
+}
+
+.library-header p:last-child {
+  margin: 6px 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.settings-screen {
+  display: grid;
+  gap: 22px;
+}
+
+.settings-group h2 {
+  margin: 0 0 8px;
+  padding-inline: 16px;
+}
+
+.settings-card {
+  display: grid;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--surface-line);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 12px 16px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-weight: 600;
+  text-align: start;
+}
+
+.settings-card .settings-row + .settings-row {
+  box-shadow: inset 0 1px 0 var(--surface-line);
+}
+
+.settings-row span {
+  display: grid;
+  gap: 2px;
+}
+
+.settings-row small {
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.settings-row input[type='checkbox'] {
+  width: 1.15rem;
+  height: 1.15rem;
+  margin: 0;
+}
+
+.appearance-picker {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px;
+}
+
+.appearance-picker button {
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 8px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.appearance-picker button[aria-pressed='true'] {
+  color: #ffffff;
+  background: #0a84ff;
+}
+
+.settings-note,
+.settings-empty {
+  margin: 8px 16px 0;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.settings-action {
+  text-align: center;
+  color: #ffffff;
+  background: #0a84ff;
 }
 
 @media (prefers-color-scheme: dark) {

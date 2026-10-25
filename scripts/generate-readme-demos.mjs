@@ -471,11 +471,82 @@ function optionsDemoFrame(frame) {
   return phoneShell(inner);
 }
 
+function scrollHeaderState(frame) {
+  if (frame < 4) {
+    return { offset: 0, visible: 1, touch: null };
+  }
+  if (frame < 13) {
+    const progress = ease((frame - 4) / 8);
+    return {
+      offset: lerp(0, 220, progress),
+      visible: 1 - ease(Math.max(0, (frame - 6) / 6)),
+      touch: [200, lerp(520, 300, progress), 'down'],
+    };
+  }
+  if (frame < 17) {
+    return { offset: 220, visible: 0, touch: null };
+  }
+  if (frame < 26) {
+    const progress = ease((frame - 17) / 8);
+    return {
+      offset: lerp(220, 70, progress),
+      visible: ease(Math.max(0, (frame - 18) / 6)),
+      touch: [200, lerp(300, 500, progress), 'up'],
+    };
+  }
+  return { offset: 70, visible: 1, touch: null };
+}
+
+function scrollList(scrollOffset, chromeShift) {
+  let rows = '';
+  for (let index = 0; index < 16; index += 1) {
+    const y = 132 + index * 68 - scrollOffset - chromeShift;
+    if (y > 730 || y < 52) continue;
+    rows += `
+      <rect x="24" y="${y}" width="342" height="56" rx="16" fill="#ffffff" stroke="#dbe3ef"/>
+      ${text(`Row ${index + 1}`, 42, y + 24, 16, '#111827', 750)}
+      ${text('Scroll-driven navbar chrome', 42, y + 42, 12, '#64748b', 600)}
+    `;
+  }
+  return rows;
+}
+
+function scrollChrome(shown) {
+  const title = shown
+    ? `
+      <rect x="0" y="48" width="${width}" height="68" fill="#f8fafc"/>
+      ${text('Scroll header', 30, 86, 28, '#111827', 800)}
+      ${text('Hides on the way down', 31, 106, 12, '#64748b', 600)}
+      <line x1="10" y1="113.5" x2="${width - 10}" y2="113.5" stroke="#dbe3ef"/>
+    `
+    : '';
+  return `
+    ${title}
+    <rect x="0" y="0" width="${width}" height="58" fill="#f8fafc"/>
+    ${text('9:41', 42, 42, 13, '#0f172a', 700)}
+    <rect x="178" y="28" width="34" height="10" rx="5" fill="#111827" opacity="0.9"/>
+  `;
+}
+
+function scrollHeaderFrame(frame) {
+  const state = scrollHeaderState(frame);
+  const shown = state.visible > 0.55;
+  const chromeShift = shown ? 0 : 58;
+  return phoneShell(`
+    ${scrollList(state.offset, chromeShift)}
+    ${scrollChrome(shown)}
+    ${tabbar('home')}
+    ${state.touch ? touch(state.touch[0], state.touch[1], true, state.touch[2]) : ''}
+  `);
+}
+
 function renderFrames(name, count, factory) {
   const dir = join(frameRoot, name);
   const frameDuration = Math.round(1000 / fps);
+  const outputPath = join(docsDir, `${name}.webp`);
   const webpArgs = ['-loop', '0', '-lossy', '-q', '72', '-m', '4'];
   ensureEmptyDir(dir);
+  mkdirSync(dirname(outputPath), { recursive: true });
   for (let frame = 0; frame < count; frame += 1) {
     const svgPath = join(dir, `frame-${String(frame).padStart(3, '0')}.svg`);
     const pngPath = join(dir, `frame-${String(frame).padStart(3, '0')}.png`);
@@ -483,12 +554,21 @@ function renderFrames(name, count, factory) {
     execFileSync('rsvg-convert', ['-o', pngPath, svgPath], { stdio: 'ignore' });
     webpArgs.push('-d', String(frameDuration), pngPath);
   }
-  webpArgs.push('-o', join(docsDir, `${name}.webp`));
+  webpArgs.push('-o', outputPath);
   execFileSync('img2webp', webpArgs, { stdio: 'ignore' });
 }
 
+const jobs = [
+  ['demo-navigation', 40, navigationFrame],
+  ['demo-svg-icons', 32, iconDemoFrame],
+  ['demo-options', 36, optionsDemoFrame],
+  ['media/scroll-header', 1, () => scrollHeaderFrame(0)],
+  ['media/scroll-header-demo', 30, scrollHeaderFrame],
+];
+const only = process.argv.slice(2);
 ensureEmptyDir(frameRoot);
-renderFrames('demo-navigation', 40, navigationFrame);
-renderFrames('demo-svg-icons', 32, iconDemoFrame);
-renderFrames('demo-options', 36, optionsDemoFrame);
+for (const [name, count, factory] of jobs) {
+  if (only.length > 0 && !only.some((arg) => name === arg || name.endsWith(`/${arg}`))) continue;
+  renderFrames(name, count, factory);
+}
 rmSync(frameRoot, { recursive: true, force: true });

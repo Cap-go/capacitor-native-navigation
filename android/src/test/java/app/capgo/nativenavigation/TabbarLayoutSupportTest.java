@@ -59,6 +59,22 @@ public class TabbarLayoutSupportTest {
     }
 
     @Test
+    public void floatingBarOriginXFollowsAlignmentAndDirection() {
+        assertEquals(100, TabbarLayoutSupport.floatingBarOriginX(400, 200, 24, "center", false));
+        assertEquals(24, TabbarLayoutSupport.floatingBarOriginX(400, 200, 24, "start", false));
+        assertEquals(176, TabbarLayoutSupport.floatingBarOriginX(400, 200, 24, "end", false));
+        assertEquals(176, TabbarLayoutSupport.floatingBarOriginX(400, 200, 24, "start", true));
+        assertEquals(24, TabbarLayoutSupport.floatingBarOriginX(400, 200, 24, "end", true));
+    }
+
+    @Test
+    public void sidebarOriginXSitsOnTheTrailingEdge() {
+        assertEquals(304, TabbarLayoutSupport.sidebarOriginX(400, 84, 12, false));
+        assertEquals(12, TabbarLayoutSupport.sidebarOriginX(400, 84, 12, true));
+        assertEquals(TabbarLayoutSupport.SIDEBAR_WIDTH_DP, 84);
+    }
+
+    @Test
     public void dragPositionAtRtlMapsRightmostTabToIndexZero() {
         float[] centers = new float[] { 250f, 150f, 50f };
         assertEquals(0f, TabbarLayoutSupport.dragPositionAt(260f, centers, true), 0.001f);
