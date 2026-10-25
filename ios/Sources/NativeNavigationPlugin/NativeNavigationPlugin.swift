@@ -2,6 +2,7 @@
 
 import Foundation
 import Capacitor
+import ObjectiveC
 import UIKit
 
 private struct NativeNavigationTransitionContext {
@@ -75,6 +76,23 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var floatingTabBarWantsHidden = false
     private var contentInsetMode = "css"
     private var isEnabled = true
+    /// Navbar buttons currently installed on either the custom bar or the rail's navigation item.
+    private var navbarRailLeftItems: [UIBarButtonItem] = []
+    private var navbarRailRightItems: [UIBarButtonItem] = []
+    private var navbarRailTitle = ""
+    private var navbarRailSubtitle: String?
+    private var navbarRailLarge = false
+    private var navbarItemsNeedPlacement = false
+    private var navbarUsesSystemRail = false
+    private var didWrapSystemNavigation = false
+    private var cachedRail = NativeNavigationVerticalRail(isVertical: false, onLeft: false, width: 0)
+    private var lastReportedVerticalBarEdge: String?
+    private var lastReportedVerticalBarActive = false
+    private var didInstallDuoObservers = false
+    private var verticalBarTraitToken: Any?
+    private var hingeInteractionToken: Any?
+    private var hingePayload: [String: Any]?
+    private var lastHingeStatus: String?
     private var defaultTransitionDuration: TimeInterval = 0.35
     private var navbarItemPlacement: [String: String] = [:]
     private var navbarItemTitle: [String: String] = [:]
@@ -161,6 +179,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             name: UIAccessibility.reduceTransparencyStatusDidChangeNotification,
             object: nil
         )
+        installDuoObservers()
     }
 
     deinit {
@@ -173,6 +192,11 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             self.contentInsetMode = call.getString("contentInsetMode") ?? self.contentInsetMode
             if let duration = call.getDouble("animationDuration") {
                 self.defaultTransitionDuration = duration / 1_000
+            }
+            if let behavior = call.getString("verticalBarBehavior") {
+                NativeNavigationVerticalBarPreference.disabled = behavior == "disabled"
+                self.installDuoObservers()
+                self.requestVerticalBarUpdate()
             }
 
             if !self.isEnabled {
@@ -217,6 +241,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
             guard !hidden else {
                 self.navContainer?.isHidden = true
+                self.navbarItemsNeedPlacement = false
+                self.hideSystemRailNavbar()
                 self.stopNavbarScrollObservation(resetCollapsed: true)
                 self.updateInsetsAndNotify()
                 call.resolve(self.insetsResult())
@@ -253,6 +279,12 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             }
 
             navItem.rightBarButtonItems = self.makeBarButtonItems(call.getArray("rightItems") as? [[String: Any]] ?? [], placement: "right")
+            self.navbarRailTitle = navItem.title ?? ""
+            self.navbarRailSubtitle = subtitle
+            self.navbarRailLarge = large
+            self.navbarRailLeftItems = navItem.leftBarButtonItems ?? []
+            self.navbarRailRightItems = navItem.rightBarButtonItems ?? []
+            self.navbarItemsNeedPlacement = true
             navBar.setItems([navItem], animated: animated)
             self.applyNavBarAppearance(navBar: navBar, options: call)
             self.applyNavbarSegments(options: call)
@@ -791,10 +823,12 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         guard !suppressTabSelectEvent else {
             tabSelectEmittedForReTap = false
             hostWebViewInSelectedSystemTab()
+            refreshRailNavbarItems()
             return
         }
         let index = viewController.tabBarItem.tag
         hostWebViewInSelectedSystemTab()
+        refreshRailNavbarItems()
         if !tabSelectEmittedForReTap {
             notifyTabSelect(index: index)
         }
@@ -1013,6 +1047,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
 
     private func ensureSystemTabBar() -> UITabBar {
+        installDuoObservers()
         if let tabBarController = tabBarController {
             hostWebViewInSelectedSystemTab()
             return tabBarController.tabBar
@@ -1119,18 +1154,25 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
 
     private func systemTabContentControllers(for items: [UITabBarItem]) -> [UIViewController] {
-        let existingControllers = tabViewControllers.compactMap { $0 as? NativeNavigationTabContentController }
-        if existingControllers.count == items.count {
-            zip(existingControllers, items).forEach { controller, item in
+        let existingContent = tabViewControllers.compactMap { nativeNavigationTabContentController(from: $0) }
+        if existingContent.count == items.count, existingContent.count == tabViewControllers.count {
+            for (controller, item) in zip(tabViewControllers, items) {
                 controller.tabBarItem = item
+                nativeNavigationTabContentController(from: controller)?.tabBarItem = item
             }
-            return existingControllers
+            return tabViewControllers
         }
 
         return items.map { item -> UIViewController in
             let controller = NativeNavigationTabContentController()
             controller.tabBarItem = item
-            return controller
+            guard didWrapSystemNavigation, #available(iOS 27.1, *) else {
+                return controller
+            }
+            let navigation = UINavigationController(rootViewController: controller)
+            navigation.tabBarItem = item
+            navigation.setNavigationBarHidden(true, animated: false)
+            return navigation
         }
     }
 
@@ -1317,7 +1359,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private func hostWebView(in viewController: UIViewController?) {
         guard usesSystemLiquidGlass,
               let webView = webView,
-              let selectedController = viewController as? NativeNavigationTabContentController else {
+              let selectedController = nativeNavigationTabContentController(from: viewController) else {
             return
         }
 
@@ -1382,7 +1424,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         preservingSnapshots: Bool = false
     ) {
         tabViewControllers
-            .compactMap { $0 as? NativeNavigationTabContentController }
+            .compactMap { nativeNavigationTabContentController(from: $0) }
             .filter { $0 !== owner }
             .forEach { $0.clearHostedWebView(ifMatching: webView, preservingSnapshot: preservingSnapshots) }
     }
@@ -1558,7 +1600,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         case "selected":
             return isSelected ? title : nil
         case "auto":
-            let compact = bridge?.viewController?.traitCollection.horizontalSizeClass == .compact || UIDevice.current.userInterfaceIdiom == .phone
+            let compact = bridge?.viewController?.traitCollection.horizontalSizeClass == .compact
             return compact && !isSelected ? nil : title
         default:
             return title
@@ -2055,7 +2097,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         case "selected":
             return (normal: "", selected: rawTitle)
         case "auto":
-            let compact = bridge?.viewController?.traitCollection.horizontalSizeClass == .compact || UIDevice.current.userInterfaceIdiom == .phone
+            let compact = bridge?.viewController?.traitCollection.horizontalSizeClass == .compact
             return compact ? (normal: "", selected: rawTitle) : (normal: rawTitle, selected: rawTitle)
         case "labeled":
             return (normal: rawTitle, selected: rawTitle)
@@ -2343,25 +2385,54 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             }
         }
 
+        if let tabBarController = tabBarController {
+            tabBarController.view.frame = CGRect(x: 0, y: 0, width: width, height: height)
+            tabBarController.view.setNeedsLayout()
+            tabBarController.view.layoutIfNeeded()
+        }
+
+        let tabBarFrame = usesSystemTabBar ? (tabBarController?.tabBar.frame ?? .zero) : .zero
+        cachedRail = nativeNavigationVerticalRail(tabBarFrame: tabBarFrame, containerWidth: width)
+        syncDuoRailChrome(rail: cachedRail)
+
         if let container = navContainer {
-            let topInset = navbarTopInset(safeInsets)
-            let visibleNavbarHeight = navbarLarge && navbarLargeCollapsed ? 44 : navbarHeight
             let segmentsHeight = navbarSegmentsHeight
-            container.frame = CGRect(x: 0, y: 0, width: width, height: topInset + visibleNavbarHeight + segmentsHeight)
-            navBlurView?.frame = container.bounds
-            navBar?.frame = CGRect(x: 0, y: topInset, width: width, height: visibleNavbarHeight)
-            navSegmentsView?.frame = CGRect(x: 0, y: topInset + visibleNavbarHeight, width: width, height: segmentsHeight)
-            // The bar isn't hosted by a UINavigationController, so it starts with 8pt margins and the
-            // large title sits off the system content margin. Match the hosting controller's margins.
-            if let margins = bridge?.viewController?.systemMinimumLayoutMargins {
-                navBar?.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 0, leading: margins.leading, bottom: 0, trailing: margins.trailing)
+            if navbarUsesSystemRail {
+                // The title and buttons live in the rail. Segment rows are a custom
+                // view, so they stay horizontal and clear the rail.
+                navBar?.isHidden = true
+                navBlurView?.isHidden = true
+                if navbarVisible && segmentsHeight > 0 {
+                    let barWidth = max(0, width - safeInsets.left - safeInsets.right)
+                    container.isHidden = false
+                    container.frame = CGRect(x: safeInsets.left, y: safeInsets.top, width: barWidth, height: segmentsHeight)
+                    navSegmentsView?.frame = container.bounds
+                } else {
+                    container.isHidden = true
+                }
+            } else {
+                let topInset = navbarTopInset(safeInsets)
+                let visibleNavbarHeight = navbarLarge && navbarLargeCollapsed ? 44 : navbarHeight
+                container.frame = CGRect(x: 0, y: 0, width: width, height: topInset + visibleNavbarHeight + segmentsHeight)
+                navBlurView?.frame = container.bounds
+                navBar?.isHidden = false
+                navBar?.frame = CGRect(x: 0, y: topInset, width: width, height: visibleNavbarHeight)
+                navSegmentsView?.frame = CGRect(x: 0, y: topInset + visibleNavbarHeight, width: width, height: segmentsHeight)
+                // The bar isn't hosted by a UINavigationController, so it starts with 8pt margins and the
+                // large title sits off the system content margin. Match the hosting controller's margins.
+                if let margins = bridge?.viewController?.systemMinimumLayoutMargins {
+                    navBar?.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 0, leading: margins.leading, bottom: 0, trailing: margins.trailing)
+                }
             }
         }
 
         if let container = tabContainer {
             let systemLook = usesSystemLookCapsule
             let horizontalMargin = systemLook ? Self.systemLookSideMargin : tabbarStyle.horizontalMargin
-            let availableWidth = max(0, width - (horizontalMargin * 2))
+            // Safe left/right are 0 in portrait on a phone. On Duo, and in landscape,
+            // they keep the capsule off the rail and the notch.
+            let safeSpan = max(0, width - safeInsets.left - safeInsets.right)
+            let availableWidth = max(0, safeSpan - (horizontalMargin * 2))
             let maxWidth = tabbarStyle.maxWidth > 0 ? tabbarStyle.maxWidth : availableWidth
             let hasDetachedTrailing = floatingTabBar?.hasDetachedTrailing == true && tabbarStyle.shape == .floating
             let trailingDiameter = systemLook ? Self.systemLookBarHeight : tabbarStyle.height
@@ -2375,7 +2446,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             let contentHeight = (systemLook ? Self.systemLookBarHeight : tabbarStyle.height) - 16 * minimizeProgress
             let barTop = tabbarStyle.shape == .curve ? tabbarStyle.centerButtonLift : 0
             let totalHeight = contentHeight + barTop
-            let originX = (width - tabbarWidth) / 2
+            let originX = safeInsets.left + (safeSpan - tabbarWidth) / 2
             // Keep the home-indicator fill inside the screen. The previous origin
             // pushed that extension below the bezel and left labels on the edge.
             let originY = systemLook
@@ -2406,12 +2477,6 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             } else {
                 trailingTabEffectView?.isHidden = true
             }
-        }
-
-        if let tabBarController = tabBarController {
-            tabBarController.view.frame = CGRect(x: 0, y: 0, width: width, height: height)
-            tabBarController.view.setNeedsLayout()
-            tabBarController.view.layoutIfNeeded()
         }
 
         bringChromeToFront()
@@ -2520,10 +2585,320 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         #endif
     }
 
+    private func installDuoObservers() {
+        guard !didInstallDuoObservers, bridge?.viewController != nil else {
+            return
+        }
+        didInstallDuoObservers = true
+        #if compiler(>=6.4)
+        installVerticalBarForwarding()
+        installVerticalBarTraitObserver()
+        installHingeObserver()
+        #endif
+    }
+
+    private func requestVerticalBarUpdate() {
+        #if compiler(>=6.4)
+        if #available(iOS 27.1, *) {
+            bridge?.viewController?.setNeedsUpdateOfVerticalBarConfiguration()
+        }
+        #endif
+    }
+
+    private func traitVerticalBarEdge() -> String? {
+        #if compiler(>=6.4)
+        if #available(iOS 27.1, *) {
+            switch bridge?.viewController?.traitCollection.verticalBarEdge {
+            case .leading:
+                return "leading"
+            case .trailing:
+                return "trailing"
+            default:
+                return nil
+            }
+        }
+        #endif
+        return nil
+    }
+
+    private func reservedRegionPayload() -> [[String: Any]] {
+        #if compiler(>=6.4)
+        if #available(iOS 27.1, *), let view = bridge?.viewController?.view {
+            return duoReservedRegions(in: view)
+        }
+        #endif
+        return []
+    }
+
+    private func notifyVerticalBarChange(_ insets: [String: Any]) {
+        let edge = insets["verticalBarEdge"] as? String
+        let active = cachedRail.isVertical && !NativeNavigationVerticalBarPreference.disabled
+        guard edge != lastReportedVerticalBarEdge || active != lastReportedVerticalBarActive else {
+            return
+        }
+        lastReportedVerticalBarEdge = edge
+        lastReportedVerticalBarActive = active
+        notifyListeners("verticalBarChanged", data: [
+            "edge": edge ?? NSNull(),
+            "active": active
+        ])
+    }
+
+    private func syncDuoRailChrome(rail: NativeNavigationVerticalRail) {
+        let railEngaged = rail.isVertical && usesSystemTabBar && !NativeNavigationVerticalBarPreference.disabled
+        if railEngaged {
+            wrapSystemNavigationForRail()
+        }
+        let useRail = railEngaged && didWrapSystemNavigation && navbarVisible
+        let modeChanged = useRail != navbarUsesSystemRail
+        navbarUsesSystemRail = useRail
+        if useRail && (modeChanged || navbarItemsNeedPlacement) {
+            placeNavbarItemsOnSelectedContent()
+            navbarItemsNeedPlacement = false
+        } else if !useRail && modeChanged {
+            restoreNavbarItemsToCustomBar()
+            navbarItemsNeedPlacement = false
+        } else if navbarItemsNeedPlacement {
+            navbarItemsNeedPlacement = false
+        }
+        applyDuoNavbarVisibility()
+    }
+
+    /// UIKit only moves navbar items that belong to a navigation controller.
+    /// Wrap once, after the tab bar itself is a rail, so a normal iPhone never
+    /// gains an extra navigation controller.
+    private func wrapSystemNavigationForRail() {
+        guard !didWrapSystemNavigation, #available(iOS 27.1, *) else {
+            return
+        }
+        guard let tabBarController, !tabViewControllers.isEmpty else {
+            return
+        }
+        let selectedIndex = tabBarController.selectedIndex
+        let wrapped: [UIViewController] = tabViewControllers.map { controller in
+            if controller is UINavigationController {
+                return controller
+            }
+            let content = nativeNavigationTabContentController(from: controller) ?? controller
+            let navigation = UINavigationController(rootViewController: content)
+            navigation.tabBarItem = content.tabBarItem
+            navigation.setNavigationBarHidden(true, animated: false)
+            return navigation
+        }
+        didWrapSystemNavigation = true
+        tabViewControllers = wrapped
+        tabBarController.setViewControllers(wrapped, animated: false)
+        let index = min(max(selectedIndex, 0), wrapped.count - 1)
+        tabBarController.selectedIndex = index
+        hostWebView(in: wrapped[index])
+    }
+
+    private func hideSystemRailNavbar() {
+        tabViewControllers
+            .compactMap { $0 as? UINavigationController }
+            .forEach { $0.setNavigationBarHidden(true, animated: false) }
+    }
+
+    private func refreshRailNavbarItems() {
+        guard navbarUsesSystemRail else {
+            return
+        }
+        placeNavbarItemsOnSelectedContent()
+    }
+
+    private func releaseStoredNavbarButtons() {
+        navBar?.topItem?.leftBarButtonItems = nil
+        navBar?.topItem?.rightBarButtonItems = nil
+        for controller in tabViewControllers {
+            guard let content = nativeNavigationTabContentController(from: controller) else {
+                continue
+            }
+            content.navigationItem.leftBarButtonItems = nil
+            content.navigationItem.rightBarButtonItems = nil
+        }
+    }
+
+    private func applyStoredNavbarContent(to item: UINavigationItem) {
+        item.title = navbarRailTitle
+        if #available(iOS 26.0, *) {
+            item.subtitle = navbarRailSubtitle
+        }
+        if #available(iOS 11.0, *) {
+            item.largeTitleDisplayMode = navbarRailLarge && !navbarLargeCollapsed ? .always : .never
+        }
+        item.leftBarButtonItems = navbarRailLeftItems
+        item.rightBarButtonItems = navbarRailRightItems
+    }
+
+    private func placeNavbarItemsOnSelectedContent() {
+        let content = nativeNavigationTabContentController(from: tabBarController?.selectedViewController)
+            ?? tabViewControllers.compactMap { nativeNavigationTabContentController(from: $0) }.first
+        guard let content else {
+            return
+        }
+        releaseStoredNavbarButtons()
+        applyStoredNavbarContent(to: content.navigationItem)
+        if #available(iOS 11.0, *) {
+            content.navigationController?.navigationBar.prefersLargeTitles = navbarRailLarge && !navbarLargeCollapsed
+        }
+    }
+
+    private func restoreNavbarItemsToCustomBar() {
+        guard navbarVisible else {
+            return
+        }
+        let bar = ensureNavBar()
+        releaseStoredNavbarButtons()
+        let item = UINavigationItem(title: navbarRailTitle)
+        applyStoredNavbarContent(to: item)
+        if #available(iOS 11.0, *) {
+            bar.prefersLargeTitles = navbarRailLarge && !navbarLargeCollapsed
+        }
+        bar.setItems([item], animated: false)
+        bar.isHidden = false
+    }
+
+    private func applyDuoNavbarVisibility() {
+        let navigations = tabViewControllers.compactMap { $0 as? UINavigationController }
+        if navbarUsesSystemRail && navbarVisible {
+            navigations.forEach { $0.setNavigationBarHidden(false, animated: false) }
+            navBar?.isHidden = true
+            navBlurView?.isHidden = true
+            navContainer?.isHidden = navbarSegmentsHeight == 0
+            if let source = navBar {
+                for navigation in navigations {
+                    let bar = navigation.navigationBar
+                    bar.standardAppearance = source.standardAppearance
+                    bar.scrollEdgeAppearance = source.scrollEdgeAppearance
+                    bar.compactAppearance = source.compactAppearance
+                    bar.tintColor = source.tintColor
+                }
+            }
+            return
+        }
+
+        navigations.forEach { $0.setNavigationBarHidden(true, animated: false) }
+        navBar?.isHidden = false
+        if navbarVisible {
+            navContainer?.isHidden = false
+        }
+    }
+
+    #if compiler(>=6.4)
+    @available(iOS 27.1, *)
+    private func duoReservedRegions(in view: UIView) -> [[String: Any]] {
+        let regions = view.reservedRegions(kind: .division) + view.reservedRegions(kind: .occlusion)
+        return regions.map { region in
+            [
+                "kind": region.kind == .division ? "division" : "occlusion",
+                "x": region.frame.origin.x,
+                "y": region.frame.origin.y,
+                "width": region.frame.size.width,
+                "height": region.frame.size.height,
+                "active": region.isActive
+            ]
+        }
+    }
+
+    private func installVerticalBarForwarding() {
+        guard #available(iOS 27.1, *), let bridgeViewController = bridge?.viewController else {
+            return
+        }
+        let currentClass: AnyClass = object_getClass(bridgeViewController) ?? type(of: bridgeViewController)
+        let currentName = NSStringFromClass(currentClass)
+        if currentName.hasSuffix("_CapNativeVerticalBar") {
+            return
+        }
+        let subclassName = currentName + "_CapNativeVerticalBar"
+        let subclass: AnyClass
+        if let existing = NSClassFromString(subclassName) {
+            subclass = existing
+        } else {
+            guard let created = objc_allocateClassPair(currentClass, subclassName, 0) else {
+                return
+            }
+            let block: @convention(block) (AnyObject) -> UIViewController? = { object in
+                (object as? UIViewController)?.children.first { $0 is NativeNavigationTabController }
+            }
+            let implementation = imp_implementationWithBlock(block)
+            class_addMethod(
+                created,
+                NSSelectorFromString("childViewControllerForPreferredVerticalBarBehavior"),
+                implementation,
+                "@@:"
+            )
+            objc_registerClassPair(created)
+            subclass = created
+        }
+        object_setClass(bridgeViewController, subclass)
+    }
+
+    private func installVerticalBarTraitObserver() {
+        guard verticalBarTraitToken == nil, let viewController = bridge?.viewController else {
+            return
+        }
+        if #available(iOS 27.1, *) {
+            verticalBarTraitToken = viewController.registerForTraitChanges(
+                UITraitCollection.systemTraitsAffectingVerticalBarEdge
+            ) { [weak self] (_: UIViewController, _: UITraitCollection) in
+                self?.updateInsetsAndNotify()
+            }
+        }
+    }
+
+    private func installHingeObserver() {
+        guard hingeInteractionToken == nil, let view = bridge?.viewController?.view else {
+            return
+        }
+        if #available(iOS 27.1, *) {
+            let interaction = UIHingeInteraction { [weak self] _, update in
+                self?.handleHingeUpdate(update)
+            }
+            view.addInteraction(interaction)
+            hingeInteractionToken = interaction
+        }
+    }
+
+    @available(iOS 27.1, *)
+    private func handleHingeUpdate(_ update: UIHingeInteraction.Update) {
+        guard let hinge = update.hinge else {
+            hingePayload = nil
+            lastHingeStatus = nil
+            notifyListeners("hingeChanged", data: ["hinge": NSNull()])
+            return
+        }
+        let status: String
+        switch hinge.status {
+        case .closed:
+            status = "closed"
+        case .partiallyOpen:
+            status = "partiallyOpen"
+        case .fullyOpen:
+            status = "fullyOpen"
+        default:
+            status = "unknown"
+        }
+        let payload: [String: Any] = ["angle": hinge.angle, "status": status]
+        hingePayload = payload
+        notifyListeners("hingeChanged", data: ["hinge": payload])
+        guard status != lastHingeStatus else {
+            return
+        }
+        lastHingeStatus = status
+        updateInsetsAndNotify()
+    }
+    #endif
+
     private func currentInsets() -> [String: Any] {
-        let safeInsets = bridge?.viewController?.view.safeAreaInsets ?? .zero
-        let topInset = navbarTopInset(safeInsets)
-        let barHeight = navbarScrollCollapsed ? 0 : navbarHeight + navbarSegmentsHeight
+        let rootView = bridge?.viewController?.view
+        let safeInsets = rootView?.safeAreaInsets ?? .zero
+        let rootWidth = rootView?.bounds.width ?? 0
+        // In the rail the title is not a top bar. Only custom segment rows still
+        // occupy the top of the WebView.
+        let topInset = navbarUsesSystemRail ? 0 : navbarTopInset(safeInsets)
+        let barHeight: CGFloat = navbarUsesSystemRail
+            ? navbarSegmentsHeight
+            : (navbarScrollCollapsed ? 0 : navbarHeight + navbarSegmentsHeight)
         let navHeight = isEnabled && navbarVisible ? barHeight + topInset : 0
         let usesSystemTabbar = usesSystemTabBar
         let nativeTabHeight = max(tabBar?.frame.height ?? 0, 49 + safeInsets.bottom)
@@ -2542,14 +2917,35 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             nativeTabHeight: nativeTabHeight,
             customTabHeight: customTabHeight
         )
+        let contentView = isWebViewHostedInSystemTabController
+            ? nativeNavigationTabContentController(from: tabBarController?.selectedViewController)?.view
+            : nil
+        let duo = nativeNavigationDuoEdgeInsets(
+            rootSafe: safeInsets,
+            contentSafe: contentView?.safeAreaInsets ?? safeInsets,
+            rootWidth: rootWidth,
+            contentWidth: contentView?.bounds.width ?? rootWidth,
+            rail: cachedRail,
+            hosted: isWebViewHostedInSystemTabController,
+            horizontalTabbarHeight: tabInsets.tabbarHeight,
+            horizontalSystemTabbarHeight: tabInsets.systemTabbarHeight
+        )
+        let edge = nativeNavigationResolvedVerticalBarEdge(
+            traitEdge: traitVerticalBarEdge(),
+            rail: cachedRail,
+            layoutRtl: rootView?.effectiveUserInterfaceLayoutDirection == .rightToLeft
+        )
         return [
             "top": navHeight,
-            "right": safeInsets.right,
-            "bottom": tabInsets.tabbarHeight,
-            "left": safeInsets.left,
+            "right": duo.right,
+            "bottom": duo.bottom,
+            "left": duo.left,
             "navbarHeight": navHeight,
-            "tabbarHeight": tabInsets.tabbarHeight,
-            "systemTabbarHeight": tabInsets.systemTabbarHeight
+            "tabbarHeight": duo.tabbarHeight,
+            "systemTabbarHeight": duo.systemTabbarHeight,
+            "verticalBarEdge": edge ?? NSNull(),
+            "reservedRegions": reservedRegionPayload(),
+            "hinge": hingePayload ?? NSNull()
         ]
     }
 
@@ -2561,6 +2957,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         layoutChrome()
         let insets = currentInsets()
         notifyListeners("safeAreaChanged", data: ["insets": insets])
+        notifyVerticalBarChange(insets)
         applyTabbarEdgeBlur(tabbarHeight: insets["tabbarHeight"] as? CGFloat ?? 0)
         applyNavbarEdgeBlur(navbarHeight: insets["navbarHeight"] as? CGFloat ?? 0)
         pullToRefresh.updateTopInset(pullToRefreshTopInset())
@@ -2574,6 +2971,12 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         let navbar = insets["navbarHeight"] as? CGFloat ?? 0
         let tabbar = insets["tabbarHeight"] as? CGFloat ?? 0
         let systemTabbar = insets["systemTabbarHeight"] as? CGFloat ?? 0
+        let edge = insets["verticalBarEdge"] as? String ?? ""
+        let division = (insets["reservedRegions"] as? [[String: Any]])?.first { region in
+            region["kind"] as? String == "division"
+        }
+        let divisionX = (division?["x"] as? NSNumber)?.doubleValue ?? (division?["x"] as? CGFloat).map(Double.init) ?? 0
+        let divisionWidth = (division?["width"] as? NSNumber)?.doubleValue ?? (division?["width"] as? CGFloat).map(Double.init) ?? 0
         let detailJson = jsonString(["insets": insets])
         let script = """
         (() => {
@@ -2585,6 +2988,9 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
           root.style.setProperty('--cap-native-navbar-height', '\(navbar)px');
           root.style.setProperty('--cap-native-tabbar-height', '\(tabbar)px');
           root.style.setProperty('--cap-native-system-tabbar-height', '\(systemTabbar)px');
+          root.style.setProperty('--cap-native-navigation-vertical-bar-edge', '\(edge)');
+          root.style.setProperty('--cap-native-navigation-division-x', '\(divisionX)px');
+          root.style.setProperty('--cap-native-navigation-division-width', '\(divisionWidth)px');
           window.dispatchEvent(new CustomEvent('capNativeNavigation:safeAreaChanged', { detail: \(detailJson) }));
         })();
         """
@@ -3173,7 +3579,7 @@ private final class NativeNavigationFloatingTabBar: UIView {
         case "selected":
             return index == selectedIndex
         case "auto":
-            let compact = traitCollection.horizontalSizeClass == .compact || UIDevice.current.userInterfaceIdiom == .phone
+            let compact = traitCollection.horizontalSizeClass == .compact
             return !compact || index == selectedIndex
         default:
             return true
@@ -3474,6 +3880,13 @@ final class NativeNavigationTabController: UITabBarController {
 final class NativeNavigationTabContentController: UIViewController {
     private weak var hostedWebView: UIView?
     private var snapshotPlaceholder: UIView?
+
+    #if compiler(>=6.4)
+    @available(iOS 27.1, *)
+    override var preferredVerticalBarBehavior: UIVerticalBarBehavior {
+        NativeNavigationVerticalBarPreference.disabled ? .disabled : .automatic
+    }
+    #endif
 
     override func loadView() {
         let view = UIView()

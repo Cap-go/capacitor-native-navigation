@@ -38,7 +38,15 @@ export function defineNativeNavigationElements(): void {
 
   class CapNativeNavigationProvider extends HTMLElement {
     static get observedAttributes(): string[] {
-      return ['enabled', 'platform-style', 'content-inset-mode', 'animation-duration', 'colors', 'glass'];
+      return [
+        'enabled',
+        'platform-style',
+        'content-inset-mode',
+        'animation-duration',
+        'colors',
+        'glass',
+        'vertical-bar-behavior',
+      ];
     }
 
     connectedCallback(): void {
@@ -65,6 +73,10 @@ export function defineNativeNavigationElements(): void {
           ) ?? 'css',
         colors: parseJsonAttribute(this, 'colors', undefined as NativeNavigationConfigureOptions['colors']),
         glass: parseJsonAttribute(this, 'glass', undefined as NativeNavigationConfigureOptions['glass']),
+        verticalBarBehavior: typedAttribute<NonNullable<NativeNavigationConfigureOptions['verticalBarBehavior']>>(
+          this,
+          'vertical-bar-behavior',
+        ),
       };
 
       if (duration) {

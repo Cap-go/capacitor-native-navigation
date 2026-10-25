@@ -18,7 +18,11 @@ body {
   background: #f7f8fb;
   color: #111827;
   --cap-native-navigation-top: 0px;
+  --cap-native-navigation-right: 0px;
   --cap-native-navigation-bottom: 0px;
+  --cap-native-navigation-left: 0px;
+  --cap-native-navigation-division-x: 0px;
+  --cap-native-navigation-division-width: 0px;
 }
 
 * {
@@ -38,14 +42,14 @@ body {
   overflow: auto;
   padding:
     calc(var(--cap-native-navigation-top) + 30px)
-    max(18px, env(safe-area-inset-right))
+    max(18px, env(safe-area-inset-right), var(--cap-native-navigation-right))
     max(22px, env(safe-area-inset-bottom))
-    max(18px, env(safe-area-inset-left));
+    max(18px, env(safe-area-inset-left), var(--cap-native-navigation-left));
   scroll-padding:
     calc(var(--cap-native-navigation-top) + 30px)
-    max(18px, env(safe-area-inset-right))
+    max(18px, env(safe-area-inset-right), var(--cap-native-navigation-right))
     calc(var(--cap-native-navigation-bottom) + 24px)
-    max(18px, env(safe-area-inset-left));
+    max(18px, env(safe-area-inset-left), var(--cap-native-navigation-left));
 }
 
 .page {

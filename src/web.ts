@@ -254,6 +254,9 @@ export class NativeNavigationWeb extends WebPlugin implements NativeNavigationPl
       navbarHeight: navbarChromeHeight,
       tabbarHeight,
       systemTabbarHeight,
+      verticalBarEdge: null,
+      reservedRegions: [],
+      hinge: null,
     };
 
     if (this.config.contentInsetMode !== 'none' && typeof document !== 'undefined') {
@@ -265,6 +268,9 @@ export class NativeNavigationWeb extends WebPlugin implements NativeNavigationPl
       root.style.setProperty('--cap-native-navbar-height', `${insets.navbarHeight}px`);
       root.style.setProperty('--cap-native-tabbar-height', `${insets.tabbarHeight}px`);
       root.style.setProperty('--cap-native-system-tabbar-height', `${insets.systemTabbarHeight}px`);
+      root.style.setProperty('--cap-native-navigation-vertical-bar-edge', insets.verticalBarEdge ?? '');
+      root.style.setProperty('--cap-native-navigation-division-x', '0px');
+      root.style.setProperty('--cap-native-navigation-division-width', '0px');
       if (this.navbar.scrollBehavior && this.navbar.scrollBehavior !== 'none') {
         root.classList.toggle('cap-native-navbar-scroll-collapsed', this.navbarScrollCollapsed);
       } else {

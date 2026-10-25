@@ -22,7 +22,7 @@
 
 Native navbar, tabbar, safe-area handling, and WebView snapshot transitions for Capacitor apps. Your web framework keeps routing and page rendering while this plugin owns the platform surfaces users expect to feel native.
 
-**iOS 27 and iPhone Duo.** System tab bars, Liquid Glass, and the curved center button follow the window when a Duo folds and unfolds.
+**iOS 27 and iPhone Duo.** On iPhone Duo, iOS moves the status bar and the system tab bar into one vertical rail on the folded outer display and on the open display in landscape. Open portrait keeps the horizontal bars. Navbar titles and buttons join that rail. The curved center bar stays on the bottom. `configure({ verticalBarBehavior: 'disabled' })` keeps the horizontal bars for a screen that should not use the rail.
 
 ## Demo
 
@@ -38,7 +38,22 @@ The Android captures come from [Mimesis](https://github.com/Cap-go/mimesis) on A
 
 ### iPhone Duo
 
-Folded or open, iOS places the system tab bar as a vertical rail on the trailing edge. The curved center bar stays on the bottom, and its cradle stays a circle around the button when the window widens.
+Folded, and open in landscape, the system tab bar becomes a vertical rail. Open portrait stays a horizontal bar. Split View puts each window's rail on the outer edge. The rail stays on the camera's physical edge, so the semantic edge is trailing in landscape and can be leading or trailing in Split View and in right-to-left layout. The curved center bar stays on the bottom, and its cradle stays a circle around the button when the window widens.
+
+Navbar titles and buttons move into that rail with the system tab bar. Segment rows stay horizontal and clear the rail. Curve and other custom capsules stay on the bottom; their width clears the rail. `configure({ verticalBarBehavior: 'disabled' })` opts that screen out and keeps the top and bottom bars. `safeAreaChanged` reports `verticalBarEdge`, fold `reservedRegions`, and the latest hinge sample. `verticalBarChanged` and `hingeChanged` fire when those change.
+
+```ts
+await NativeNavigation.configure({ verticalBarBehavior: 'automatic' });
+```
+
+```css
+.page {
+  padding-inline-start: var(--cap-native-navigation-left);
+  padding-inline-end: var(--cap-native-navigation-right);
+}
+```
+
+`--cap-native-navigation-division-x` and `--cap-native-navigation-division-width` mark the fold so a web layout can split around it. The plugin still uses one WebView. On a phone with no rail those inset variables are `0px`.
 
 | Folded, center                                                                                                                                          | Open, center                                                                                                                                      | Open, system                                                                                                                               | Folded, system                                                                                                                    |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
@@ -83,6 +98,7 @@ NativeNavigation.addListener('pullToRefresh', async () => {
 - Capture WebView snapshots for native-feeling push, back, root, tab, and zoom transitions.
 - Configure tab labels, selected icons, badges, indicators, ripples, tint colors, and dynamic colors.
 - Write CSS inset variables so web content can scroll behind native bars without being hidden.
+- On iPhone Duo, follow the system vertical rail: navbar items join it, safe areas clear it, and a screen can opt out.
 - Stack multi-level native segment rows under the navbar (scope switcher plus section tabs) with `setNavbar({ segments })`.
 - Opt into native pull-to-refresh (system spinner and haptic on iOS, `SwipeRefreshLayout` on Android) with `setPullToRefresh()`.
 - Hide the navbar and tabbar while a web modal, sheet, or popover is open. An animated tabbar hide keeps the iOS tab controller and WebView in place.
@@ -496,7 +512,9 @@ Available variables:
 - `--cap-native-navigation-left`
 - `--cap-native-navbar-height`
 - `--cap-native-tabbar-height`
-- `--cap-native-system-tabbar-height` (nominal tab bar height; use on iOS when `--cap-native-tabbar-height` is `0` for hosted system bars)
+- `--cap-native-system-tabbar-height` (nominal tab bar height; use on iOS when `--cap-native-tabbar-height` is `0` for hosted system bars). On an iPhone Duo rail this is the rail thickness, and the overlap is `--cap-native-navigation-left` or `--cap-native-navigation-right`.
+- `--cap-native-navigation-vertical-bar-edge` (`leading`, `trailing`, or empty)
+- `--cap-native-navigation-division-x` and `--cap-native-navigation-division-width` (the fold, or `0px`)
 
 ## Web Components
 
@@ -585,6 +603,8 @@ npx cap sync
 * [`addListener('navbarSegmentSelect', ...)`](#addlistenernavbarsegmentselect-)
 * [`addListener('tabSelect', ...)`](#addlistenertabselect-)
 * [`addListener('safeAreaChanged', ...)`](#addlistenersafeareachanged-)
+* [`addListener('verticalBarChanged', ...)`](#addlistenerverticalbarchanged-)
+* [`addListener('hingeChanged', ...)`](#addlistenerhingechanged-)
 * [`addListener('transitionStart', ...)`](#addlistenertransitionstart-)
 * [`addListener('transitionEnd', ...)`](#addlistenertransitionend-)
 * [`addListener('pullToRefresh', ...)`](#addlistenerpulltorefresh-)
@@ -830,6 +850,48 @@ addListener(eventName: 'safeAreaChanged', listenerFunc: (event: NativeNavigation
 --------------------
 
 
+### addListener('verticalBarChanged', ...)
+
+```typescript
+addListener(eventName: 'verticalBarChanged', listenerFunc: (event: NativeNavigationVerticalBarChangedEvent) => void) => Promise<PluginListenerHandle>
+```
+
+Fired when the iPhone Duo vertical rail appears, disappears, or changes
+edge. `safeAreaChanged` carries the same edge on every inset update.
+
+| Param              | Type                                                                                                                            |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| **`eventName`**    | <code>'verticalBarChanged'</code>                                                                                               |
+| **`listenerFunc`** | <code>(event: <a href="#nativenavigationverticalbarchangedevent">NativeNavigationVerticalBarChangedEvent</a>) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+**Since:** 8.14.0
+
+--------------------
+
+
+### addListener('hingeChanged', ...)
+
+```typescript
+addListener(eventName: 'hingeChanged', listenerFunc: (event: NativeNavigationHingeChangedEvent) => void) => Promise<PluginListenerHandle>
+```
+
+Fired when the iPhone Duo hinge changes, or when hinge updates stop.
+Prefer `hinge.status` over `hinge.angle` when a coarse pose is enough.
+
+| Param              | Type                                                                                                                |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| **`eventName`**    | <code>'hingeChanged'</code>                                                                                         |
+| **`listenerFunc`** | <code>(event: <a href="#nativenavigationhingechangedevent">NativeNavigationHingeChangedEvent</a>) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+**Since:** 8.14.0
+
+--------------------
+
+
 ### addListener('transitionStart', ...)
 
 ```typescript
@@ -899,29 +961,57 @@ Returned by methods that may change safe content bounds.
 
 Insets exposed to web content.
 
-| Prop                     | Type                | Description                                                                                                                                                                                                  |
-| ------------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **`top`**                | <code>number</code> |                                                                                                                                                                                                              |
-| **`right`**              | <code>number</code> |                                                                                                                                                                                                              |
-| **`bottom`**             | <code>number</code> |                                                                                                                                                                                                              |
-| **`left`**               | <code>number</code> |                                                                                                                                                                                                              |
-| **`navbarHeight`**       | <code>number</code> |                                                                                                                                                                                                              |
-| **`tabbarHeight`**       | <code>number</code> | Bottom overlap inset for web layout when the WebView does not already reserve space for the native tab bar. On iOS 26+ with a system-hosted tab bar this stays `0` so content is not lifted twice.           |
-| **`systemTabbarHeight`** | <code>number</code> | Nominal native tab bar height (bar plus home-indicator padding on iOS) even when `tabbarHeight` is `0`. Stays available while the tab bar is soft-hidden with `setTabbar({ hidden: true, animated: true })`. |
+| Prop                     | Type                                                                                                | Description                                                                                                                                                                                                                                                              | Since  |
+| ------------------------ | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
+| **`top`**                | <code>number</code>                                                                                 |                                                                                                                                                                                                                                                                          |        |
+| **`right`**              | <code>number</code>                                                                                 |                                                                                                                                                                                                                                                                          |        |
+| **`bottom`**             | <code>number</code>                                                                                 |                                                                                                                                                                                                                                                                          |        |
+| **`left`**               | <code>number</code>                                                                                 |                                                                                                                                                                                                                                                                          |        |
+| **`navbarHeight`**       | <code>number</code>                                                                                 |                                                                                                                                                                                                                                                                          |        |
+| **`tabbarHeight`**       | <code>number</code>                                                                                 | Bottom overlap inset for web layout when the WebView does not already reserve space for the native tab bar. On iOS 26+ with a system-hosted tab bar this stays `0` so content is not lifted twice.                                                                       |        |
+| **`systemTabbarHeight`** | <code>number</code>                                                                                 | Nominal native tab bar height (bar plus home-indicator padding on iOS) even when `tabbarHeight` is `0`. Stays available while the tab bar is soft-hidden with `setTabbar({ hidden: true, animated: true })`.                                                             |        |
+| **`verticalBarEdge`**    | <code><a href="#nativenavigationverticalbaredge">NativeNavigationVerticalBarEdge</a> \| null</code> | Semantic edge of the vertical rail, or `null` when the bars are horizontal. On a rail, `left` or `right` carries the rail thickness and `tabbarHeight` stays `0` when the WebView is already beside it. `systemTabbarHeight` is that thickness rather than a bottom bar. | 8.14.0 |
+| **`reservedRegions`**    | <code>NativeNavigationReservedRegion[]</code>                                                       | Fold and occlusion rectangles reported by iOS, in the root view's points. Empty when the device has no reserved regions.                                                                                                                                                 | 8.14.0 |
+| **`hinge`**              | <code><a href="#nativenavigationhinge">NativeNavigationHinge</a> \| null</code>                     | Latest hinge sample. `null` when the device has no hinge. Angle updates are delivered on `hingeChanged` and are not pushed through this snapshot on every tick.                                                                                                          | 8.14.0 |
+
+
+#### NativeNavigationReservedRegion
+
+A region iOS reserves inside the window, such as the fold or an occlusion.
+
+| Prop         | Type                                   |
+| ------------ | -------------------------------------- |
+| **`kind`**   | <code>'division' \| 'occlusion'</code> |
+| **`x`**      | <code>number</code>                    |
+| **`y`**      | <code>number</code>                    |
+| **`width`**  | <code>number</code>                    |
+| **`height`** | <code>number</code>                    |
+| **`active`** | <code>boolean</code>                   |
+
+
+#### NativeNavigationHinge
+
+iPhone Duo hinge sample. `angle` is radians.
+
+| Prop         | Type                                                                 |
+| ------------ | -------------------------------------------------------------------- |
+| **`angle`**  | <code>number</code>                                                  |
+| **`status`** | <code>'unknown' \| 'closed' \| 'partiallyOpen' \| 'fullyOpen'</code> |
 
 
 #### NativeNavigationConfigureOptions
 
 Global plugin configuration.
 
-| Prop                    | Type                                                                                          | Description                                                                |
-| ----------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| **`enabled`**           | <code>boolean</code>                                                                          | Enables or disables the native chrome host.                                |
-| **`platformStyle`**     | <code><a href="#nativenavigationplatformstyle">NativeNavigationPlatformStyle</a></code>       | Native style preference. `auto` uses the current platform.                 |
-| **`contentInsetMode`**  | <code><a href="#nativenavigationcontentinsetmode">NativeNavigationContentInsetMode</a></code> | When `css`, the plugin writes CSS variables on `document.documentElement`. |
-| **`animationDuration`** | <code>number</code>                                                                           | Default native transition duration in milliseconds.                        |
-| **`colors`**            | <code><a href="#nativenavigationcolors">NativeNavigationColors</a></code>                     | Shared color hints for native bars.                                        |
-| **`glass`**             | <code><a href="#nativenavigationglassoptions">NativeNavigationGlassOptions</a></code>         | Shared glass background defaults for native bars.                          |
+| Prop                      | Type                                                                                                | Description                                                                                                                                                                                                                                                                            | Since  |
+| ------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| **`enabled`**             | <code>boolean</code>                                                                                | Enables or disables the native chrome host.                                                                                                                                                                                                                                            |        |
+| **`platformStyle`**       | <code><a href="#nativenavigationplatformstyle">NativeNavigationPlatformStyle</a></code>             | Native style preference. `auto` uses the current platform.                                                                                                                                                                                                                             |        |
+| **`contentInsetMode`**    | <code><a href="#nativenavigationcontentinsetmode">NativeNavigationContentInsetMode</a></code>       | When `css`, the plugin writes CSS variables on `document.documentElement`.                                                                                                                                                                                                             |        |
+| **`animationDuration`**   | <code>number</code>                                                                                 | Default native transition duration in milliseconds.                                                                                                                                                                                                                                    |        |
+| **`colors`**              | <code><a href="#nativenavigationcolors">NativeNavigationColors</a></code>                           | Shared color hints for native bars.                                                                                                                                                                                                                                                    |        |
+| **`glass`**               | <code><a href="#nativenavigationglassoptions">NativeNavigationGlassOptions</a></code>               | Shared glass background defaults for native bars.                                                                                                                                                                                                                                      |        |
+| **`verticalBarBehavior`** | <code><a href="#nativenavigationverticalbarbehavior">NativeNavigationVerticalBarBehavior</a></code> | iPhone Duo vertical rail. `automatic` lets iOS move the status bar, the system tab bar, and navbar items into the rail. `disabled` keeps the horizontal bars for a screen that should stay put, such as video or a calculator. Treat it as a stable choice for that screen. iOS 27.1+. | 8.14.0 |
 
 
 #### NativeNavigationColors
@@ -1234,6 +1324,25 @@ Plugin version payload.
 | **`insets`** | <code><a href="#nativenavigationinsets">NativeNavigationInsets</a></code> |
 
 
+#### NativeNavigationVerticalBarChangedEvent
+
+iPhone Duo vertical rail edge change.
+
+| Prop         | Type                                                                                                | Description                                                |
+| ------------ | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| **`edge`**   | <code><a href="#nativenavigationverticalbaredge">NativeNavigationVerticalBarEdge</a> \| null</code> |                                                            |
+| **`active`** | <code>boolean</code>                                                                                | True when the system tab bar is currently a vertical rail. |
+
+
+#### NativeNavigationHingeChangedEvent
+
+iPhone Duo hinge update. `hinge` is `null` when updates stop.
+
+| Prop        | Type                                                                            |
+| ----------- | ------------------------------------------------------------------------------- |
+| **`hinge`** | <code><a href="#nativenavigationhinge">NativeNavigationHinge</a> \| null</code> |
+
+
 #### NativeNavigationTransitionEvent
 
 | Prop            | Type                                                                                                |
@@ -1244,6 +1353,17 @@ Plugin version payload.
 
 
 ### Type Aliases
+
+
+#### NativeNavigationVerticalBarEdge
+
+Semantic edge of the iPhone Duo vertical rail.
+
+The rail stays on the camera's physical edge. This value flips with
+right-to-left layout. `null` when the system is not using a rail, including
+iPhone Duo open in portrait.
+
+<code>'leading' | 'trailing'</code>
 
 
 #### NativeNavigationPlatformStyle
@@ -1265,6 +1385,13 @@ How the plugin exposes native bar sizes to web content.
 Native glass background rendering preference.
 
 <code>'none' | 'liquidGlass'</code>
+
+
+#### NativeNavigationVerticalBarBehavior
+
+Whether iPhone Duo uses the vertical rail.
+
+<code>'automatic' | 'disabled'</code>
 
 
 #### NativeNavigationBlurEffect

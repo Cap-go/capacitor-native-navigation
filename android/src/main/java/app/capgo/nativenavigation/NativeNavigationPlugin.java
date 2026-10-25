@@ -2908,6 +2908,9 @@ public class NativeNavigationPlugin extends Plugin {
             "root.style.setProperty('--cap-native-system-tabbar-height','" +
             insets.getInteger("systemTabbarHeight", 0) +
             "px');" +
+            "root.style.setProperty('--cap-native-navigation-vertical-bar-edge','');" +
+            "root.style.setProperty('--cap-native-navigation-division-x','0px');" +
+            "root.style.setProperty('--cap-native-navigation-division-width','0px');" +
             "window.dispatchEvent(new CustomEvent('capNativeNavigation:safeAreaChanged',{detail:{insets:" +
             insets.toString() +
             "}}));" +
@@ -3114,6 +3117,9 @@ public class NativeNavigationPlugin extends Plugin {
         insets.put("navbarHeight", cssPx(top));
         insets.put("tabbarHeight", cssPx(bottom));
         insets.put("systemTabbarHeight", cssPx(bottom));
+        insets.put("verticalBarEdge", JSONObject.NULL);
+        insets.put("reservedRegions", new JSONArray());
+        insets.put("hinge", JSONObject.NULL);
         return insets;
     }
 

@@ -252,20 +252,18 @@ class NativeNavigationTests: XCTestCase {
             200,
             accuracy: 0.001
         )
-        XCTAssertEqual(
-            nativeNavigationFloatingTabOriginX(
-                rectMinX: 10,
-                rectWidth: 280,
-                position: 1,
-                itemWidth: 92,
-                pitch: 80,
-                inset: 4,
-                systemLook: true,
-                layoutDirection: "rtl"
-            ),
-            10 + 280 - 4 - 2 * 80 - (92 - 80),
-            accuracy: 0.001
+        let rtlSystemOrigin = nativeNavigationFloatingTabOriginX(
+            rectMinX: 10,
+            rectWidth: 280,
+            position: 1,
+            itemWidth: 92,
+            pitch: 80,
+            inset: 4,
+            systemLook: true,
+            layoutDirection: "rtl"
         )
+        let rtlSystemExpected: CGFloat = 10 + 280 - 4 - 2 * 80 - (92 - 80)
+        XCTAssertEqual(rtlSystemOrigin, rtlSystemExpected, accuracy: 0.001)
     }
 
     func testAnimatedSystemTabbarVisibilityUsesSoftHide() {
@@ -310,5 +308,87 @@ class NativeNavigationTests: XCTestCase {
         XCTAssertEqual(path.currentPoint.y, 21, accuracy: 0.001)
         XCTAssertEqual(path.bounds.minY, 13, accuracy: 0.05)
         XCTAssertEqual(path.bounds.width, 16, accuracy: 0.05)
+    }
+
+    func testVerticalRailDetectsTheShortSide() {
+        let horizontal = nativeNavigationVerticalRail(
+            tabBarFrame: CGRect(x: 0, y: 700, width: 390, height: 83),
+            containerWidth: 390
+        )
+        XCTAssertFalse(horizontal.isVertical)
+        XCTAssertEqual(horizontal.width, 0)
+
+        let trailing = nativeNavigationVerticalRail(
+            tabBarFrame: CGRect(x: 720, y: 0, width: 84, height: 390),
+            containerWidth: 804
+        )
+        XCTAssertTrue(trailing.isVertical)
+        XCTAssertFalse(trailing.onLeft)
+        XCTAssertEqual(trailing.width, 84)
+
+        let leading = nativeNavigationVerticalRail(
+            tabBarFrame: CGRect(x: 0, y: 0, width: 84, height: 390),
+            containerWidth: 804
+        )
+        XCTAssertTrue(leading.onLeft)
+    }
+
+    func testVerticalBarEdgeFollowsLayoutDirection() {
+        XCTAssertEqual(nativeNavigationVerticalBarEdge(railOnLeft: false, layoutRtl: false), "trailing")
+        XCTAssertEqual(nativeNavigationVerticalBarEdge(railOnLeft: true, layoutRtl: false), "leading")
+        XCTAssertEqual(nativeNavigationVerticalBarEdge(railOnLeft: false, layoutRtl: true), "leading")
+        XCTAssertEqual(nativeNavigationVerticalBarEdge(railOnLeft: true, layoutRtl: true), "trailing")
+        let idleRail = NativeNavigationVerticalRail(isVertical: false, onLeft: false, width: 0)
+        let traitEdge = nativeNavigationResolvedVerticalBarEdge(traitEdge: "leading", rail: idleRail, layoutRtl: false)
+        XCTAssertEqual(traitEdge, "leading")
+        let unspecified = nativeNavigationResolvedVerticalBarEdge(traitEdge: nil, rail: idleRail, layoutRtl: false)
+        XCTAssertNil(unspecified)
+    }
+
+    func testDuoEdgeInsetsDoNotDoubleCountAHostedRail() {
+        let rail = NativeNavigationVerticalRail(isVertical: true, onLeft: false, width: 84)
+        let hosted = nativeNavigationDuoEdgeInsets(
+            rootSafe: UIEdgeInsets(top: 0, left: 0, bottom: 21, right: 84),
+            contentSafe: UIEdgeInsets(top: 0, left: 0, bottom: 12, right: 0),
+            rootWidth: 804,
+            contentWidth: 720,
+            rail: rail,
+            hosted: true,
+            horizontalTabbarHeight: 390,
+            horizontalSystemTabbarHeight: 390
+        )
+        XCTAssertEqual(hosted.left, 0)
+        XCTAssertEqual(hosted.right, 0)
+        XCTAssertEqual(hosted.bottom, 12)
+        XCTAssertEqual(hosted.tabbarHeight, 0)
+        XCTAssertEqual(hosted.systemTabbarHeight, 84)
+
+        let fullBleed = nativeNavigationDuoEdgeInsets(
+            rootSafe: UIEdgeInsets(top: 0, left: 0, bottom: 21, right: 0),
+            contentSafe: .zero,
+            rootWidth: 804,
+            contentWidth: 804,
+            rail: rail,
+            hosted: true,
+            horizontalTabbarHeight: 83,
+            horizontalSystemTabbarHeight: 83
+        )
+        XCTAssertEqual(fullBleed.right, 84)
+        XCTAssertEqual(fullBleed.tabbarHeight, 0)
+
+        let horizontal = nativeNavigationDuoEdgeInsets(
+            rootSafe: UIEdgeInsets(top: 59, left: 0, bottom: 34, right: 0),
+            contentSafe: .zero,
+            rootWidth: 390,
+            contentWidth: 390,
+            rail: NativeNavigationVerticalRail(isVertical: false, onLeft: false, width: 0),
+            hosted: true,
+            horizontalTabbarHeight: 0,
+            horizontalSystemTabbarHeight: 83
+        )
+        XCTAssertEqual(horizontal.left, 0)
+        XCTAssertEqual(horizontal.right, 0)
+        XCTAssertEqual(horizontal.bottom, 0)
+        XCTAssertEqual(horizontal.systemTabbarHeight, 83)
     }
 }

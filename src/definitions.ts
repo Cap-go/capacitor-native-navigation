@@ -271,7 +271,35 @@ export interface NativeNavigationConfigureOptions {
    * Shared glass background defaults for native bars.
    */
   glass?: NativeNavigationGlassOptions;
+
+  /**
+   * iPhone Duo vertical rail. `automatic` lets iOS move the status bar, the
+   * system tab bar, and navbar items into the rail. `disabled` keeps the
+   * horizontal bars for a screen that should stay put, such as video or a
+   * calculator. Treat it as a stable choice for that screen. iOS 27.1+.
+   *
+   * @since 8.14.0
+   */
+  verticalBarBehavior?: NativeNavigationVerticalBarBehavior;
 }
+
+/**
+ * Whether iPhone Duo uses the vertical rail.
+ *
+ * @since 8.14.0
+ */
+export type NativeNavigationVerticalBarBehavior = 'automatic' | 'disabled';
+
+/**
+ * Semantic edge of the iPhone Duo vertical rail.
+ *
+ * The rail stays on the camera's physical edge. This value flips with
+ * right-to-left layout. `null` when the system is not using a rail, including
+ * iPhone Duo open in portrait.
+ *
+ * @since 8.14.0
+ */
+export type NativeNavigationVerticalBarEdge = 'leading' | 'trailing';
 
 /**
  * A button shown in the native navbar.
@@ -846,6 +874,57 @@ export interface NativeNavigationInsets {
    * soft-hidden with `setTabbar({ hidden: true, animated: true })`.
    */
   systemTabbarHeight: number;
+
+  /**
+   * Semantic edge of the vertical rail, or `null` when the bars are horizontal.
+   * On a rail, `left` or `right` carries the rail thickness and `tabbarHeight`
+   * stays `0` when the WebView is already beside it. `systemTabbarHeight` is
+   * that thickness rather than a bottom bar.
+   *
+   * @since 8.14.0
+   */
+  verticalBarEdge?: NativeNavigationVerticalBarEdge | null;
+
+  /**
+   * Fold and occlusion rectangles reported by iOS, in the root view's points.
+   * Empty when the device has no reserved regions.
+   *
+   * @since 8.14.0
+   */
+  reservedRegions?: NativeNavigationReservedRegion[];
+
+  /**
+   * Latest hinge sample. `null` when the device has no hinge. Angle updates
+   * are delivered on `hingeChanged` and are not pushed through this snapshot
+   * on every tick.
+   *
+   * @since 8.14.0
+   */
+  hinge?: NativeNavigationHinge | null;
+}
+
+/**
+ * A region iOS reserves inside the window, such as the fold or an occlusion.
+ *
+ * @since 8.14.0
+ */
+export interface NativeNavigationReservedRegion {
+  kind: 'division' | 'occlusion';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  active: boolean;
+}
+
+/**
+ * iPhone Duo hinge sample. `angle` is radians.
+ *
+ * @since 8.14.0
+ */
+export interface NativeNavigationHinge {
+  angle: number;
+  status: 'unknown' | 'closed' | 'partiallyOpen' | 'fullyOpen';
 }
 
 /**
@@ -952,6 +1031,28 @@ export interface NativeNavigationTabSelectEvent {
 
 export interface NativeNavigationSafeAreaChangedEvent {
   insets: NativeNavigationInsets;
+}
+
+/**
+ * iPhone Duo vertical rail edge change.
+ *
+ * @since 8.14.0
+ */
+export interface NativeNavigationVerticalBarChangedEvent {
+  edge: NativeNavigationVerticalBarEdge | null;
+  /**
+   * True when the system tab bar is currently a vertical rail.
+   */
+  active: boolean;
+}
+
+/**
+ * iPhone Duo hinge update. `hinge` is `null` when updates stop.
+ *
+ * @since 8.14.0
+ */
+export interface NativeNavigationHingeChangedEvent {
+  hinge: NativeNavigationHinge | null;
 }
 
 export interface NativeNavigationTransitionEvent {
@@ -1077,6 +1178,28 @@ export interface NativeNavigationPlugin {
   addListener(
     eventName: 'safeAreaChanged',
     listenerFunc: (event: NativeNavigationSafeAreaChangedEvent) => void,
+  ): Promise<PluginListenerHandle>;
+
+  /**
+   * Fired when the iPhone Duo vertical rail appears, disappears, or changes
+   * edge. `safeAreaChanged` carries the same edge on every inset update.
+   *
+   * @since 8.14.0
+   */
+  addListener(
+    eventName: 'verticalBarChanged',
+    listenerFunc: (event: NativeNavigationVerticalBarChangedEvent) => void,
+  ): Promise<PluginListenerHandle>;
+
+  /**
+   * Fired when the iPhone Duo hinge changes, or when hinge updates stop.
+   * Prefer `hinge.status` over `hinge.angle` when a coarse pose is enough.
+   *
+   * @since 8.14.0
+   */
+  addListener(
+    eventName: 'hingeChanged',
+    listenerFunc: (event: NativeNavigationHingeChangedEvent) => void,
   ): Promise<PluginListenerHandle>;
 
   addListener(
