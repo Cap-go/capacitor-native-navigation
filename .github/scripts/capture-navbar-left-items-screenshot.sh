@@ -53,19 +53,20 @@ launch_app() {
 
 wait_for_screenshot_ready_log() {
   local attempt=0
-  while [ "${attempt}" -lt 90 ]; do
+  while [ "${attempt}" -lt 30 ]; do
     if adb logcat -d -t 80 2>/dev/null | tr -d '\r' | grep -q 'NATIVE_NAV_SCREENSHOT_READY'; then
       return 0
     fi
     attempt=$((attempt + 1))
-    sleep 2
+    sleep 1
   done
   echo "Screenshot readiness log not observed; capturing anyway" >&2
-  adb logcat -d | tail -120 >&2 || true
   return 0
 }
 
-wait_for_boot_completed
+if [ "${NAVBAR_SCREENSHOT_SKIP_BOOT:-0}" != "1" ]; then
+  wait_for_boot_completed
+fi
 adb shell wm size 1080x1920 >/dev/null 2>&1 || true
 adb shell wm density 420 >/dev/null 2>&1 || true
 dismiss_blocking_dialogs
@@ -73,9 +74,9 @@ adb uninstall "${PACKAGE}" >/dev/null 2>&1 || true
 adb install -r "${APK_PATH}"
 adb logcat -c >/dev/null 2>&1 || true
 launch_app
-sleep 20
+sleep 8
 wait_for_screenshot_ready_log
-sleep 5
+sleep 2
 wake_display
 adb exec-out screencap -p > "${WORK_PNG}"
 test -s "${WORK_PNG}"
