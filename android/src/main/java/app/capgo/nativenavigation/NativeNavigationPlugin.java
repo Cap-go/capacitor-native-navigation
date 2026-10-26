@@ -276,12 +276,12 @@ public class NativeNavigationPlugin extends Plugin {
                 nativeToolbar.setNavigationContentDescription(provided);
                 nativeToolbar.setNavigationOnClickListener((v) -> notifyListeners("navbarBack", new JSObject().put("source", "navbar")));
                 if (Boolean.TRUE.equals(backButton.getBool("supplements"))) {
-                    addToolbarItems(nativeToolbar, call.getArray("leftItems", new JSArray()), "left");
+                    applyLeftToolbarItems(nativeToolbar, call.getArray("leftItems", new JSArray()), true);
                 }
             } else {
                 nativeToolbar.setNavigationIcon(null);
                 nativeToolbar.setNavigationOnClickListener(null);
-                addToolbarItems(nativeToolbar, call.getArray("leftItems", new JSArray()), "left");
+                applyLeftToolbarItems(nativeToolbar, call.getArray("leftItems", new JSArray()), false);
             }
 
             addToolbarItems(nativeToolbar, call.getArray("rightItems", new JSArray()), "right");
@@ -841,8 +841,61 @@ public class NativeNavigationPlugin extends Plugin {
         return navbarSegments.rowCount() * dp(NavbarSegmentRows.ROW_HEIGHT_DP);
     }
 
+    private void applyLeftToolbarItems(Toolbar nativeToolbar, JSONArray leftItems, boolean backButtonVisible) {
+        if (!NavbarToolbarItemsSupport.shouldPromoteLeadingLeftItemToNavigation(backButtonVisible)) {
+            addToolbarItems(nativeToolbar, leftItems, "left", -1);
+            return;
+        }
+        int leadingIndex = NavbarToolbarItemsSupport.indexOfFirstLeftItemWithIcon(leftItems);
+        if (leadingIndex < 0) {
+            addToolbarItems(nativeToolbar, leftItems, "left", -1);
+            return;
+        }
+        JSONObject leadingItem = leftItems.optJSONObject(leadingIndex);
+        if (leadingItem == null) {
+            addToolbarItems(nativeToolbar, leftItems, "left", -1);
+            return;
+        }
+        Drawable icon = iconFrom(leadingItem.optJSONObject("icon"));
+        if (icon == null) {
+            addToolbarItems(nativeToolbar, leftItems, "left", -1);
+            return;
+        }
+        String leadingId = leadingItem.optString("id", "item-leading");
+        String leadingTitle = leadingItem.optString("title", "");
+        nativeToolbar.setNavigationIcon(icon);
+        nativeToolbar.setNavigationContentDescription(leadingTitle);
+        if (leadingItem.optBoolean("enabled", true)) {
+            NavbarItemTapEventSupport.NavbarItemTapPayload tapPayload = NavbarItemTapEventSupport.leadingLeft(
+                leadingId,
+                leadingTitle
+            );
+            nativeToolbar.setNavigationOnClickListener((v) -> emitNavbarItemTap(tapPayload));
+        } else {
+            nativeToolbar.setNavigationOnClickListener(null);
+        }
+        addToolbarItems(nativeToolbar, leftItems, "left", leadingIndex);
+    }
+
+    private void emitNavbarItemTap(String id, String title, String placement) {
+        emitNavbarItemTap(new NavbarItemTapEventSupport.NavbarItemTapPayload(id, title, placement));
+    }
+
+    private void emitNavbarItemTap(NavbarItemTapEventSupport.NavbarItemTapPayload payload) {
+        JSObject event = new JSObject();
+        NavbarItemTapEventSupport.apply(event, payload);
+        notifyListeners("navbarItemTap", event);
+    }
+
     private void addToolbarItems(Toolbar nativeToolbar, JSONArray rawItems, String placement) {
+        addToolbarItems(nativeToolbar, rawItems, placement, -1);
+    }
+
+    private void addToolbarItems(Toolbar nativeToolbar, JSONArray rawItems, String placement, int skipIndex) {
         for (int index = 0; index < rawItems.length(); index++) {
+            if (index == skipIndex) {
+                continue;
+            }
             JSONObject rawItem = rawItems.optJSONObject(index);
             if (rawItem == null) {
                 continue;
@@ -976,11 +1029,7 @@ public class NativeNavigationPlugin extends Plugin {
 
         toolbar.setOnMenuItemClickListener((item) -> {
             int itemId = item.getItemId();
-            JSObject event = new JSObject();
-            event.put("id", menuActionIds.get(itemId));
-            event.put("title", menuActionTitles.get(itemId));
-            event.put("placement", menuActionPlacements.get(itemId));
-            notifyListeners("navbarItemTap", event);
+            emitNavbarItemTap(menuActionIds.get(itemId), menuActionTitles.get(itemId), menuActionPlacements.get(itemId));
             return true;
         });
 
@@ -1528,7 +1577,12 @@ public class NativeNavigationPlugin extends Plugin {
         }
         String svg = svgFrom(descriptor);
         if (svg != null && !svg.isEmpty()) {
-            return SvgIconRenderer.render(getContext().getResources(), svg, iconSizeDp(descriptor));
+            return SvgIconRenderer.render(
+                getContext().getResources(),
+                svg,
+                NativeNavigationIconMetrics.widthDp(descriptor),
+                NativeNavigationIconMetrics.heightDp(descriptor)
+            );
         }
         JSONObject android = descriptor.optJSONObject("android");
         String resource = android == null ? null : android.optString("resource", null);
@@ -1540,7 +1594,12 @@ public class NativeNavigationPlugin extends Plugin {
         }
         String inlineSvg = inlineSvgFrom(resource);
         if (inlineSvg != null) {
-            return SvgIconRenderer.render(getContext().getResources(), inlineSvg, iconSizeDp(descriptor));
+            return SvgIconRenderer.render(
+                getContext().getResources(),
+                inlineSvg,
+                NativeNavigationIconMetrics.widthDp(descriptor),
+                NativeNavigationIconMetrics.heightDp(descriptor)
+            );
         }
         if (resource == null || resource.isEmpty()) {
             return null;
@@ -1597,11 +1656,6 @@ public class NativeNavigationPlugin extends Plugin {
         } catch (Exception ignored) {
             return null;
         }
-    }
-
-    private int iconSizeDp(JSONObject descriptor) {
-        double width = descriptor.optDouble("width", 24);
-        return (int) Math.max(1, Math.round(width));
     }
 
     private static String attr(XmlPullParser parser, String name) {
@@ -2356,12 +2410,14 @@ public class NativeNavigationPlugin extends Plugin {
 
         private static final Pattern NUMBER_PATTERN = Pattern.compile("[-+]?(?:\\d*\\.\\d+|\\d+\\.?)(?:[eE][-+]?\\d+)?");
 
-        static Drawable render(Resources resources, String svg, int iconSizeDp) {
-            int sizePx = Math.max(1, Math.round(iconSizeDp * resources.getDisplayMetrics().density));
-            Bitmap bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888);
+        static Drawable render(Resources resources, String svg, int widthDp, int heightDp) {
+            int[] sizePx = SvgIconBitmapSize.pixelSize(resources.getDisplayMetrics().density, widthDp, heightDp);
+            int widthPx = sizePx[0];
+            int heightPx = sizePx[1];
+            Bitmap bitmap = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888);
             Canvas canvas = new Canvas(bitmap);
-            RectF viewBox = viewBox(svg, iconSizeDp);
-            canvas.scale(sizePx / Math.max(viewBox.width(), 1f), sizePx / Math.max(viewBox.height(), 1f));
+            RectF viewBox = viewBox(svg, widthDp, heightDp);
+            canvas.scale(widthPx / Math.max(viewBox.width(), 1f), heightPx / Math.max(viewBox.height(), 1f));
             canvas.translate(-viewBox.left, -viewBox.top);
 
             try {
@@ -2384,7 +2440,7 @@ public class NativeNavigationPlugin extends Plugin {
             } catch (Exception ignored) {}
 
             BitmapDrawable drawable = new BitmapDrawable(resources, bitmap);
-            drawable.setBounds(0, 0, sizePx, sizePx);
+            drawable.setBounds(0, 0, widthPx, heightPx);
             return drawable;
         }
 
@@ -2473,7 +2529,7 @@ public class NativeNavigationPlugin extends Plugin {
             return path;
         }
 
-        private static RectF viewBox(String svg, int iconSizeDp) {
+        private static RectF viewBox(String svg, int widthDp, int heightDp) {
             List<Float> viewBoxValues = numbers(attribute(svg, "viewBox"));
             if (viewBoxValues.size() >= 4) {
                 return new RectF(
@@ -2486,8 +2542,8 @@ public class NativeNavigationPlugin extends Plugin {
             float width = value(attribute(svg, "width"));
             float height = value(attribute(svg, "height"));
             if (width <= 0 || height <= 0) {
-                width = iconSizeDp;
-                height = iconSizeDp;
+                width = widthDp;
+                height = heightDp;
             }
             return new RectF(0, 0, width, height);
         }

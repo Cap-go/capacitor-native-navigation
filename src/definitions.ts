@@ -437,7 +437,10 @@ export interface NativeNavigationBackButton {
    * When `true`, `leftItems` are kept beside the system back button.
    * Omitted means `false`. The plugin's back control is its own leading
    * item, so this does not hide `leftItems` on iOS. On Android, `leftItems`
-   * are shown with a visible back button only when this is `true`.
+   * are shown with a visible back button only when this is `true`. When no
+   * back button is visible, the first `leftItems` entry with an icon uses
+   * the toolbar navigation slot (leading edge); further left items stay in
+   * the toolbar menu.
    *
    * @since 8.14.0
    */
