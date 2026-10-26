@@ -1,0 +1,107 @@
+name: Android navbar left items screenshot
+
+concurrency:
+  group: android-navbar-left-items-screenshot-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - 'example-app/**'
+      - '.github/workflows/android-navbar-left-items-screenshot.yml'
+      - '.github/scripts/capture-navbar-left-items-screenshot.sh'
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.x
+      - uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: |
+          bun i
+          cd example-app && bun i
+      - name: Setup Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: zulu
+          java-version: 21
+      - name: Build plugin
+        run: bun run build
+      - name: Build screenshot APKs
+        run: |
+          set -euo pipefail
+          mkdir -p screenshot-apks
+          build_apk() {
+            local plugin_source="$1"
+            local apk_out="$2"
+            local test_out="$3"
+            cp "$plugin_source" android/src/main/java/app/capgo/nativenavigation/NativeNavigationPlugin.java
+            bun run build
+            cd example-app
+            VITE_SCREENSHOT_MODE=navbar-left-items bun run build
+            VITE_SCREENSHOT_MODE=navbar-left-items bunx cap sync android
+            cd android
+            chmod +x gradlew
+            VITE_SCREENSHOT_MODE=navbar-left-items ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon
+            cp app/build/outputs/apk/debug/app-debug.apk "../../${apk_out}"
+            cp app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk "../../${test_out}"
+            cd ../..
+          }
+          git fetch origin main
+          git show origin/main:android/src/main/java/app/capgo/nativenavigation/NativeNavigationPlugin.java > /tmp/NativeNavigationPlugin.main.java
+          build_apk /tmp/NativeNavigationPlugin.main.java screenshot-apks/navbar-before.apk screenshot-apks/navbar-before-androidTest.apk
+          git checkout -- android/src/main/java/app/capgo/nativenavigation/NativeNavigationPlugin.java
+          build_apk android/src/main/java/app/capgo/nativenavigation/NativeNavigationPlugin.java screenshot-apks/navbar-after.apk screenshot-apks/navbar-after-androidTest.apk
+      - name: Enable KVM for Android emulator
+        run: |
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+            sudo chmod 666 /dev/kvm || true
+          fi
+      - name: Capture before and after navbar screenshots
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          cores: 4
+          ram-size: 4096M
+          profile: pixel_6
+          emulator-boot-timeout: 1200
+          disable-animations: true
+          emulator-options: -no-window -gpu auto -noaudio -no-boot-anim -camera-back none
+          script: |
+            set -euo pipefail
+            chmod +x .github/scripts/capture-navbar-left-items-screenshot.sh
+            mkdir -p docs/screenshots/pr-98
+            capture_pair() {
+              local apk="$1"
+              local test_apk="$2"
+              local output="$3"
+              bash .github/scripts/capture-navbar-left-items-screenshot.sh "$apk" "$output" "$test_apk"
+            }
+            capture_pair screenshot-apks/navbar-before.apk screenshot-apks/navbar-before-androidTest.apk docs/screenshots/pr-98/android-before.png
+            capture_pair screenshot-apks/navbar-after.apk screenshot-apks/navbar-after-androidTest.apk docs/screenshots/pr-98/android-after.png
+      - name: Upload navbar screenshot pair
+        uses: actions/upload-artifact@v7
+        with:
+          name: navbar-left-items-screenshots
+          path: docs/screenshots/pr-98/*.png
+          if-no-files-found: error
