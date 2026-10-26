@@ -13,6 +13,11 @@ public class InsetsOffsetSupportTest {
     }
 
     @Test
+    public void nativeChromeInsetIgnoresWebViewOffsetWhenContentRootStaysAtZero() {
+        assertEquals(50, InsetsOffsetSupport.adjustedSystemBarInset(50, 0));
+    }
+
+    @Test
     public void effectiveTopOffsetUsesContentRootWhenItMoves() {
         assertEquals(50, InsetsOffsetSupport.effectiveTopOffset(50, 0));
         assertEquals(0, InsetsOffsetSupport.adjustedSystemBarInset(50, InsetsOffsetSupport.effectiveTopOffset(50, 0)));

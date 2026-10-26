@@ -363,7 +363,7 @@ public class NativeNavigationPlugin extends Plugin {
 
     private int pullToRefreshTopPx() {
         int navbarToolbar = navbarScrollCollapsed ? 0 : navbarBarHeight(navbarLarge ? 1f : 0f) + navbarAccessoryHeight();
-        return statusBarInset() + (navbarVisible ? navbarToolbar : 0);
+        return nativeStatusBarInset() + (navbarVisible ? navbarToolbar : 0);
     }
 
     @PluginMethod
@@ -2828,8 +2828,8 @@ public class NativeNavigationPlugin extends Plugin {
         if (root == null) {
             return;
         }
-        int status = statusBarInset();
-        int bottom = navigationBarInset();
+        int status = nativeStatusBarInset();
+        int bottom = nativeNavigationBarInset();
         int navbarToolbar = navbarScrollCollapsed ? 0 : navbarBarHeight(navbarLargeProgress) + navbarAccessoryHeight();
         int navbarHeight = navbarVisible ? status + navbarToolbar : 0;
         boolean tabbarLayoutVisible = tabbarVisible || tabbarChromeHideAnimating;
@@ -2912,7 +2912,7 @@ public class NativeNavigationPlugin extends Plugin {
         if (root == null || tabbarContainer == null) {
             return;
         }
-        int bottom = navigationBarInset();
+        int bottom = nativeNavigationBarInset();
         boolean tabbarLayoutVisible = tabbarVisible || tabbarChromeHideAnimating;
         int rootWidth = root.getWidth() > 0 ? root.getWidth() : Resources.getSystem().getDisplayMetrics().widthPixels;
         int rootHeight = root.getHeight() > 0 ? root.getHeight() : Resources.getSystem().getDisplayMetrics().heightPixels;
@@ -2925,7 +2925,9 @@ public class NativeNavigationPlugin extends Plugin {
         int topMargin = 0;
         int bottomMargin;
         if (sidebar) {
-            int navbarOccupied = navbarVisible ? statusBarInset() + navbarBarHeight(navbarLargeProgress) + navbarAccessoryHeight() : statusBarInset();
+            int navbarOccupied = navbarVisible
+                ? nativeStatusBarInset() + navbarBarHeight(navbarLargeProgress) + navbarAccessoryHeight()
+                : nativeStatusBarInset();
             tabbarWidth = dp(TabbarLayoutSupport.SIDEBAR_WIDTH_DP);
             topMargin = navbarOccupied + dp(8);
             bottomMargin = bottom + dp(8);
@@ -3292,18 +3294,18 @@ public class NativeNavigationPlugin extends Plugin {
         if (params == null) {
             return;
         }
-        params.height = statusBarInset() + (navbarScrollCollapsed ? 0 : navbarBarHeight(navbarLargeProgress) + navbarAccessoryHeight());
+        params.height = nativeStatusBarInset() + (navbarScrollCollapsed ? 0 : navbarBarHeight(navbarLargeProgress) + navbarAccessoryHeight());
         navbarContainer.setLayoutParams(params);
         // Full layout places the search row once. These frames skip that path, so the row has to
         // follow the large title or it stays overlapped or clipped after the animation.
         if (navbarSearchField != null && navbarSearchField.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
             ViewGroup.MarginLayoutParams searchParams = (ViewGroup.MarginLayoutParams) navbarSearchField.getLayoutParams();
-            searchParams.topMargin = statusBarInset() + navbarBarHeight(navbarLargeProgress) + dp(8);
+            searchParams.topMargin = nativeStatusBarInset() + navbarBarHeight(navbarLargeProgress) + dp(8);
             navbarSearchField.setLayoutParams(searchParams);
         }
         if (navbarSegments != null && navbarSegments.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
             ViewGroup.MarginLayoutParams segmentsParams = (ViewGroup.MarginLayoutParams) navbarSegments.getLayoutParams();
-            segmentsParams.topMargin = statusBarInset() + navbarBarHeight(navbarLargeProgress) + navbarSearchHeight();
+            segmentsParams.topMargin = nativeStatusBarInset() + navbarBarHeight(navbarLargeProgress) + navbarSearchHeight();
             navbarSegments.setLayoutParams(segmentsParams);
         }
         if (tabbarStyle.isSidebar()) {
@@ -3461,13 +3463,20 @@ public class NativeNavigationPlugin extends Plugin {
     }
 
     /**
-     * The chrome is laid out inside {@code android.R.id.content}, so it only needs to clear the part of a
-     * system bar that actually overlaps that view. Capacitor's SystemBars plugin (default
-     * {@code insetsHandling: 'css'} without {@code viewport-fit=cover}) pads the decor view by the system bars,
-     * which already moves the content root clear of them; adding the full inset again doubled the gap. On API 35+
-     * with WebView &lt; 140 the same padding can move the WebView's parent while {@code android.R.id.content} stays
-     * at the window origin, so inset values exposed to JS/CSS also account for the WebView position.
+     * Native chrome is laid out inside {@code android.R.id.content}, so it only clears the part of a system bar
+     * that overlaps that view. Capacitor's SystemBars plugin (default {@code insetsHandling: 'css'} without
+     * {@code viewport-fit=cover}) may pad the decor view or, on API 35+ with WebView &lt; 140, pad the WebView's
+     * parent while {@code android.R.id.content} stays at the window origin.
      */
+    private int nativeStatusBarInset() {
+        return InsetsOffsetSupport.adjustedSystemBarInset(rawStatusBarInset(), contentRootTopOffset());
+    }
+
+    private int nativeNavigationBarInset() {
+        return InsetsOffsetSupport.adjustedSystemBarInset(rawNavigationBarInset(), contentRootBottomOffset());
+    }
+
+    /** JS/CSS insets also account for WebView position when SystemBars pads only the WebView parent. */
     private int statusBarInset() {
         return InsetsOffsetSupport.adjustedSystemBarInset(
             rawStatusBarInset(),
