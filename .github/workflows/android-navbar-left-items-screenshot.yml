@@ -89,18 +89,7 @@ jobs:
           emulator-boot-timeout: 1200
           disable-animations: true
           emulator-options: -no-window -gpu auto -noaudio -no-boot-anim -camera-back none
-          script: |
-            set -euo pipefail
-            chmod +x .github/scripts/capture-navbar-left-items-screenshot.sh
-            mkdir -p docs/screenshots/pr-98
-            capture_pair() {
-              local apk="$1"
-              local test_apk="$2"
-              local output="$3"
-              bash .github/scripts/capture-navbar-left-items-screenshot.sh "$apk" "$output" "$test_apk"
-            }
-            capture_pair screenshot-apks/navbar-before.apk screenshot-apks/navbar-before-androidTest.apk docs/screenshots/pr-98/android-before.png
-            capture_pair screenshot-apks/navbar-after.apk screenshot-apks/navbar-after-androidTest.apk docs/screenshots/pr-98/android-after.png
+          script: bash -lc 'set -euo pipefail; chmod +x .github/scripts/capture-navbar-left-items-screenshot.sh; mkdir -p docs/screenshots/pr-98; capture_pair() { local apk="$1"; local test_apk="$2"; local output="$3"; bash .github/scripts/capture-navbar-left-items-screenshot.sh "$apk" "$output" "$test_apk"; }; capture_pair screenshot-apks/navbar-before.apk screenshot-apks/navbar-before-androidTest.apk docs/screenshots/pr-98/android-before.png; capture_pair screenshot-apks/navbar-after.apk screenshot-apks/navbar-after-androidTest.apk docs/screenshots/pr-98/android-after.png'
       - name: Upload navbar screenshot pair
         uses: actions/upload-artifact@v7
         with:
