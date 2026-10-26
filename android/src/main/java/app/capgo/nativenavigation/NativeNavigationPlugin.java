@@ -363,7 +363,9 @@ public class NativeNavigationPlugin extends Plugin {
 
     private int pullToRefreshTopPx() {
         int navbarToolbar = navbarScrollCollapsed ? 0 : navbarBarHeight(navbarLarge ? 1f : 0f) + navbarAccessoryHeight();
-        return nativeStatusBarInset() + (navbarVisible ? navbarToolbar : 0);
+        int navbarBottomInWindow =
+            contentRootTopOffset() + nativeStatusBarInset() + (navbarVisible ? navbarToolbar : 0);
+        return InsetsOffsetSupport.pullToRefreshProgressTopOffset(navbarBottomInWindow, webViewTopOffset());
     }
 
     @PluginMethod

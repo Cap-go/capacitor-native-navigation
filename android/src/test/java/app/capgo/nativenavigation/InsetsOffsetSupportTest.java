@@ -51,4 +51,16 @@ public class InsetsOffsetSupportTest {
     public void adjustedSystemBarInsetNeverReturnsNegative() {
         assertEquals(0, InsetsOffsetSupport.adjustedSystemBarInset(24, 100));
     }
+
+    @Test
+    public void pullToRefreshOffsetSubtractsWebViewTopWhenWebViewStartsBelowWindowOrigin() {
+        int navbarBottomInWindow = 50 + 56;
+        assertEquals(56, InsetsOffsetSupport.pullToRefreshProgressTopOffset(navbarBottomInWindow, 50));
+    }
+
+    @Test
+    public void pullToRefreshOffsetUsesNavbarBottomWhenWebViewAlignsWithWindowOrigin() {
+        int navbarBottomInWindow = 50 + 56;
+        assertEquals(106, InsetsOffsetSupport.pullToRefreshProgressTopOffset(navbarBottomInWindow, 0));
+    }
 }

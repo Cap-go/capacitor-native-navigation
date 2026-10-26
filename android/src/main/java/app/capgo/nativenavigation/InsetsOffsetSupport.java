@@ -21,4 +21,12 @@ public final class InsetsOffsetSupport {
     public static int adjustedSystemBarInset(int rawInset, int effectiveOffset) {
         return Math.max(0, rawInset - effectiveOffset);
     }
+
+    /**
+     * {@link androidx.swiperefreshlayout.widget.SwipeRefreshLayout} replaces the WebView in its parent, so progress
+     * offsets are relative to the WebView's top in window coordinates, not {@code android.R.id.content}.
+     */
+    public static int pullToRefreshProgressTopOffset(int navbarBottomInWindow, int webViewTopInWindow) {
+        return Math.max(0, navbarBottomInWindow - Math.max(0, webViewTopInWindow));
+    }
 }
