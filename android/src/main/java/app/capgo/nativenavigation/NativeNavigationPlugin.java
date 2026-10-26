@@ -158,6 +158,7 @@ public class NativeNavigationPlugin extends Plugin {
     private float tabbarMinimizeProgress = 0f;
     private ValueAnimator tabbarMinimizeAnimator;
     private final PullToRefreshSupport pullToRefresh = new PullToRefreshSupport();
+    private boolean webViewBoundsWatcherAttached;
 
     @Override
     public void load() {
@@ -3463,14 +3464,22 @@ public class NativeNavigationPlugin extends Plugin {
      * The chrome is laid out inside {@code android.R.id.content}, so it only needs to clear the part of a
      * system bar that actually overlaps that view. Capacitor's SystemBars plugin (default
      * {@code insetsHandling: 'css'} without {@code viewport-fit=cover}) pads the decor view by the system bars,
-     * which already moves the content root clear of them; adding the full inset again doubled the gap.
+     * which already moves the content root clear of them; adding the full inset again doubled the gap. On API 35+
+     * with WebView &lt; 140 the same padding can move the WebView's parent while {@code android.R.id.content} stays
+     * at the window origin, so inset values exposed to JS/CSS also account for the WebView position.
      */
     private int statusBarInset() {
-        return Math.max(0, rawStatusBarInset() - contentRootTopOffset());
+        return InsetsOffsetSupport.adjustedSystemBarInset(
+            rawStatusBarInset(),
+            InsetsOffsetSupport.effectiveTopOffset(contentRootTopOffset(), webViewTopOffset())
+        );
     }
 
     private int navigationBarInset() {
-        return Math.max(0, rawNavigationBarInset() - contentRootBottomOffset());
+        return InsetsOffsetSupport.adjustedSystemBarInset(
+            rawNavigationBarInset(),
+            InsetsOffsetSupport.effectiveBottomOffset(contentRootBottomOffset(), webViewBottomOffset())
+        );
     }
 
     // API 30+ reads the currently visible bars so a hidden navigation bar (immersive mode) gives the space back.
@@ -3526,6 +3535,28 @@ public class NativeNavigationPlugin extends Plugin {
         return Math.max(0, decor.getHeight() - (location[1] + root.getHeight()));
     }
 
+    private int webViewTopOffset() {
+        View webView = getBridge() == null ? null : getBridge().getWebView();
+        if (webView == null || !webView.isLaidOut()) {
+            return 0;
+        }
+        int[] location = new int[2];
+        webView.getLocationInWindow(location);
+        return Math.max(0, location[1]);
+    }
+
+    private int webViewBottomOffset() {
+        View webView = getBridge() == null ? null : getBridge().getWebView();
+        Activity activity = getActivity();
+        if (webView == null || activity == null || !webView.isLaidOut()) {
+            return 0;
+        }
+        View decor = activity.getWindow().getDecorView();
+        int[] location = new int[2];
+        webView.getLocationInWindow(location);
+        return Math.max(0, decor.getHeight() - (location[1] + webView.getHeight()));
+    }
+
     private void watchContentRootBounds() {
         FrameLayout root = contentRoot();
         if (root == null) {
@@ -3551,6 +3582,30 @@ public class NativeNavigationPlugin extends Plugin {
             return insets;
         });
         root.addView(insetsProbe, new FrameLayout.LayoutParams(0, 0));
+        attachWebViewBoundsWatcher();
+    }
+
+    private void attachWebViewBoundsWatcher() {
+        if (webViewBoundsWatcherAttached || getBridge() == null) {
+            return;
+        }
+        View webView = getBridge().getWebView();
+        if (webView == null) {
+            FrameLayout root = contentRoot();
+            if (root != null) {
+                root.post(this::attachWebViewBoundsWatcher);
+            }
+            return;
+        }
+        webViewBoundsWatcherAttached = true;
+        webView.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+            if (top == oldTop && bottom == oldBottom && left == oldLeft && right == oldRight) {
+                return;
+            }
+            if (navbarVisible || tabbarVisible) {
+                view.post(this::updateInsetsAndNotify);
+            }
+        });
     }
 
     private int systemDimension(String name) {
