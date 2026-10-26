@@ -159,6 +159,10 @@ public class NativeNavigationPlugin extends Plugin {
     private ValueAnimator tabbarMinimizeAnimator;
     private final PullToRefreshSupport pullToRefresh = new PullToRefreshSupport();
     private boolean webViewBoundsWatcherAttached;
+    private static final int WEB_VIEW_BOUNDS_WATCHER_MAX_ATTACH_ATTEMPTS = 60;
+    private static final long WEB_VIEW_BOUNDS_WATCHER_RETRY_DELAY_MS = 100L;
+    private int webViewBoundsWatcherAttachAttempts;
+    private Runnable pendingWebViewBoundsWatcherAttach;
 
     @Override
     public void load() {
@@ -169,6 +173,12 @@ public class NativeNavigationPlugin extends Plugin {
                 watchContentRootBounds();
             });
         }
+    }
+
+    @Override
+    protected void handleOnDestroy() {
+        cancelPendingWebViewBoundsWatcherAttach();
+        super.handleOnDestroy();
     }
 
     @PluginMethod
@@ -3597,17 +3607,16 @@ public class NativeNavigationPlugin extends Plugin {
     }
 
     private void attachWebViewBoundsWatcher() {
-        if (webViewBoundsWatcherAttached || getBridge() == null) {
+        if (webViewBoundsWatcherAttached || getBridge() == null || !isActiveForWebViewBoundsWatcher()) {
             return;
         }
         View webView = getBridge().getWebView();
         if (webView == null) {
-            FrameLayout root = contentRoot();
-            if (root != null) {
-                root.post(this::attachWebViewBoundsWatcher);
-            }
+            scheduleWebViewBoundsWatcherAttachRetry();
             return;
         }
+        cancelPendingWebViewBoundsWatcherAttach();
+        webViewBoundsWatcherAttachAttempts = 0;
         webViewBoundsWatcherAttached = true;
         webView.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
             if (top == oldTop && bottom == oldBottom && left == oldLeft && right == oldRight) {
@@ -3628,6 +3637,45 @@ public class NativeNavigationPlugin extends Plugin {
                 view.post(() -> pullToRefresh.setTopOffset(pullToRefreshTopPx()));
             }
         });
+    }
+
+    private boolean isActiveForWebViewBoundsWatcher() {
+        Activity activity = getActivity();
+        if (activity == null || activity.isFinishing()) {
+            return false;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1 && activity.isDestroyed()) {
+            return false;
+        }
+        return true;
+    }
+
+    private void scheduleWebViewBoundsWatcherAttachRetry() {
+        if (!isActiveForWebViewBoundsWatcher()) {
+            return;
+        }
+        if (webViewBoundsWatcherAttachAttempts >= WEB_VIEW_BOUNDS_WATCHER_MAX_ATTACH_ATTEMPTS) {
+            return;
+        }
+        webViewBoundsWatcherAttachAttempts++;
+        FrameLayout root = contentRoot();
+        if (root == null) {
+            return;
+        }
+        cancelPendingWebViewBoundsWatcherAttach();
+        pendingWebViewBoundsWatcherAttach = this::attachWebViewBoundsWatcher;
+        root.postDelayed(pendingWebViewBoundsWatcherAttach, WEB_VIEW_BOUNDS_WATCHER_RETRY_DELAY_MS);
+    }
+
+    private void cancelPendingWebViewBoundsWatcherAttach() {
+        if (pendingWebViewBoundsWatcherAttach == null) {
+            return;
+        }
+        FrameLayout root = contentRoot();
+        if (root != null) {
+            root.removeCallbacks(pendingWebViewBoundsWatcherAttach);
+        }
+        pendingWebViewBoundsWatcherAttach = null;
     }
 
     private int systemDimension(String name) {
