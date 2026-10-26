@@ -2,53 +2,81 @@
 set -eu
 
 PACKAGE="app.capgo.capacitor.navigation"
+ACTIVITY="${PACKAGE}/.MainActivity"
 APK_PATH="${1:?apk path required}"
 OUTPUT="${2:?output png path required}"
-AVD_NAME="${AVD_NAME:-navbar_left_items_api34}"
-ANDROID_HOME="${ANDROID_HOME:-$HOME/android-sdk}"
-export ANDROID_HOME
-export PATH="${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/emulator:${ANDROID_HOME}/cmdline-tools/latest/bin:${PATH}"
+WORK_PNG="${OUTPUT%.png}.work.png"
 
-SCREENSHOT_REMOTE="/data/user/0/${PACKAGE}/files/Pictures/navbar-left-items-screenshot.png"
-DONE_REMOTE="/data/user/0/${PACKAGE}/files/Pictures/navbar-left-items-screenshot.done"
-TEST_CLASS="app.capgo.capacitor.navigation.NavbarLeftItemsScreenshotTest"
+screen_size() {
+  adb shell wm size 2>/dev/null | tr -d '\r' | awk '/Physical size/ {print $3; exit}'
+}
 
-start_emulator() {
-  if adb devices | grep -q 'emulator-'; then
-    return 0
+wake_display() {
+  adb shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1 || true
+  adb shell svc power stayon true >/dev/null 2>&1 || true
+}
+
+dismiss_blocking_dialogs() {
+  local size width height
+  size="$(screen_size)"
+  if [ -z "${size}" ]; then
+    adb shell input keyevent 66 >/dev/null 2>&1 || true
+    return
   fi
-  if ! avdmanager list avd | grep -q "Name: ${AVD_NAME}"; then
-    echo no | avdmanager create avd -n "${AVD_NAME}" -k "system-images;android-34;google_apis;x86_64" --device pixel_6
-  fi
-  nohup emulator -avd "${AVD_NAME}" -no-snapshot -no-audio -no-boot-anim -gpu swiftshader_indirect >/tmp/navbar-left-items-emulator.log 2>&1 &
-  adb wait-for-device
-  booted=""
-  for _ in $(seq 1 120); do
-    booted="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
-    if [ "${booted}" = "1" ]; then
-      break
-    fi
-    sleep 2
-  done
-  if [ "${booted}" != "1" ]; then
-    echo "Emulator failed to boot" >&2
-    exit 1
+  width="${size%x*}"
+  height="${size#*x}"
+  if adb shell dumpsys window 2>/dev/null | tr -d '\r' | grep -qi "isn't responding"; then
+    adb shell input tap "$((width / 2))" "$((height * 2 / 3))" >/dev/null 2>&1 || true
+    adb shell input keyevent 66 >/dev/null 2>&1 || true
   fi
 }
 
-start_emulator
-TEST_APK_PATH="${3:-}"
+wait_for_boot_completed() {
+  adb wait-for-device
+  local attempt=0
+  while [ "${attempt}" -lt 120 ]; do
+    boot="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n' || true)"
+    if [ "${boot}" = "1" ]; then
+      return 0
+    fi
+    attempt=$((attempt + 1))
+    sleep 2
+  done
+  echo "Timed out waiting for sys.boot_completed" >&2
+  return 1
+}
+
+launch_app() {
+  adb shell am force-stop "${PACKAGE}" >/dev/null 2>&1 || true
+  adb shell am start -W -n "${ACTIVITY}" >/dev/null 2>&1 || adb shell am start -n "${ACTIVITY}"
+}
+
+wait_for_screenshot_ready_log() {
+  local attempt=0
+  while [ "${attempt}" -lt 90 ]; do
+    if adb logcat -d -t 80 2>/dev/null | tr -d '\r' | grep -q 'NATIVE_NAV_SCREENSHOT_READY'; then
+      return 0
+    fi
+    attempt=$((attempt + 1))
+    sleep 2
+  done
+  echo "Screenshot readiness log not observed" >&2
+  return 1
+}
+
+wait_for_boot_completed
+adb shell wm size 1080x1920 >/dev/null 2>&1 || true
+adb shell wm density 420 >/dev/null 2>&1 || true
+dismiss_blocking_dialogs
 adb uninstall "${PACKAGE}" >/dev/null 2>&1 || true
-adb uninstall "${PACKAGE}.test" >/dev/null 2>&1 || true
 adb install -r "${APK_PATH}"
-if [ -n "${TEST_APK_PATH}" ]; then
-  adb install -r "${TEST_APK_PATH}"
-fi
-adb shell am instrument -w -r -e class "${TEST_CLASS}" "${PACKAGE}.test/androidx.test.runner.AndroidJUnitRunner"
-for _ in $(seq 1 30); do
-  if adb shell test -f "${DONE_REMOTE}" 2>/dev/null; then
-    break
-  fi
-  sleep 2
-done
-adb pull "${SCREENSHOT_REMOTE}" "${OUTPUT}"
+adb logcat -c >/dev/null 2>&1 || true
+launch_app
+sleep 10
+wait_for_screenshot_ready_log
+sleep 2
+wake_display
+adb exec-out screencap -p > "${WORK_PNG}"
+test -s "${WORK_PNG}"
+cp "${WORK_PNG}" "${OUTPUT}"
+rm -f "${WORK_PNG}"
