@@ -158,6 +158,11 @@ public class NativeNavigationPlugin extends Plugin {
     private float tabbarMinimizeProgress = 0f;
     private ValueAnimator tabbarMinimizeAnimator;
     private final PullToRefreshSupport pullToRefresh = new PullToRefreshSupport();
+    private boolean webViewBoundsWatcherAttached;
+    private static final int WEB_VIEW_BOUNDS_WATCHER_MAX_ATTACH_ATTEMPTS = 60;
+    private static final long WEB_VIEW_BOUNDS_WATCHER_RETRY_DELAY_MS = 100L;
+    private int webViewBoundsWatcherAttachAttempts;
+    private Runnable pendingWebViewBoundsWatcherAttach;
 
     @Override
     public void load() {
@@ -168,6 +173,12 @@ public class NativeNavigationPlugin extends Plugin {
                 watchContentRootBounds();
             });
         }
+    }
+
+    @Override
+    protected void handleOnDestroy() {
+        cancelPendingWebViewBoundsWatcherAttach();
+        super.handleOnDestroy();
     }
 
     @PluginMethod
@@ -362,7 +373,9 @@ public class NativeNavigationPlugin extends Plugin {
 
     private int pullToRefreshTopPx() {
         int navbarToolbar = navbarScrollCollapsed ? 0 : navbarBarHeight(navbarLarge ? 1f : 0f) + navbarAccessoryHeight();
-        return statusBarInset() + (navbarVisible ? navbarToolbar : 0);
+        int navbarBottomInWindow =
+            contentRootTopOffset() + nativeStatusBarInset() + (navbarVisible ? navbarToolbar : 0);
+        return InsetsOffsetSupport.pullToRefreshProgressTopOffset(navbarBottomInWindow, webViewTopOffset());
     }
 
     @PluginMethod
@@ -2457,7 +2470,8 @@ public class NativeNavigationPlugin extends Plugin {
                 return null;
             }
             try {
-                return PathParser.createPathFromPathData(data);
+                String normalized = SvgPathDataSupport.normalizeArcFlagsInPathData(data);
+                return PathParser.createPathFromPathData(normalized);
             } catch (RuntimeException ignored) {
                 return null;
             }
@@ -2834,8 +2848,8 @@ public class NativeNavigationPlugin extends Plugin {
         if (root == null) {
             return;
         }
-        int status = statusBarInset();
-        int bottom = navigationBarInset();
+        int status = nativeStatusBarInset();
+        int bottom = nativeNavigationBarInset();
         int navbarToolbar = navbarScrollCollapsed ? 0 : navbarBarHeight(navbarLargeProgress) + navbarAccessoryHeight();
         int navbarHeight = navbarVisible ? status + navbarToolbar : 0;
         boolean tabbarLayoutVisible = tabbarVisible || tabbarChromeHideAnimating;
@@ -2918,7 +2932,7 @@ public class NativeNavigationPlugin extends Plugin {
         if (root == null || tabbarContainer == null) {
             return;
         }
-        int bottom = navigationBarInset();
+        int bottom = nativeNavigationBarInset();
         boolean tabbarLayoutVisible = tabbarVisible || tabbarChromeHideAnimating;
         int rootWidth = root.getWidth() > 0 ? root.getWidth() : Resources.getSystem().getDisplayMetrics().widthPixels;
         int rootHeight = root.getHeight() > 0 ? root.getHeight() : Resources.getSystem().getDisplayMetrics().heightPixels;
@@ -2931,7 +2945,9 @@ public class NativeNavigationPlugin extends Plugin {
         int topMargin = 0;
         int bottomMargin;
         if (sidebar) {
-            int navbarOccupied = navbarVisible ? statusBarInset() + navbarBarHeight(navbarLargeProgress) + navbarAccessoryHeight() : statusBarInset();
+            int navbarOccupied = navbarVisible
+                ? nativeStatusBarInset() + navbarBarHeight(navbarLargeProgress) + navbarAccessoryHeight()
+                : nativeStatusBarInset();
             tabbarWidth = dp(TabbarLayoutSupport.SIDEBAR_WIDTH_DP);
             topMargin = navbarOccupied + dp(8);
             bottomMargin = bottom + dp(8);
@@ -3298,18 +3314,18 @@ public class NativeNavigationPlugin extends Plugin {
         if (params == null) {
             return;
         }
-        params.height = statusBarInset() + (navbarScrollCollapsed ? 0 : navbarBarHeight(navbarLargeProgress) + navbarAccessoryHeight());
+        params.height = nativeStatusBarInset() + (navbarScrollCollapsed ? 0 : navbarBarHeight(navbarLargeProgress) + navbarAccessoryHeight());
         navbarContainer.setLayoutParams(params);
         // Full layout places the search row once. These frames skip that path, so the row has to
         // follow the large title or it stays overlapped or clipped after the animation.
         if (navbarSearchField != null && navbarSearchField.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
             ViewGroup.MarginLayoutParams searchParams = (ViewGroup.MarginLayoutParams) navbarSearchField.getLayoutParams();
-            searchParams.topMargin = statusBarInset() + navbarBarHeight(navbarLargeProgress) + dp(8);
+            searchParams.topMargin = nativeStatusBarInset() + navbarBarHeight(navbarLargeProgress) + dp(8);
             navbarSearchField.setLayoutParams(searchParams);
         }
         if (navbarSegments != null && navbarSegments.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
             ViewGroup.MarginLayoutParams segmentsParams = (ViewGroup.MarginLayoutParams) navbarSegments.getLayoutParams();
-            segmentsParams.topMargin = statusBarInset() + navbarBarHeight(navbarLargeProgress) + navbarSearchHeight();
+            segmentsParams.topMargin = nativeStatusBarInset() + navbarBarHeight(navbarLargeProgress) + navbarSearchHeight();
             navbarSegments.setLayoutParams(segmentsParams);
         }
         if (tabbarStyle.isSidebar()) {
@@ -3467,17 +3483,32 @@ public class NativeNavigationPlugin extends Plugin {
     }
 
     /**
-     * The chrome is laid out inside {@code android.R.id.content}, so it only needs to clear the part of a
-     * system bar that actually overlaps that view. Capacitor's SystemBars plugin (default
-     * {@code insetsHandling: 'css'} without {@code viewport-fit=cover}) pads the decor view by the system bars,
-     * which already moves the content root clear of them; adding the full inset again doubled the gap.
+     * Native chrome is laid out inside {@code android.R.id.content}, so it only clears the part of a system bar
+     * that overlaps that view. Capacitor's SystemBars plugin (default {@code insetsHandling: 'css'} without
+     * {@code viewport-fit=cover}) may pad the decor view or, on API 35+ with WebView &lt; 140, pad the WebView's
+     * parent while {@code android.R.id.content} stays at the window origin.
      */
+    private int nativeStatusBarInset() {
+        return InsetsOffsetSupport.adjustedSystemBarInset(rawStatusBarInset(), contentRootTopOffset());
+    }
+
+    private int nativeNavigationBarInset() {
+        return InsetsOffsetSupport.adjustedSystemBarInset(rawNavigationBarInset(), contentRootBottomOffset());
+    }
+
+    /** JS/CSS insets also account for WebView position when SystemBars pads only the WebView parent. */
     private int statusBarInset() {
-        return Math.max(0, rawStatusBarInset() - contentRootTopOffset());
+        return InsetsOffsetSupport.adjustedSystemBarInset(
+            rawStatusBarInset(),
+            InsetsOffsetSupport.effectiveTopOffset(contentRootTopOffset(), webViewTopOffset())
+        );
     }
 
     private int navigationBarInset() {
-        return Math.max(0, rawNavigationBarInset() - contentRootBottomOffset());
+        return InsetsOffsetSupport.adjustedSystemBarInset(
+            rawNavigationBarInset(),
+            InsetsOffsetSupport.effectiveBottomOffset(contentRootBottomOffset(), webViewBottomOffset())
+        );
     }
 
     // API 30+ reads the currently visible bars so a hidden navigation bar (immersive mode) gives the space back.
@@ -3533,6 +3564,28 @@ public class NativeNavigationPlugin extends Plugin {
         return Math.max(0, decor.getHeight() - (location[1] + root.getHeight()));
     }
 
+    private int webViewTopOffset() {
+        View webView = getBridge() == null ? null : getBridge().getWebView();
+        if (webView == null || !webView.isLaidOut()) {
+            return 0;
+        }
+        int[] location = new int[2];
+        webView.getLocationInWindow(location);
+        return Math.max(0, location[1]);
+    }
+
+    private int webViewBottomOffset() {
+        View webView = getBridge() == null ? null : getBridge().getWebView();
+        Activity activity = getActivity();
+        if (webView == null || activity == null || !webView.isLaidOut()) {
+            return 0;
+        }
+        View decor = activity.getWindow().getDecorView();
+        int[] location = new int[2];
+        webView.getLocationInWindow(location);
+        return Math.max(0, decor.getHeight() - (location[1] + webView.getHeight()));
+    }
+
     private void watchContentRootBounds() {
         FrameLayout root = contentRoot();
         if (root == null) {
@@ -3558,6 +3611,79 @@ public class NativeNavigationPlugin extends Plugin {
             return insets;
         });
         root.addView(insetsProbe, new FrameLayout.LayoutParams(0, 0));
+        attachWebViewBoundsWatcher();
+    }
+
+    private void attachWebViewBoundsWatcher() {
+        if (webViewBoundsWatcherAttached || getBridge() == null || !isActiveForWebViewBoundsWatcher()) {
+            return;
+        }
+        View webView = getBridge().getWebView();
+        if (webView == null) {
+            scheduleWebViewBoundsWatcherAttachRetry();
+            return;
+        }
+        cancelPendingWebViewBoundsWatcherAttach();
+        webViewBoundsWatcherAttachAttempts = 0;
+        webViewBoundsWatcherAttached = true;
+        webView.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+            if (top == oldTop && bottom == oldBottom && left == oldLeft && right == oldRight) {
+                return;
+            }
+            if (
+                !InsetsOffsetSupport.shouldUpdateOnWebViewBoundsChange(
+                    navbarVisible,
+                    tabbarVisible,
+                    pullToRefresh.isEnabled()
+                )
+            ) {
+                return;
+            }
+            if (navbarVisible || tabbarVisible) {
+                view.post(this::updateInsetsAndNotify);
+            } else {
+                view.post(() -> pullToRefresh.setTopOffset(pullToRefreshTopPx()));
+            }
+        });
+    }
+
+    private boolean isActiveForWebViewBoundsWatcher() {
+        Activity activity = getActivity();
+        if (activity == null || activity.isFinishing()) {
+            return false;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1 && activity.isDestroyed()) {
+            return false;
+        }
+        return true;
+    }
+
+    private void scheduleWebViewBoundsWatcherAttachRetry() {
+        if (!isActiveForWebViewBoundsWatcher()) {
+            return;
+        }
+        if (webViewBoundsWatcherAttachAttempts >= WEB_VIEW_BOUNDS_WATCHER_MAX_ATTACH_ATTEMPTS) {
+            return;
+        }
+        webViewBoundsWatcherAttachAttempts++;
+        FrameLayout root = contentRoot();
+        if (root == null) {
+            return;
+        }
+        cancelPendingWebViewBoundsWatcherAttach();
+        pendingWebViewBoundsWatcherAttach = this::attachWebViewBoundsWatcher;
+        root.postDelayed(pendingWebViewBoundsWatcherAttach, WEB_VIEW_BOUNDS_WATCHER_RETRY_DELAY_MS);
+    }
+
+    private void cancelPendingWebViewBoundsWatcherAttach() {
+        if (pendingWebViewBoundsWatcherAttach == null) {
+            return;
+        }
+        FrameLayout root = contentRoot();
+        if (root != null) {
+            root.removeCallbacks(pendingWebViewBoundsWatcherAttach);
+        }
+        pendingWebViewBoundsWatcherAttach = null;
     }
 
     private int systemDimension(String name) {

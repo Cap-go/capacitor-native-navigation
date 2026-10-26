@@ -53,10 +53,11 @@ public class TabbarLabelFontScaleScreenshotTest {
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         paint.setTypeface(Typeface.DEFAULT_BOLD);
         paint.setTextSize(TAB_LABEL_TEXT_SP * scaledDensity);
-        Paint.FontMetrics metrics = paint.getFontMetrics();
-        int paddedLinePx = (int) Math.ceil(metrics.bottom - metrics.top);
+        Paint.FontMetricsInt metrics = paint.getFontMetricsInt();
+        int paddedLinePx = metrics.bottom - metrics.top;
         assertEquals(Math.max(Math.round(TAB_LABEL_MIN_HEIGHT_DP * density), paddedLinePx), heightPx);
-        assertTrue(paddedLinePx >= (int) Math.ceil(metrics.descent - metrics.ascent));
+        Paint.FontMetrics floatMetrics = paint.getFontMetrics();
+        assertTrue(paddedLinePx >= (int) Math.ceil(floatMetrics.descent - floatMetrics.ascent));
     }
 
     @Test
