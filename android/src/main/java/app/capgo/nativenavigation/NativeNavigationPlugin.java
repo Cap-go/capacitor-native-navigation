@@ -283,7 +283,8 @@ public class NativeNavigationPlugin extends Plugin {
                 // Without a visible back button, the first left item with an icon takes the leading navigation slot,
                 // like iOS. Any other left items stay in the toolbar menu.
                 JSONArray leftItems = call.getArray("leftItems", new JSArray());
-                int leadingIndex = leadingIconItemIndex(leftItems);
+                boolean rtl = nativeToolbar.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
+                int leadingIndex = firstResolvableLeadingIconIndex(leftItems, rtl);
                 if (leadingIndex >= 0) {
                     applyLeadingNavigationItem(nativeToolbar, leftItems.optJSONObject(leadingIndex));
                     leftItems = withoutIndex(leftItems, leadingIndex);
@@ -852,11 +853,15 @@ public class NativeNavigationPlugin extends Plugin {
         return navbarSegments.rowCount() * dp(NavbarSegmentRows.ROW_HEIGHT_DP);
     }
 
-    /** Index of the first left item that carries an icon, or -1. */
-    private static int leadingIconItemIndex(JSONArray rawItems) {
+    /** Index of the first left item whose icon renders on Android, or -1. */
+    private int firstResolvableLeadingIconIndex(JSONArray rawItems, boolean rtl) {
         for (int index = 0; index < rawItems.length(); index++) {
             JSONObject rawItem = rawItems.optJSONObject(index);
-            if (rawItem != null && rawItem.optJSONObject("icon") != null) {
+            if (rawItem == null) {
+                continue;
+            }
+            JSONObject descriptor = rawItem.optJSONObject("icon");
+            if (descriptor != null && leadingIconFrom(descriptor, rtl) != null) {
                 return index;
             }
         }
@@ -894,7 +899,11 @@ public class NativeNavigationPlugin extends Plugin {
         if (nativeToolbar.getNavigationIcon() != icon) {
             nativeToolbar.setNavigationIcon(icon);
         }
-        nativeToolbar.setNavigationContentDescription(title);
+        String accessibilityLabel = rawItem.optString("accessibilityLabel", "");
+        if (accessibilityLabel.isEmpty()) {
+            accessibilityLabel = title.isEmpty() ? id : title;
+        }
+        nativeToolbar.setNavigationContentDescription(accessibilityLabel);
         boolean enabled = rawItem.optBoolean("enabled", true);
         nativeToolbar.setNavigationOnClickListener(
             enabled
@@ -912,6 +921,9 @@ public class NativeNavigationPlugin extends Plugin {
     private Drawable leadingIconFrom(JSONObject descriptor, boolean rtl) {
         Drawable base;
         String svg = svgFrom(descriptor);
+        if (svg == null || svg.isEmpty()) {
+            svg = inlineSvgFromAndroidIconResource(descriptor);
+        }
         if (svg != null && !svg.isEmpty()) {
             float widthDp = (float) Math.max(1, descriptor.optDouble("width", 24));
             float heightDp = (float) Math.max(1, descriptor.optDouble("height", 24));
@@ -1655,6 +1667,15 @@ public class NativeNavigationPlugin extends Plugin {
             return svg;
         }
         return inlineSvgFrom(descriptor.optString("src", null));
+    }
+
+    private String inlineSvgFromAndroidIconResource(JSONObject descriptor) {
+        JSONObject android = descriptor.optJSONObject("android");
+        String resource = android == null ? null : android.optString("resource", null);
+        if (resource == null || resource.isEmpty()) {
+            resource = android == null ? null : android.optString("image", null);
+        }
+        return inlineSvgFrom(resource);
     }
 
     private String inlineSvgFrom(String value) {
