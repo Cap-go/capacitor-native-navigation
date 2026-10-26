@@ -13,12 +13,14 @@ on:
       - 'example-app/**'
       - '.github/workflows/android-navbar-left-items-screenshot.yml'
       - '.github/scripts/capture-navbar-left-items-screenshot.sh'
+      - '.github/scripts/capture-navbar-left-items-screenshots-in-ci.sh'
 
 permissions:
   contents: read
+  actions: write
 
 jobs:
-  capture:
+  build_apks:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -68,6 +70,27 @@ jobs:
           build_apk /tmp/NativeNavigationPlugin.main.java screenshot-apks/navbar-before.apk
           git checkout -- android/src/main/java/app/capgo/nativenavigation/NativeNavigationPlugin.java
           build_apk HEAD screenshot-apks/navbar-after.apk
+      - name: Upload screenshot APKs
+        uses: actions/upload-artifact@v7
+        with:
+          name: navbar-left-items-apks
+          path: screenshot-apks/*.apk
+          if-no-files-found: error
+
+  capture:
+    needs: build_apks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Download screenshot APKs
+        uses: actions/download-artifact@v7
+        with:
+          name: navbar-left-items-apks
+          path: screenshot-apks
       - name: Enable KVM for Android emulator
         run: |
           if [ -e /dev/kvm ]; then
