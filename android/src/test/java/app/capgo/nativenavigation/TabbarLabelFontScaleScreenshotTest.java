@@ -1,8 +1,11 @@
 package app.capgo.nativenavigation;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import android.content.Context;
+import android.graphics.Paint;
+import android.graphics.Typeface;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -40,6 +43,21 @@ public class TabbarLabelFontScaleScreenshotTest {
     private static final int TAB_LABEL_MIN_HEIGHT_DP = 18;
     private static final int TAB_ICON_LABEL_GAP_DP = 2;
     private static final int TAB_CONTENT_PADDING_DP = 4;
+
+    @Test
+    public void tabLabelHeightUsesFontPaddingBounds() {
+        applyFontScale(FONT_SCALE);
+        float density = RuntimeEnvironment.getApplication().getResources().getDisplayMetrics().density;
+        float scaledDensity = RuntimeEnvironment.getApplication().getResources().getDisplayMetrics().scaledDensity;
+        int heightPx = TabbarLabelSupport.tabLabelHeightPx(density, scaledDensity);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setTypeface(Typeface.DEFAULT_BOLD);
+        paint.setTextSize(TAB_LABEL_TEXT_SP * scaledDensity);
+        Paint.FontMetrics metrics = paint.getFontMetrics();
+        int paddedLinePx = (int) Math.ceil(metrics.bottom - metrics.top);
+        assertEquals(Math.max(Math.round(TAB_LABEL_MIN_HEIGHT_DP * density), paddedLinePx), heightPx);
+        assertTrue(paddedLinePx >= (int) Math.ceil(metrics.descent - metrics.ascent));
+    }
 
     @Test
     public void writeBeforeAndAfterScreenshotsWhenRequested() throws Exception {

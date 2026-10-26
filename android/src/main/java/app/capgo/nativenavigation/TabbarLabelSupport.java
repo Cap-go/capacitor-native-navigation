@@ -20,7 +20,7 @@ public final class TabbarLabelSupport {
         paint.setTypeface(Typeface.DEFAULT_BOLD);
         paint.setTextSize(TAB_LABEL_TEXT_SP * scaledDensity);
         Paint.FontMetrics metrics = paint.getFontMetrics();
-        int lineHeightPx = (int) Math.ceil(metrics.descent - metrics.ascent);
+        int lineHeightPx = (int) Math.ceil(metrics.bottom - metrics.top);
         int minPx = Math.round(TAB_LABEL_MIN_HEIGHT_DP * density);
         return Math.max(minPx, lineHeightPx);
     }
