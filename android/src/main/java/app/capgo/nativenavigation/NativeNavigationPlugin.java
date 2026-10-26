@@ -2451,7 +2451,8 @@ public class NativeNavigationPlugin extends Plugin {
                 return null;
             }
             try {
-                return PathParser.createPathFromPathData(data);
+                String normalized = SvgPathDataSupport.normalizeArcFlagsInPathData(data);
+                return PathParser.createPathFromPathData(normalized);
             } catch (RuntimeException ignored) {
                 return null;
             }
