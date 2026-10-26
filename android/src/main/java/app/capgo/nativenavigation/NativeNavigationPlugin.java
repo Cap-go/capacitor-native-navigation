@@ -1791,6 +1791,7 @@ public class NativeNavigationPlugin extends Plugin {
         private TabbarStyle style = TabbarStyle.defaults(Color.rgb(0, 122, 255));
         private int backgroundColor = DEFAULT_TABBAR_BACKGROUND_COLOR;
         private int centerIndex = -1;
+        private int labelExtraHeightPx = 0;
         private DragListener dragListener;
         private int selectedIndex = -1;
         private boolean dragEnabled = true;
@@ -2090,12 +2091,17 @@ public class NativeNavigationPlugin extends Plugin {
             canvas.drawRoundRect(indicatorRect, height / 2f, height / 2f, indicatorPaint);
         }
 
-        void setTabbarStyle(TabbarStyle style, int backgroundColor, int centerIndex) {
+        void setTabbarStyle(TabbarStyle style, int backgroundColor, int centerIndex, int labelExtraHeightPx) {
             this.style = style;
             this.backgroundColor = backgroundColor;
             this.centerIndex = centerIndex;
+            this.labelExtraHeightPx = Math.max(0, labelExtraHeightPx);
             requestLayout();
             invalidate();
+        }
+
+        private int curveBarHeightPx() {
+            return dp(style.height) + labelExtraHeightPx;
         }
 
         @Override
@@ -2120,7 +2126,7 @@ public class NativeNavigationPlugin extends Plugin {
                 return;
             }
             if (hasCenterButton()) {
-                int barHeight = dp(style.height);
+                int barHeight = curveBarHeightPx();
                 int barTop = dp(style.barTop());
                 int centerGap = Math.min(dp(style.centerButtonDiameter + 4), Math.round(width * 0.34f));
                 int leftWidth = Math.max(0, Math.round(width / 2f - centerGap / 2f));
@@ -2163,7 +2169,7 @@ public class NativeNavigationPlugin extends Plugin {
             }
             if (hasCenterButton()) {
                 int barTop = dp(style.barTop());
-                int barHeight = dp(style.height);
+                int barHeight = curveBarHeightPx();
                 int buttonDiameter = dp(style.centerButtonDiameter);
                 int centerGap = Math.min(dp(style.centerButtonDiameter + 4), Math.round(width * 0.34f));
                 int leftWidth = Math.max(0, Math.round(width / 2f - centerGap / 2f));
@@ -2311,7 +2317,7 @@ public class NativeNavigationPlugin extends Plugin {
                 );
             }
             float barTop = dp(style.barTop());
-            float barHeight = dp(style.height);
+            float barHeight = curveBarHeightPx();
             float cornerRadius = Math.min(dp(style.cornerRadius), barHeight / 2f);
             float centerX = width / 2f;
             float centerRadius = dp(style.centerButtonDiameter) / 2f;
@@ -2646,7 +2652,8 @@ public class NativeNavigationPlugin extends Plugin {
         if (tabbarContainer != null) {
             tabbarContainer.setBackgroundColor(Color.TRANSPARENT);
         }
-        tabbar.setTabbarStyle(tabbarStyle, drawColor, centerIndex);
+        int labelExtraHeightPx = tabbarStyle.isCurve() ? tabbarLabelExtraHeightPx() : 0;
+        tabbar.setTabbarStyle(tabbarStyle, drawColor, centerIndex, labelExtraHeightPx);
         applyTabbarContainerOutline();
     }
 
