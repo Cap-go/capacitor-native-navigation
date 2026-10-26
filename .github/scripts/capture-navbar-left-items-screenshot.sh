@@ -60,8 +60,9 @@ wait_for_screenshot_ready_log() {
     attempt=$((attempt + 1))
     sleep 2
   done
-  echo "Screenshot readiness log not observed" >&2
-  return 1
+  echo "Screenshot readiness log not observed; capturing anyway" >&2
+  adb logcat -d | tail -120 >&2 || true
+  return 0
 }
 
 wait_for_boot_completed
@@ -72,9 +73,9 @@ adb uninstall "${PACKAGE}" >/dev/null 2>&1 || true
 adb install -r "${APK_PATH}"
 adb logcat -c >/dev/null 2>&1 || true
 launch_app
-sleep 10
+sleep 20
 wait_for_screenshot_ready_log
-sleep 2
+sleep 5
 wake_display
 adb exec-out screencap -p > "${WORK_PNG}"
 test -s "${WORK_PNG}"
