@@ -20,6 +20,7 @@ import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.InsetDrawable;
 import android.os.Build;
 import android.text.TextUtils;
 import android.util.TypedValue;
@@ -279,9 +280,19 @@ public class NativeNavigationPlugin extends Plugin {
                     addToolbarItems(nativeToolbar, call.getArray("leftItems", new JSArray()), "left");
                 }
             } else {
-                nativeToolbar.setNavigationIcon(null);
-                nativeToolbar.setNavigationOnClickListener(null);
-                addToolbarItems(nativeToolbar, call.getArray("leftItems", new JSArray()), "left");
+                // Without a visible back button, the first left item with an icon takes the leading navigation slot,
+                // like iOS. Any other left items stay in the toolbar menu.
+                JSONArray leftItems = call.getArray("leftItems", new JSArray());
+                int leadingIndex = leadingIconItemIndex(leftItems);
+                if (leadingIndex >= 0) {
+                    applyLeadingNavigationItem(nativeToolbar, leftItems.optJSONObject(leadingIndex));
+                    leftItems = withoutIndex(leftItems, leadingIndex);
+                } else {
+                    nativeToolbar.setNavigationIcon(null);
+                    nativeToolbar.setNavigationOnClickListener(null);
+                    nativeToolbar.setNavigationContentDescription(null);
+                }
+                addToolbarItems(nativeToolbar, leftItems, "left");
             }
 
             addToolbarItems(nativeToolbar, call.getArray("rightItems", new JSArray()), "right");
@@ -839,6 +850,82 @@ public class NativeNavigationPlugin extends Plugin {
             return 0;
         }
         return navbarSegments.rowCount() * dp(NavbarSegmentRows.ROW_HEIGHT_DP);
+    }
+
+    /** Index of the first left item that carries an icon, or -1. */
+    private static int leadingIconItemIndex(JSONArray rawItems) {
+        for (int index = 0; index < rawItems.length(); index++) {
+            JSONObject rawItem = rawItems.optJSONObject(index);
+            if (rawItem != null && rawItem.optJSONObject("icon") != null) {
+                return index;
+            }
+        }
+        return -1;
+    }
+
+    private static JSONArray withoutIndex(JSONArray rawItems, int skip) {
+        JSONArray rest = new JSONArray();
+        for (int index = 0; index < rawItems.length(); index++) {
+            if (index != skip) {
+                rest.put(rawItems.opt(index));
+            }
+        }
+        return rest;
+    }
+
+    /** Last rendered leading icon, reused while its descriptor is unchanged so repeated setNavbar calls do not re-render it. */
+    private String leadingIconKey;
+    private Drawable leadingIcon;
+
+    /**
+     * Shows a left item in the toolbar's navigation slot. An SVG icon is rendered at its own width x height dp,
+     * starts on the 16dp keyline, and the slot is at least 56dp wide. A tap sends the same `navbarItemTap`
+     * event as iOS ({ id, title, placement: "left" }).
+     */
+    private void applyLeadingNavigationItem(Toolbar nativeToolbar, JSONObject rawItem) {
+        String id = rawItem.optString("id", "leading");
+        String title = rawItem.optString("title", "");
+        JSONObject descriptor = rawItem.optJSONObject("icon");
+        boolean rtl = nativeToolbar.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
+        String key = String.valueOf(descriptor) + "|" + rtl;
+        Drawable icon = key.equals(leadingIconKey) ? leadingIcon : leadingIconFrom(descriptor, rtl);
+        leadingIconKey = key;
+        leadingIcon = icon;
+        if (nativeToolbar.getNavigationIcon() != icon) {
+            nativeToolbar.setNavigationIcon(icon);
+        }
+        nativeToolbar.setNavigationContentDescription(title);
+        boolean enabled = rawItem.optBoolean("enabled", true);
+        nativeToolbar.setNavigationOnClickListener(
+            enabled
+                ? (v) -> {
+                    JSObject event = new JSObject();
+                    event.put("id", id);
+                    event.put("title", title);
+                    event.put("placement", "left");
+                    notifyListeners("navbarItemTap", event);
+                }
+                : null
+        );
+    }
+
+    private Drawable leadingIconFrom(JSONObject descriptor, boolean rtl) {
+        Drawable base;
+        String svg = svgFrom(descriptor);
+        if (svg != null && !svg.isEmpty()) {
+            float widthDp = (float) Math.max(1, descriptor.optDouble("width", 24));
+            float heightDp = (float) Math.max(1, descriptor.optDouble("height", 24));
+            base = SvgIconRenderer.render(getContext().getResources(), svg, widthDp, heightDp);
+        } else {
+            base = iconFrom(descriptor);
+        }
+        if (base == null) {
+            return null;
+        }
+        int width = Math.max(1, base.getIntrinsicWidth());
+        int start = dp(16);
+        int end = Math.max(0, dp(56) - start - width);
+        return new InsetDrawable(base, rtl ? end : start, 0, rtl ? start : end, 0);
     }
 
     private void addToolbarItems(Toolbar nativeToolbar, JSONArray rawItems, String placement) {
@@ -2357,11 +2444,18 @@ public class NativeNavigationPlugin extends Plugin {
         private static final Pattern NUMBER_PATTERN = Pattern.compile("[-+]?(?:\\d*\\.\\d+|\\d+\\.?)(?:[eE][-+]?\\d+)?");
 
         static Drawable render(Resources resources, String svg, int iconSizeDp) {
-            int sizePx = Math.max(1, Math.round(iconSizeDp * resources.getDisplayMetrics().density));
-            Bitmap bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888);
+            return render(resources, svg, (float) iconSizeDp, (float) iconSizeDp);
+        }
+
+        /** Renders at widthDp x heightDp, so wide marks such as wordmarks keep their aspect ratio. */
+        static Drawable render(Resources resources, String svg, float widthDp, float heightDp) {
+            float density = resources.getDisplayMetrics().density;
+            int widthPx = Math.max(1, Math.round(widthDp * density));
+            int heightPx = Math.max(1, Math.round(heightDp * density));
+            Bitmap bitmap = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888);
             Canvas canvas = new Canvas(bitmap);
-            RectF viewBox = viewBox(svg, iconSizeDp);
-            canvas.scale(sizePx / Math.max(viewBox.width(), 1f), sizePx / Math.max(viewBox.height(), 1f));
+            RectF viewBox = viewBox(svg, widthDp, heightDp);
+            canvas.scale(widthPx / Math.max(viewBox.width(), 1f), heightPx / Math.max(viewBox.height(), 1f));
             canvas.translate(-viewBox.left, -viewBox.top);
 
             try {
@@ -2384,7 +2478,7 @@ public class NativeNavigationPlugin extends Plugin {
             } catch (Exception ignored) {}
 
             BitmapDrawable drawable = new BitmapDrawable(resources, bitmap);
-            drawable.setBounds(0, 0, sizePx, sizePx);
+            drawable.setBounds(0, 0, widthPx, heightPx);
             return drawable;
         }
 
@@ -2473,7 +2567,7 @@ public class NativeNavigationPlugin extends Plugin {
             return path;
         }
 
-        private static RectF viewBox(String svg, int iconSizeDp) {
+        private static RectF viewBox(String svg, float fallbackWidth, float fallbackHeight) {
             List<Float> viewBoxValues = numbers(attribute(svg, "viewBox"));
             if (viewBoxValues.size() >= 4) {
                 return new RectF(
@@ -2486,8 +2580,8 @@ public class NativeNavigationPlugin extends Plugin {
             float width = value(attribute(svg, "width"));
             float height = value(attribute(svg, "height"));
             if (width <= 0 || height <= 0) {
-                width = iconSizeDp;
-                height = iconSizeDp;
+                width = fallbackWidth;
+                height = fallbackHeight;
             }
             return new RectF(0, 0, width, height);
         }
