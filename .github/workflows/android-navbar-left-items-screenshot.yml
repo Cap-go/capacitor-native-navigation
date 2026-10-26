@@ -50,7 +50,9 @@ jobs:
             local plugin_source="$1"
             local apk_out="$2"
             local test_out="$3"
-            cp "$plugin_source" android/src/main/java/app/capgo/nativenavigation/NativeNavigationPlugin.java
+            if [ "${plugin_source}" != "HEAD" ]; then
+              cp "${plugin_source}" android/src/main/java/app/capgo/nativenavigation/NativeNavigationPlugin.java
+            fi
             bun run build
             cd example-app
             VITE_SCREENSHOT_MODE=navbar-left-items bun run build
@@ -66,7 +68,7 @@ jobs:
           git show origin/main:android/src/main/java/app/capgo/nativenavigation/NativeNavigationPlugin.java > /tmp/NativeNavigationPlugin.main.java
           build_apk /tmp/NativeNavigationPlugin.main.java screenshot-apks/navbar-before.apk screenshot-apks/navbar-before-androidTest.apk
           git checkout -- android/src/main/java/app/capgo/nativenavigation/NativeNavigationPlugin.java
-          build_apk android/src/main/java/app/capgo/nativenavigation/NativeNavigationPlugin.java screenshot-apks/navbar-after.apk screenshot-apks/navbar-after-androidTest.apk
+          build_apk HEAD screenshot-apks/navbar-after.apk screenshot-apks/navbar-after-androidTest.apk
       - name: Enable KVM for Android emulator
         run: |
           if [ -e /dev/kvm ]; then
