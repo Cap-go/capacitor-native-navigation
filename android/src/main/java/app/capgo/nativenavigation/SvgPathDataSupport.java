@@ -81,6 +81,7 @@ public final class SvgPathDataSupport {
 
     static List<String> tokenize(String pathData) {
         List<String> tokens = new ArrayList<>();
+        Matcher matcher = NUMBER_PATTERN.matcher(pathData);
         int index = 0;
         while (index < pathData.length()) {
             char character = pathData.charAt(index);
@@ -94,10 +95,11 @@ public final class SvgPathDataSupport {
                 continue;
             }
 
-            Matcher matcher = NUMBER_PATTERN.matcher(pathData.substring(index));
+            matcher.region(index, pathData.length());
             if (matcher.lookingAt()) {
-                tokens.add(matcher.group());
-                index += matcher.group().length();
+                String number = matcher.group();
+                tokens.add(number);
+                index += number.length();
             } else {
                 index++;
             }

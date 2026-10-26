@@ -59,4 +59,17 @@ public class SvgPathDataSupportTest {
         assertEquals(expected, SvgPathDataSupport.normalizeArcFlagsInPathData(compact));
         assertEquals(expected, SvgPathDataSupport.normalizeArcFlagsInPathData(spaced));
     }
+
+    @Test
+    public void tokenizeLongPathWithManyNumbers() {
+        StringBuilder path = new StringBuilder("M0 0");
+        for (int i = 0; i < 2000; i++) {
+            path.append(" L1 2");
+        }
+        path.append("a5 5 0 0010 0");
+        String pathData = path.toString();
+        assertEquals(3 + 2000 * 3 + 6, SvgPathDataSupport.tokenize(pathData).size());
+        String expected = "M 0 0" + " L 1 2".repeat(2000) + " a 5 5 0 0 0 10 0";
+        assertEquals(expected, SvgPathDataSupport.normalizeArcFlagsInPathData(pathData));
+    }
 }
