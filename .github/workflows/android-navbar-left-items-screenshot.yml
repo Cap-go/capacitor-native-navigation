@@ -20,12 +20,13 @@ permissions:
 jobs:
   capture:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 10
     steps:
       - name: Check out
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
@@ -49,7 +50,6 @@ jobs:
           build_apk() {
             local plugin_source="$1"
             local apk_out="$2"
-            local test_out="$3"
             if [ "${plugin_source}" != "HEAD" ]; then
               cp "${plugin_source}" android/src/main/java/app/capgo/nativenavigation/NativeNavigationPlugin.java
             fi
@@ -65,9 +65,9 @@ jobs:
           }
           git fetch origin main
           git show origin/main:android/src/main/java/app/capgo/nativenavigation/NativeNavigationPlugin.java > /tmp/NativeNavigationPlugin.main.java
-          build_apk /tmp/NativeNavigationPlugin.main.java screenshot-apks/navbar-before.apk unused
+          build_apk /tmp/NativeNavigationPlugin.main.java screenshot-apks/navbar-before.apk
           git checkout -- android/src/main/java/app/capgo/nativenavigation/NativeNavigationPlugin.java
-          build_apk HEAD screenshot-apks/navbar-after.apk unused
+          build_apk HEAD screenshot-apks/navbar-after.apk
       - name: Enable KVM for Android emulator
         run: |
           if [ -e /dev/kvm ]; then
@@ -85,10 +85,10 @@ jobs:
           cores: 4
           ram-size: 4096M
           profile: pixel_6
-          emulator-boot-timeout: 1200
+          emulator-boot-timeout: 600
           disable-animations: true
           emulator-options: -no-window -gpu auto -noaudio -no-boot-anim -camera-back none
-          script: bash -lc 'set -euo pipefail; chmod +x .github/scripts/capture-navbar-left-items-screenshot.sh; mkdir -p docs/screenshots/pr-98; bash .github/scripts/capture-navbar-left-items-screenshot.sh screenshot-apks/navbar-before.apk docs/screenshots/pr-98/android-before.png; bash .github/scripts/capture-navbar-left-items-screenshot.sh screenshot-apks/navbar-after.apk docs/screenshots/pr-98/android-after.png'
+          script: bash .github/scripts/capture-navbar-left-items-screenshots-in-ci.sh
       - name: Upload navbar screenshot pair
         uses: actions/upload-artifact@v7
         with:

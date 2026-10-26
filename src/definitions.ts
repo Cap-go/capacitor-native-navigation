@@ -345,6 +345,12 @@ export interface NativeNavigationBarButton {
   title?: string;
 
   /**
+   * Accessibility label for the control. When omitted or empty, native code
+   * falls back to `title`, then `id`.
+   */
+  accessibilityLabel?: string;
+
+  /**
    * Native icon descriptor.
    */
   icon?: NativeNavigationIcon;
@@ -661,10 +667,10 @@ export interface NativeNavigationNavbarOptions {
   /**
    * Left-side action buttons.
    *
-   * On Android, when no back button is visible, the first item with an
-   * `icon` is placed in the toolbar's leading navigation slot, as on iOS.
-   * Its SVG icon is drawn at its own `width` x `height`. Other items are
-   * shown in the toolbar menu.
+   * On Android, when no back button is visible, the first item whose icon
+   * resolves on Android is placed in the toolbar's leading navigation slot,
+   * as on iOS. Its SVG icon is drawn at its own `width` x `height`. Other
+   * items are shown in the toolbar menu.
    */
   leftItems?: NativeNavigationBarButton[];
 
