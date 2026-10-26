@@ -3613,8 +3613,19 @@ public class NativeNavigationPlugin extends Plugin {
             if (top == oldTop && bottom == oldBottom && left == oldLeft && right == oldRight) {
                 return;
             }
+            if (
+                !InsetsOffsetSupport.shouldUpdateOnWebViewBoundsChange(
+                    navbarVisible,
+                    tabbarVisible,
+                    pullToRefresh.isEnabled()
+                )
+            ) {
+                return;
+            }
             if (navbarVisible || tabbarVisible) {
                 view.post(this::updateInsetsAndNotify);
+            } else {
+                view.post(() -> pullToRefresh.setTopOffset(pullToRefreshTopPx()));
             }
         });
     }

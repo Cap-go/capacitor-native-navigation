@@ -1,6 +1,8 @@
 package app.capgo.nativenavigation;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
@@ -62,5 +64,11 @@ public class InsetsOffsetSupportTest {
     public void pullToRefreshOffsetUsesNavbarBottomWhenWebViewAlignsWithWindowOrigin() {
         int navbarBottomInWindow = 50 + 56;
         assertEquals(106, InsetsOffsetSupport.pullToRefreshProgressTopOffset(navbarBottomInWindow, 0));
+    }
+
+    @Test
+    public void webViewBoundsWatcherRunsWhenPullToRefreshEnabledWithoutBars() {
+        assertTrue(InsetsOffsetSupport.shouldUpdateOnWebViewBoundsChange(false, false, true));
+        assertFalse(InsetsOffsetSupport.shouldUpdateOnWebViewBoundsChange(false, false, false));
     }
 }

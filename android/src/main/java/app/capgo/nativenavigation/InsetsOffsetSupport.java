@@ -29,4 +29,13 @@ public final class InsetsOffsetSupport {
     public static int pullToRefreshProgressTopOffset(int navbarBottomInWindow, int webViewTopInWindow) {
         return Math.max(0, navbarBottomInWindow - Math.max(0, webViewTopInWindow));
     }
+
+    /** WebView position affects JS insets and pull-to-refresh even when native bars are hidden. */
+    public static boolean shouldUpdateOnWebViewBoundsChange(
+        boolean navbarVisible,
+        boolean tabbarVisible,
+        boolean pullToRefreshEnabled
+    ) {
+        return navbarVisible || tabbarVisible || pullToRefreshEnabled;
+    }
 }
