@@ -5,7 +5,6 @@ import static org.junit.Assert.assertTrue;
 
 import android.content.Context;
 import android.graphics.Paint;
-import android.graphics.Typeface;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -90,9 +89,11 @@ public class TabbarLabelFontScaleScreenshotTest {
         float density = context.getResources().getDisplayMetrics().density;
         int minLabelPx = Math.round(TAB_LABEL_MIN_HEIGHT_DP * density);
         int labelRowHeight = useScaledLabelHeight
-            ? TabbarLabelSupport.tabLabelHeightPx(
+            ? TabbarLabelSupport.tabLabelHeightPxForTitle(
+                "Home",
                 density,
-                context.getResources().getDisplayMetrics().scaledDensity
+                context.getResources().getDisplayMetrics().scaledDensity,
+                true
             )
             : minLabelPx;
 
