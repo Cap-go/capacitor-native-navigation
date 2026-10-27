@@ -17,7 +17,6 @@ on:
 
 permissions:
   contents: read
-  actions: write
 
 jobs:
   build_apks:

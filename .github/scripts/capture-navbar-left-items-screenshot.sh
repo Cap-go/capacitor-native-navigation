@@ -60,8 +60,8 @@ wait_for_screenshot_ready_log() {
     attempt=$((attempt + 1))
     sleep 1
   done
-  echo "Screenshot readiness log not observed; capturing anyway" >&2
-  return 0
+  echo "Screenshot readiness log not observed" >&2
+  return 1
 }
 
 if [ "${NAVBAR_SCREENSHOT_SKIP_BOOT:-0}" != "1" ]; then

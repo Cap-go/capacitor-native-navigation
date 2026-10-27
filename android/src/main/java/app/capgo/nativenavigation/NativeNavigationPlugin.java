@@ -48,6 +48,7 @@ import android.widget.TextView;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.graphics.PathParser;
+import androidx.core.view.MenuItemCompat;
 import androidx.core.widget.TextViewCompat;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -963,6 +964,11 @@ public class NativeNavigationPlugin extends Plugin {
             String id = rawItem.optString("id", "item-" + itemId);
             String title = rawItem.optString("title", "");
             MenuItem item = nativeToolbar.getMenu().add(Menu.NONE, itemId, index, title);
+            String accessibilityLabel = rawItem.optString("accessibilityLabel", "");
+            if (accessibilityLabel.isEmpty()) {
+                accessibilityLabel = title.isEmpty() ? id : title;
+            }
+            MenuItemCompat.setContentDescription(item, accessibilityLabel);
             item.setEnabled(rawItem.optBoolean("enabled", true));
             Drawable icon = iconFrom(rawItem.optJSONObject("icon"));
             if (icon != null) {
