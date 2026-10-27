@@ -913,11 +913,7 @@ public class NativeNavigationPlugin extends Plugin {
         if (nativeToolbar.getNavigationIcon() != icon) {
             nativeToolbar.setNavigationIcon(icon);
         }
-        String accessibilityLabel = rawItem.optString("accessibilityLabel", "");
-        if (accessibilityLabel.isEmpty()) {
-            accessibilityLabel = title.isEmpty() ? id : title;
-        }
-        nativeToolbar.setNavigationContentDescription(accessibilityLabel);
+        nativeToolbar.setNavigationContentDescription(itemContentDescription(rawItem, id, title));
         boolean enabled = rawItem.optBoolean("enabled", true);
         nativeToolbar.setNavigationOnClickListener(
             enabled
@@ -954,6 +950,14 @@ public class NativeNavigationPlugin extends Plugin {
         return new InsetDrawable(base, rtl ? end : start, 0, rtl ? start : end, 0);
     }
 
+    private String itemContentDescription(JSONObject rawItem, String id, String title) {
+        String accessibilityLabel = rawItem.optString("accessibilityLabel", "");
+        if (accessibilityLabel.isEmpty()) {
+            accessibilityLabel = title.isEmpty() ? id : title;
+        }
+        return accessibilityLabel;
+    }
+
     private void addToolbarItems(Toolbar nativeToolbar, JSONArray rawItems, String placement) {
         for (int index = 0; index < rawItems.length(); index++) {
             JSONObject rawItem = rawItems.optJSONObject(index);
@@ -970,6 +974,7 @@ public class NativeNavigationPlugin extends Plugin {
             }
             MenuItemCompat.setContentDescription(item, accessibilityLabel);
             item.setEnabled(rawItem.optBoolean("enabled", true));
+            MenuItemCompat.setContentDescription(item, itemContentDescription(rawItem, id, title));
             Drawable icon = iconFrom(rawItem.optJSONObject("icon"));
             if (icon != null) {
                 item.setIcon(icon);

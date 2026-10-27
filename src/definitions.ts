@@ -345,8 +345,9 @@ export interface NativeNavigationBarButton {
   title?: string;
 
   /**
-   * Accessibility label for the control. When omitted or empty, native code
-   * falls back to `title`, then `id`.
+   * Accessibility label for the control. On Android this applies to the
+   * leading navigation icon and toolbar menu items. When omitted or empty,
+   * native code falls back to `title`, then `id`.
    */
   accessibilityLabel?: string;
 
