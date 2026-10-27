@@ -7,6 +7,7 @@ import android.graphics.drawable.Drawable;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
+import androidx.appcompat.R;
 import androidx.appcompat.app.AppCompatActivity;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -30,7 +31,9 @@ final class NativeNavigationPluginTabbarFixture {
 
     static NativeNavigationPluginTabbarFixture create() throws Exception {
         Context appContext = RuntimeEnvironment.getApplication();
-        AppCompatActivity activity = Robolectric.buildActivity(AppCompatActivity.class).setup().get();
+        var activityController = Robolectric.buildActivity(AppCompatActivity.class);
+        activityController.get().setTheme(R.style.Theme_AppCompat_Light_NoActionBar);
+        AppCompatActivity activity = activityController.setup().get();
         NativeNavigationPlugin plugin = new NativeNavigationPlugin() {
             @Override
             public Context getContext() {
