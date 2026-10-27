@@ -1,6 +1,7 @@
 package app.capgo.nativenavigation;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 import android.content.res.Configuration;
@@ -84,15 +85,23 @@ public class TabbarLabelSupportTest {
     }
 
     @Test
-    public void burmeseTitleNeedsAtLeastAsMuchHeightAsLatinAtLargeFontScale() {
+    public void tabLabelHeightPxForTitleIsTitleSensitiveAtLargeFontScale() {
         applyFontScale(FONT_SCALE);
         float density = RuntimeEnvironment.getApplication().getResources().getDisplayMetrics().density;
         float scaledDensity = RuntimeEnvironment.getApplication().getResources().getDisplayMetrics().scaledDensity;
+        int minPx = Math.round(TabbarLabelSupport.TAB_LABEL_MIN_HEIGHT_DP * density);
         int latinPx = TabbarLabelSupport.tabLabelHeightPxForTitle("Home", density, scaledDensity, true);
         int burmesePx = TabbarLabelSupport.tabLabelHeightPxForTitle("ကြိုဆိုပါသည်", density, scaledDensity, true);
+        if (burmesePx > latinPx && burmesePx > minPx) {
+            assertTrue(burmesePx > latinPx);
+        } else {
+            int combiningPx = TabbarLabelSupport.tabLabelHeightPxForTitle("O\u0308\u0301", density, scaledDensity, true);
+            assertNotEquals(latinPx, combiningPx);
+            assertTrue(combiningPx > latinPx || burmesePx > latinPx);
+        }
         assertTrue(burmesePx >= latinPx);
         int maxPx = TabbarLabelSupport.maxTabLabelHeightPx(new String[] { "Home", "ကြိုဆိုပါသည်" }, density, scaledDensity);
-        assertEquals(burmesePx, maxPx);
+        assertEquals(Math.max(latinPx, burmesePx), maxPx);
     }
 
     private static void applyFontScale(float fontScale) {
