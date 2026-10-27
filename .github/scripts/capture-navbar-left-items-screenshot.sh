@@ -56,8 +56,11 @@ screenshot_ready_in_logcat() {
 }
 
 screenshot_ready_in_ui() {
-  adb shell uiautomator dump /data/local/tmp/navbar-screenshot-ui.xml >/dev/null 2>&1 || return 1
-  adb shell cat /data/local/tmp/navbar-screenshot-ui.xml 2>/dev/null | tr -d '\r' | grep -q 'screenshot-ready'
+  local dump='/data/local/tmp/navbar-screenshot-ui.xml'
+  adb shell rm -f "${dump}" >/dev/null 2>&1 || true
+  adb shell uiautomator dump "${dump}" >/dev/null 2>&1 || return 1
+  adb shell test -s "${dump}" >/dev/null 2>&1 || return 1
+  adb shell cat "${dump}" 2>/dev/null | tr -d '\r' | grep -q 'screenshot-ready'
 }
 
 wait_for_screenshot_ready_log() {
