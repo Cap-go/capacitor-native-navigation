@@ -37,7 +37,7 @@ final class NativeNavigationPluginTabbarFixture {
         NativeNavigationPlugin plugin = new NativeNavigationPlugin() {
             @Override
             public Context getContext() {
-                return appContext;
+                return activity;
             }
 
             @Override
