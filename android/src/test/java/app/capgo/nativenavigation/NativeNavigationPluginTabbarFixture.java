@@ -68,7 +68,7 @@ final class NativeNavigationPluginTabbarFixture {
     }
 
     FrameLayout firstTabButton() throws Exception {
-        View tabbar = getField(plugin, "tabbar");
+        View tabbar = (View) getField(plugin, "tabbar");
         if (tabbar == null || ((ViewGroup) tabbar).getChildCount() == 0) {
             throw new IllegalStateException("Tab bar has no rendered buttons");
         }
