@@ -5,6 +5,9 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 import android.content.res.Configuration;
+import android.graphics.Paint;
+import android.graphics.Typeface;
+import android.os.Build;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
@@ -90,18 +93,45 @@ public class TabbarLabelSupportTest {
         float density = RuntimeEnvironment.getApplication().getResources().getDisplayMetrics().density;
         float scaledDensity = RuntimeEnvironment.getApplication().getResources().getDisplayMetrics().scaledDensity;
         int minPx = Math.round(TabbarLabelSupport.TAB_LABEL_MIN_HEIGHT_DP * density);
-        int latinPx = TabbarLabelSupport.tabLabelHeightPxForTitle("Home", density, scaledDensity, true);
-        int burmesePx = TabbarLabelSupport.tabLabelHeightPxForTitle("ကြိုဆိုပါသည်", density, scaledDensity, true);
+        String latinTitle = "Home";
+        String burmeseTitle = "ကြိုဆိုပါသည်";
+        int latinPx = TabbarLabelSupport.tabLabelHeightPxForTitle(latinTitle, density, scaledDensity, true);
+        int burmesePx = TabbarLabelSupport.tabLabelHeightPxForTitle(burmeseTitle, density, scaledDensity, true);
+        assertEquals(expectedTabLabelHeightPx(latinTitle, density, scaledDensity, true), latinPx);
+        assertEquals(expectedTabLabelHeightPx(burmeseTitle, density, scaledDensity, true), burmesePx);
+        int latinLinePx = titleLineHeightPx(latinTitle, scaledDensity, true);
+        int burmeseLinePx = titleLineHeightPx(burmeseTitle, scaledDensity, true);
+        assertTrue(burmesePx >= latinPx);
+        assertEquals(Math.max(minPx, latinLinePx), latinPx);
+        assertEquals(Math.max(minPx, burmeseLinePx), burmesePx);
         if (burmesePx > latinPx && burmesePx > minPx) {
             assertTrue(burmesePx > latinPx);
-        } else {
-            int combiningPx = TabbarLabelSupport.tabLabelHeightPxForTitle("O\u0308\u0301", density, scaledDensity, true);
-            assertNotEquals(latinPx, combiningPx);
-            assertTrue(combiningPx > latinPx || burmesePx > latinPx);
         }
-        assertTrue(burmesePx >= latinPx);
-        int maxPx = TabbarLabelSupport.maxTabLabelHeightPx(new String[] { "Home", "ကြိုဆိုပါသည်" }, density, scaledDensity);
+        if (burmeseLinePx > latinLinePx) {
+            assertTrue(burmeseLinePx > latinLinePx);
+        } else {
+            assertNotEquals(titleLineHeightPx(null, scaledDensity, true), burmeseLinePx);
+        }
+        int maxPx = TabbarLabelSupport.maxTabLabelHeightPx(new String[] { latinTitle, burmeseTitle }, density, scaledDensity);
         assertEquals(Math.max(latinPx, burmesePx), maxPx);
+    }
+
+    private static int expectedTabLabelHeightPx(String title, float density, float scaledDensity, boolean bold) {
+        int linePx = titleLineHeightPx(title, scaledDensity, bold);
+        return Math.max(Math.round(TabbarLabelSupport.TAB_LABEL_MIN_HEIGHT_DP * density), linePx);
+    }
+
+    private static int titleLineHeightPx(String title, float scaledDensity, boolean bold) {
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setTypeface(Typeface.create(Typeface.DEFAULT, bold ? Typeface.BOLD : Typeface.NORMAL));
+        paint.setTextSize(TabbarLabelSupport.TAB_LABEL_TEXT_SP * scaledDensity);
+        Paint.FontMetricsInt metrics = new Paint.FontMetricsInt();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && title != null && !title.isEmpty()) {
+            paint.getFontMetricsInt(title, 0, title.length(), 0, title.length(), false, metrics);
+        } else {
+            paint.getFontMetricsInt(metrics);
+        }
+        return metrics.bottom - metrics.top;
     }
 
     private static void applyFontScale(float fontScale) {
