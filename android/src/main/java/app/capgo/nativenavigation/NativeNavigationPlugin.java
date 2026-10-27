@@ -968,11 +968,6 @@ public class NativeNavigationPlugin extends Plugin {
             String id = rawItem.optString("id", "item-" + itemId);
             String title = rawItem.optString("title", "");
             MenuItem item = nativeToolbar.getMenu().add(Menu.NONE, itemId, index, title);
-            String accessibilityLabel = rawItem.optString("accessibilityLabel", "");
-            if (accessibilityLabel.isEmpty()) {
-                accessibilityLabel = title.isEmpty() ? id : title;
-            }
-            MenuItemCompat.setContentDescription(item, accessibilityLabel);
             item.setEnabled(rawItem.optBoolean("enabled", true));
             MenuItemCompat.setContentDescription(item, itemContentDescription(rawItem, id, title));
             Drawable icon = iconFrom(rawItem.optJSONObject("icon"));
