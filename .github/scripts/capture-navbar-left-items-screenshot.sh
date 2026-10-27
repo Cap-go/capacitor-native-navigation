@@ -51,16 +51,26 @@ launch_app() {
   adb shell am start -W -n "${ACTIVITY}" >/dev/null 2>&1 || adb shell am start -n "${ACTIVITY}"
 }
 
+screenshot_ready_in_logcat() {
+  adb logcat -d 2>/dev/null | tr -d '\r' | grep -q 'NATIVE_NAV_SCREENSHOT_READY'
+}
+
+screenshot_ready_in_ui() {
+  adb shell uiautomator dump /data/local/tmp/navbar-screenshot-ui.xml >/dev/null 2>&1 || return 1
+  adb shell cat /data/local/tmp/navbar-screenshot-ui.xml 2>/dev/null | tr -d '\r' | grep -q 'screenshot-ready'
+}
+
 wait_for_screenshot_ready_log() {
   local attempt=0
-  while [ "${attempt}" -lt 30 ]; do
-    if adb logcat -d -t 80 2>/dev/null | tr -d '\r' | grep -q 'NATIVE_NAV_SCREENSHOT_READY'; then
+  local max_attempts=90
+  while [ "${attempt}" -lt "${max_attempts}" ]; do
+    if screenshot_ready_in_logcat || screenshot_ready_in_ui; then
       return 0
     fi
     attempt=$((attempt + 1))
-    sleep 1
+    sleep 2
   done
-  echo "Screenshot readiness log not observed" >&2
+  echo "Screenshot readiness signal not observed (log or UI)" >&2
   return 1
 }
 
@@ -74,7 +84,7 @@ adb uninstall "${PACKAGE}" >/dev/null 2>&1 || true
 adb install -r "${APK_PATH}"
 adb logcat -c >/dev/null 2>&1 || true
 launch_app
-sleep 8
+sleep 12
 wait_for_screenshot_ready_log
 sleep 2
 wake_display
