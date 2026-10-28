@@ -930,6 +930,11 @@ public class NativeNavigationPlugin extends Plugin {
         JSONObject descriptor = rawItem.optJSONObject("icon");
         boolean rtl = nativeToolbar.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
         Drawable icon = resolveLeadingIcon(descriptor, rtl);
+        if (icon != null) {
+            Drawable tintedIcon = icon.mutate();
+            tintedIcon.setTint(tintColor);
+            icon = tintedIcon;
+        }
         if (nativeToolbar.getNavigationIcon() != icon) {
             nativeToolbar.setNavigationIcon(icon);
         }
