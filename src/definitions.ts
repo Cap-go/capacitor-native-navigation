@@ -345,6 +345,12 @@ export interface NativeNavigationBarButton {
   title?: string;
 
   /**
+   * Screen reader label. Defaults to `title`, then `id`. Set it for icon-only
+   * buttons.
+   */
+  accessibilityLabel?: string;
+
+  /**
    * Native icon descriptor.
    */
   icon?: NativeNavigationIcon;
@@ -660,6 +666,11 @@ export interface NativeNavigationNavbarOptions {
 
   /**
    * Left-side action buttons.
+   *
+   * On Android, when no back button is visible, the first item with an
+   * `icon` that resolves on Android is placed in the toolbar's leading
+   * navigation slot, as on iOS. Its SVG icon is drawn at its own `width` x
+   * `height`. Other items are shown in the toolbar menu.
    */
   leftItems?: NativeNavigationBarButton[];
 

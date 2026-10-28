@@ -189,6 +189,16 @@ func nativeNavigationBackButtonAccessibilityLabel(title: String?, role: String?)
     return role == "close" ? "Close" : "Back"
 }
 
+func nativeNavigationBarButtonAccessibilityLabel(accessibilityLabel: String?, title: String?, id: String) -> String {
+    if let accessibilityLabel, !accessibilityLabel.isEmpty {
+        return accessibilityLabel
+    }
+    if let title, !title.isEmpty {
+        return title
+    }
+    return id
+}
+
 func nativeNavigationPartitionDock(
     left: [NativeNavigationDockButton],
     right: [NativeNavigationDockButton]

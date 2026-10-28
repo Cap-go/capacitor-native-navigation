@@ -1638,7 +1638,11 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             }
             item.isEnabled = rawItem["enabled"] as? Bool ?? true
             item.accessibilityIdentifier = id
-            item.accessibilityLabel = title
+            item.accessibilityLabel = nativeNavigationBarButtonAccessibilityLabel(
+                accessibilityLabel: rawItem["accessibilityLabel"] as? String,
+                title: title,
+                id: id
+            )
             configureGlassBarButtonItem(item, id: id)
             let dock = nativeNavigationBarButtonDock(rawItem["dock"] as? String)
             applyBarButtonDock(dock, to: item)
