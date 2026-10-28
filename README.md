@@ -323,7 +323,7 @@ await NativeNavigation.setTabbar({
 
 ## Android Liquid Glass
 
-On Android 12+, floating tabbars use `liquidGlass` automatically when `setTabbar` omits `glass` (pass `glass: { effect: 'none' }` for a flat fill). Android draws a translucent tint without live blur: rendering the WebView from native code to blur it flashes the page or swallows flings. For blur, place an element with `backdrop-filter: blur(...)` in your page under the bar (the floating tabbar is 64px tall, 24px from the sides, at most 430px wide, 10px above the system navigation bar). Tune `colors.background` alpha and `glass.surfaceAlpha` (default `0.62`) together.
+On Android 12+, floating tabbars use `liquidGlass` automatically when `setTabbar` omits `glass` (pass `glass: { effect: 'none' }` for a flat fill). Android draws a translucent tint without live blur: rendering the WebView from native code to blur it flashes the page or swallows flings. For blur, place an element with `backdrop-filter: blur(...)` in your page under the bar (the floating tabbar is 64px tall, 24px from the sides, at most 430px wide, 10px above the system navigation bar). Tune `colors.background` alpha and `glass.surfaceAlpha` (default `0.62`) together. When the system font size is increased, the tab bar grows with the label line height and reported `tabbarHeight` / bottom insets stay aligned with the native bar.
 
 ```typescript
 await NativeNavigation.configure({

@@ -82,7 +82,6 @@ public class NativeNavigationPlugin extends Plugin {
     private static final int INDICATOR_SLOT_INSET_DP = 2;
     private static final int FLOATING_INDICATOR_INSET_DP = 4;
     private static final int DEFAULT_TRANSITION_MS = 350;
-    private static final int TAB_LABEL_HEIGHT_DP = 18;
     private static final int TAB_ICON_LABEL_GAP_DP = 2;
     private static final int TABBAR_MINIMIZE_HEIGHT_REDUCTION_DP = 16;
     private static final int TABBAR_MINIMIZE_SIDE_INSET_DP = 24;
@@ -152,6 +151,7 @@ public class NativeNavigationPlugin extends Plugin {
     private Integer tabbarIndicatorColor = null;
     private String tabbarLabelVisibilityMode = "labeled";
     private boolean tabbarIconsVisible = true;
+    private int tabLabelRowHeightPx;
     private boolean tabbarMinimizeOnScroll = false;
     private boolean tabbarDragToSelect = true;
     private boolean tabbarEdgeBlur = false;
@@ -160,6 +160,11 @@ public class NativeNavigationPlugin extends Plugin {
     private float tabbarMinimizeProgress = 0f;
     private ValueAnimator tabbarMinimizeAnimator;
     private final PullToRefreshSupport pullToRefresh = new PullToRefreshSupport();
+    private boolean webViewBoundsWatcherAttached;
+    private static final int WEB_VIEW_BOUNDS_WATCHER_MAX_ATTACH_ATTEMPTS = 60;
+    private static final long WEB_VIEW_BOUNDS_WATCHER_RETRY_DELAY_MS = 100L;
+    private int webViewBoundsWatcherAttachAttempts;
+    private Runnable pendingWebViewBoundsWatcherAttach;
 
     @Override
     public void load() {
@@ -176,6 +181,22 @@ public class NativeNavigationPlugin extends Plugin {
     protected void handleOnConfigurationChanged(Configuration newConfig) {
         super.handleOnConfigurationChanged(newConfig);
         clearLeadingIconCache();
+        Activity activity = getActivity();
+        if (activity == null) {
+            return;
+        }
+        activity.runOnUiThread(() -> {
+            if (leadingNavigationItem == null || toolbar == null) {
+                return;
+            }
+            applyLeadingNavigationItem(toolbar, leadingNavigationItem);
+        });
+    }
+
+    @Override
+    protected void handleOnDestroy() {
+        cancelPendingWebViewBoundsWatcherAttach();
+        super.handleOnDestroy();
     }
 
     @PluginMethod
@@ -270,6 +291,7 @@ public class NativeNavigationPlugin extends Plugin {
 
             JSObject backButton = call.getObject("backButton", null);
             if (backButton != null && Boolean.TRUE.equals(backButton.getBool("visible"))) {
+                leadingNavigationItem = null;
                 boolean close = "close".equals(backButton.getString("role", "back"));
                 String provided = backButton.getString("title", null);
                 if (provided == null || provided.isEmpty()) {
@@ -296,6 +318,7 @@ public class NativeNavigationPlugin extends Plugin {
                     applyLeadingNavigationItem(nativeToolbar, leftItems.optJSONObject(leadingIndex));
                     leftItems = withoutIndex(leftItems, leadingIndex);
                 } else {
+                    leadingNavigationItem = null;
                     nativeToolbar.setNavigationIcon(null);
                     nativeToolbar.setNavigationOnClickListener(null);
                     nativeToolbar.setNavigationContentDescription(null);
@@ -382,7 +405,9 @@ public class NativeNavigationPlugin extends Plugin {
 
     private int pullToRefreshTopPx() {
         int navbarToolbar = navbarScrollCollapsed ? 0 : navbarBarHeight(navbarLarge ? 1f : 0f) + navbarAccessoryHeight();
-        return statusBarInset() + (navbarVisible ? navbarToolbar : 0);
+        int navbarBottomInWindow =
+            contentRootTopOffset() + nativeStatusBarInset() + (navbarVisible ? navbarToolbar : 0);
+        return InsetsOffsetSupport.pullToRefreshProgressTopOffset(navbarBottomInWindow, webViewTopOffset());
     }
 
     @PluginMethod
@@ -886,6 +911,9 @@ public class NativeNavigationPlugin extends Plugin {
         return rest;
     }
 
+    /** Last left item shown in the navigation slot, reapplied after configuration changes. */
+    private JSONObject leadingNavigationItem;
+
     /** Last rendered leading icon, reused while its descriptor is unchanged so repeated setNavbar calls do not re-render it. */
     private String leadingIconKey;
     private Drawable leadingIcon;
@@ -896,6 +924,7 @@ public class NativeNavigationPlugin extends Plugin {
      * event as iOS ({ id, title, placement: "left" }).
      */
     private void applyLeadingNavigationItem(Toolbar nativeToolbar, JSONObject rawItem) {
+        leadingNavigationItem = rawItem;
         String id = rawItem.optString("id", "leading");
         String title = rawItem.optString("title", "");
         JSONObject descriptor = rawItem.optJSONObject("icon");
@@ -1283,6 +1312,7 @@ public class NativeNavigationPlugin extends Plugin {
             TabbarChromeSupport.resolveSelectedIndicatorColor(tabbarIndicatorColor, tintColor)
         );
         int centerIndex = centerTabIndex();
+        refreshTabLabelRowHeightPx(labelVisibilityMode, icons);
         applyTabbarBackground(centerIndex);
         for (int index = 0; index < tabItems.size(); index++) {
             final int itemIndex = index;
@@ -1426,7 +1456,7 @@ public class NativeNavigationPlugin extends Plugin {
     private void applyTabButtonMinimize(TabButton button) {
         float progress = tabbarMinimizeProgress;
         if (button.labelClip != null) {
-            int height = Math.round(dp(TAB_LABEL_HEIGHT_DP) * (1f - progress));
+            int height = Math.round(tabLabelRowHeightPx * (1f - progress));
             ViewGroup.LayoutParams params = button.labelClip.getLayoutParams();
             if (params != null && params.height != height) {
                 params.height = height;
@@ -1522,6 +1552,7 @@ public class NativeNavigationPlugin extends Plugin {
         }
 
         if (labelVisible) {
+            int labelRowHeight = tabLabelRowHeightPx;
             TextView label = new TextView(getContext());
             label.setText(item.title);
             label.setTextColor(itemColor);
@@ -1538,12 +1569,12 @@ public class NativeNavigationPlugin extends Plugin {
                 FrameLayout labelClip = new FrameLayout(getContext());
                 labelClip.addView(
                     label,
-                    new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(TAB_LABEL_HEIGHT_DP), Gravity.TOP)
+                    new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, labelRowHeight, Gravity.TOP)
                 );
-                content.addView(labelClip, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(TAB_LABEL_HEIGHT_DP)));
+                content.addView(labelClip, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, labelRowHeight));
                 button.labelClip = labelClip;
             } else {
-                content.addView(label, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(TAB_LABEL_HEIGHT_DP)));
+                content.addView(label, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, labelRowHeight));
             }
         }
 
@@ -1587,14 +1618,13 @@ public class NativeNavigationPlugin extends Plugin {
     }
 
     private int indicatorContentHeight(boolean labelVisible, boolean iconVisible) {
-        int height = 0;
-        if (iconVisible) {
-            height += dp(24);
-        }
-        if (labelVisible) {
-            height += dp(TAB_LABEL_HEIGHT_DP) + (iconVisible ? dp(TAB_ICON_LABEL_GAP_DP) : 0);
-        }
-        return height;
+        return TabbarLabelSupport.indicatorContentHeightPx(
+            tabLabelRowHeightPx,
+            dp(24),
+            dp(TAB_ICON_LABEL_GAP_DP),
+            labelVisible,
+            iconVisible
+        );
     }
 
     /** Tab item that reports how wide it wants to be, so the tabbar can size slots to their content. */
@@ -1939,6 +1969,7 @@ public class NativeNavigationPlugin extends Plugin {
         private TabbarStyle style = TabbarStyle.defaults(Color.rgb(0, 122, 255));
         private int backgroundColor = DEFAULT_TABBAR_BACKGROUND_COLOR;
         private int centerIndex = -1;
+        private int labelExtraHeightPx = 0;
         private DragListener dragListener;
         private int selectedIndex = -1;
         private boolean dragEnabled = true;
@@ -2238,12 +2269,17 @@ public class NativeNavigationPlugin extends Plugin {
             canvas.drawRoundRect(indicatorRect, height / 2f, height / 2f, indicatorPaint);
         }
 
-        void setTabbarStyle(TabbarStyle style, int backgroundColor, int centerIndex) {
+        void setTabbarStyle(TabbarStyle style, int backgroundColor, int centerIndex, int labelExtraHeightPx) {
             this.style = style;
             this.backgroundColor = backgroundColor;
             this.centerIndex = centerIndex;
+            this.labelExtraHeightPx = Math.max(0, labelExtraHeightPx);
             requestLayout();
             invalidate();
+        }
+
+        private int curveBarHeightPx() {
+            return dp(style.height) + labelExtraHeightPx;
         }
 
         @Override
@@ -2268,7 +2304,7 @@ public class NativeNavigationPlugin extends Plugin {
                 return;
             }
             if (hasCenterButton()) {
-                int barHeight = dp(style.height);
+                int barHeight = curveBarHeightPx();
                 int barTop = dp(style.barTop());
                 int centerGap = Math.min(dp(style.centerButtonDiameter + 4), Math.round(width * 0.34f));
                 int leftWidth = Math.max(0, Math.round(width / 2f - centerGap / 2f));
@@ -2311,7 +2347,7 @@ public class NativeNavigationPlugin extends Plugin {
             }
             if (hasCenterButton()) {
                 int barTop = dp(style.barTop());
-                int barHeight = dp(style.height);
+                int barHeight = curveBarHeightPx();
                 int buttonDiameter = dp(style.centerButtonDiameter);
                 int centerGap = Math.min(dp(style.centerButtonDiameter + 4), Math.round(width * 0.34f));
                 int leftWidth = Math.max(0, Math.round(width / 2f - centerGap / 2f));
@@ -2459,7 +2495,7 @@ public class NativeNavigationPlugin extends Plugin {
                 );
             }
             float barTop = dp(style.barTop());
-            float barHeight = dp(style.height);
+            float barHeight = curveBarHeightPx();
             float cornerRadius = Math.min(dp(style.cornerRadius), barHeight / 2f);
             float centerX = width / 2f;
             float centerRadius = dp(style.centerButtonDiameter) / 2f;
@@ -2606,7 +2642,8 @@ public class NativeNavigationPlugin extends Plugin {
                 return null;
             }
             try {
-                return PathParser.createPathFromPathData(data);
+                String normalized = SvgPathDataSupport.normalizeArcFlagsInPathData(data);
+                return PathParser.createPathFromPathData(normalized);
             } catch (RuntimeException ignored) {
                 return null;
             }
@@ -2791,6 +2828,7 @@ public class NativeNavigationPlugin extends Plugin {
         if (tabbar == null) {
             return;
         }
+        refreshTabLabelRowHeightPx(tabbarLabelVisibilityMode, tabbarIconsVisible);
         int drawColor = resolvedTabbarSurfaceColor();
         if (tabbarBackdrop != null) {
             tabbarBackdrop.setBackgroundColor(drawColor);
@@ -2801,7 +2839,8 @@ public class NativeNavigationPlugin extends Plugin {
         if (tabbarContainer != null) {
             tabbarContainer.setBackgroundColor(Color.TRANSPARENT);
         }
-        tabbar.setTabbarStyle(tabbarStyle, drawColor, centerIndex);
+        int labelExtraHeightPx = tabbarLabelExtraHeightPx();
+        tabbar.setTabbarStyle(tabbarStyle, drawColor, centerIndex, labelExtraHeightPx);
         applyTabbarContainerOutline();
     }
 
@@ -2982,8 +3021,8 @@ public class NativeNavigationPlugin extends Plugin {
         if (root == null) {
             return;
         }
-        int status = statusBarInset();
-        int bottom = navigationBarInset();
+        int status = nativeStatusBarInset();
+        int bottom = nativeNavigationBarInset();
         int navbarToolbar = navbarScrollCollapsed ? 0 : navbarBarHeight(navbarLargeProgress) + navbarAccessoryHeight();
         int navbarHeight = navbarVisible ? status + navbarToolbar : 0;
         boolean tabbarLayoutVisible = tabbarVisible || tabbarChromeHideAnimating;
@@ -3066,7 +3105,7 @@ public class NativeNavigationPlugin extends Plugin {
         if (root == null || tabbarContainer == null) {
             return;
         }
-        int bottom = navigationBarInset();
+        int bottom = nativeNavigationBarInset();
         boolean tabbarLayoutVisible = tabbarVisible || tabbarChromeHideAnimating;
         int rootWidth = root.getWidth() > 0 ? root.getWidth() : Resources.getSystem().getDisplayMetrics().widthPixels;
         int rootHeight = root.getHeight() > 0 ? root.getHeight() : Resources.getSystem().getDisplayMetrics().heightPixels;
@@ -3079,7 +3118,9 @@ public class NativeNavigationPlugin extends Plugin {
         int topMargin = 0;
         int bottomMargin;
         if (sidebar) {
-            int navbarOccupied = navbarVisible ? statusBarInset() + navbarBarHeight(navbarLargeProgress) + navbarAccessoryHeight() : statusBarInset();
+            int navbarOccupied = navbarVisible
+                ? nativeStatusBarInset() + navbarBarHeight(navbarLargeProgress) + navbarAccessoryHeight()
+                : nativeStatusBarInset();
             tabbarWidth = dp(TabbarLayoutSupport.SIDEBAR_WIDTH_DP);
             topMargin = navbarOccupied + dp(8);
             bottomMargin = bottom + dp(8);
@@ -3089,7 +3130,7 @@ public class NativeNavigationPlugin extends Plugin {
         } else {
             bottomMargin = tabbarLayoutVisible ? bottom + dp(tabbarStyle.bottomGap) : bottom;
             float minimize = tabbarStyle.isCurve() ? 0f : tabbarMinimizeProgress;
-            tabbarHeight = dp(tabbarStyle.totalHeight()) - Math.round(dp(TABBAR_MINIMIZE_HEIGHT_REDUCTION_DP) * minimize);
+            tabbarHeight = effectiveTabbarTotalHeightPx() - Math.round(dp(TABBAR_MINIMIZE_HEIGHT_REDUCTION_DP) * minimize);
             int sideInset = Math.round(dp(TABBAR_MINIMIZE_SIDE_INSET_DP) * minimize);
             int availableWidth = Math.max(0, rootWidth - dp(tabbarStyle.horizontalMargin) * 2);
             int maxWidth = tabbarStyle.maxWidth > 0 ? dp(tabbarStyle.maxWidth) : availableWidth;
@@ -3221,14 +3262,14 @@ public class NativeNavigationPlugin extends Plugin {
 
     private float tabbarSlideDistance() {
         if (tabbarContainer == null) {
-            return dp(tabbarStyle.totalHeight() + tabbarStyle.bottomGap);
+            return effectiveTabbarChromeHeightPx();
         }
         ViewGroup.LayoutParams params = tabbarContainer.getLayoutParams();
         int bottomMargin = params instanceof ViewGroup.MarginLayoutParams ? ((ViewGroup.MarginLayoutParams) params).bottomMargin : 0;
         return TabbarChromeSupport.tabbarSlideDistancePx(
             tabbarContainer.getHeight(),
             bottomMargin,
-            dp(tabbarStyle.totalHeight() + tabbarStyle.bottomGap)
+            effectiveTabbarChromeHeightPx()
         );
     }
 
@@ -3446,18 +3487,18 @@ public class NativeNavigationPlugin extends Plugin {
         if (params == null) {
             return;
         }
-        params.height = statusBarInset() + (navbarScrollCollapsed ? 0 : navbarBarHeight(navbarLargeProgress) + navbarAccessoryHeight());
+        params.height = nativeStatusBarInset() + (navbarScrollCollapsed ? 0 : navbarBarHeight(navbarLargeProgress) + navbarAccessoryHeight());
         navbarContainer.setLayoutParams(params);
         // Full layout places the search row once. These frames skip that path, so the row has to
         // follow the large title or it stays overlapped or clipped after the animation.
         if (navbarSearchField != null && navbarSearchField.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
             ViewGroup.MarginLayoutParams searchParams = (ViewGroup.MarginLayoutParams) navbarSearchField.getLayoutParams();
-            searchParams.topMargin = statusBarInset() + navbarBarHeight(navbarLargeProgress) + dp(8);
+            searchParams.topMargin = nativeStatusBarInset() + navbarBarHeight(navbarLargeProgress) + dp(8);
             navbarSearchField.setLayoutParams(searchParams);
         }
         if (navbarSegments != null && navbarSegments.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
             ViewGroup.MarginLayoutParams segmentsParams = (ViewGroup.MarginLayoutParams) navbarSegments.getLayoutParams();
-            segmentsParams.topMargin = statusBarInset() + navbarBarHeight(navbarLargeProgress) + navbarSearchHeight();
+            segmentsParams.topMargin = nativeStatusBarInset() + navbarBarHeight(navbarLargeProgress) + navbarSearchHeight();
             navbarSegments.setLayoutParams(segmentsParams);
         }
         if (tabbarStyle.isSidebar()) {
@@ -3508,7 +3549,7 @@ public class NativeNavigationPlugin extends Plugin {
         int right = sidebar && !layoutRtl ? rail : 0;
         int bottom = sidebar
             ? navigationBarInset()
-            : (tabbarVisible ? navigationBarInset() + dp(tabbarStyle.totalHeight()) + dp(tabbarStyle.bottomGap) : 0);
+            : (tabbarVisible ? navigationBarInset() + effectiveTabbarChromeHeightPx() : 0);
         JSObject insets = new JSObject();
         insets.put("top", cssPx(top));
         insets.put("right", cssPx(right));
@@ -3615,17 +3656,32 @@ public class NativeNavigationPlugin extends Plugin {
     }
 
     /**
-     * The chrome is laid out inside {@code android.R.id.content}, so it only needs to clear the part of a
-     * system bar that actually overlaps that view. Capacitor's SystemBars plugin (default
-     * {@code insetsHandling: 'css'} without {@code viewport-fit=cover}) pads the decor view by the system bars,
-     * which already moves the content root clear of them; adding the full inset again doubled the gap.
+     * Native chrome is laid out inside {@code android.R.id.content}, so it only clears the part of a system bar
+     * that overlaps that view. Capacitor's SystemBars plugin (default {@code insetsHandling: 'css'} without
+     * {@code viewport-fit=cover}) may pad the decor view or, on API 35+ with WebView &lt; 140, pad the WebView's
+     * parent while {@code android.R.id.content} stays at the window origin.
      */
+    private int nativeStatusBarInset() {
+        return InsetsOffsetSupport.adjustedSystemBarInset(rawStatusBarInset(), contentRootTopOffset());
+    }
+
+    private int nativeNavigationBarInset() {
+        return InsetsOffsetSupport.adjustedSystemBarInset(rawNavigationBarInset(), contentRootBottomOffset());
+    }
+
+    /** JS/CSS insets also account for WebView position when SystemBars pads only the WebView parent. */
     private int statusBarInset() {
-        return Math.max(0, rawStatusBarInset() - contentRootTopOffset());
+        return InsetsOffsetSupport.adjustedSystemBarInset(
+            rawStatusBarInset(),
+            InsetsOffsetSupport.effectiveTopOffset(contentRootTopOffset(), webViewTopOffset())
+        );
     }
 
     private int navigationBarInset() {
-        return Math.max(0, rawNavigationBarInset() - contentRootBottomOffset());
+        return InsetsOffsetSupport.adjustedSystemBarInset(
+            rawNavigationBarInset(),
+            InsetsOffsetSupport.effectiveBottomOffset(contentRootBottomOffset(), webViewBottomOffset())
+        );
     }
 
     // API 30+ reads the currently visible bars so a hidden navigation bar (immersive mode) gives the space back.
@@ -3681,6 +3737,28 @@ public class NativeNavigationPlugin extends Plugin {
         return Math.max(0, decor.getHeight() - (location[1] + root.getHeight()));
     }
 
+    private int webViewTopOffset() {
+        View webView = getBridge() == null ? null : getBridge().getWebView();
+        if (webView == null || !webView.isLaidOut()) {
+            return 0;
+        }
+        int[] location = new int[2];
+        webView.getLocationInWindow(location);
+        return Math.max(0, location[1]);
+    }
+
+    private int webViewBottomOffset() {
+        View webView = getBridge() == null ? null : getBridge().getWebView();
+        Activity activity = getActivity();
+        if (webView == null || activity == null || !webView.isLaidOut()) {
+            return 0;
+        }
+        View decor = activity.getWindow().getDecorView();
+        int[] location = new int[2];
+        webView.getLocationInWindow(location);
+        return Math.max(0, decor.getHeight() - (location[1] + webView.getHeight()));
+    }
+
     private void watchContentRootBounds() {
         FrameLayout root = contentRoot();
         if (root == null) {
@@ -3706,11 +3784,124 @@ public class NativeNavigationPlugin extends Plugin {
             return insets;
         });
         root.addView(insetsProbe, new FrameLayout.LayoutParams(0, 0));
+        attachWebViewBoundsWatcher();
+    }
+
+    private void attachWebViewBoundsWatcher() {
+        if (webViewBoundsWatcherAttached || getBridge() == null || !isActiveForWebViewBoundsWatcher()) {
+            return;
+        }
+        View webView = getBridge().getWebView();
+        if (webView == null) {
+            scheduleWebViewBoundsWatcherAttachRetry();
+            return;
+        }
+        cancelPendingWebViewBoundsWatcherAttach();
+        webViewBoundsWatcherAttachAttempts = 0;
+        webViewBoundsWatcherAttached = true;
+        webView.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+            if (top == oldTop && bottom == oldBottom && left == oldLeft && right == oldRight) {
+                return;
+            }
+            if (
+                !InsetsOffsetSupport.shouldUpdateOnWebViewBoundsChange(
+                    navbarVisible,
+                    tabbarVisible,
+                    pullToRefresh.isEnabled()
+                )
+            ) {
+                return;
+            }
+            if (navbarVisible || tabbarVisible) {
+                view.post(this::updateInsetsAndNotify);
+            } else {
+                view.post(() -> pullToRefresh.setTopOffset(pullToRefreshTopPx()));
+            }
+        });
+    }
+
+    private boolean isActiveForWebViewBoundsWatcher() {
+        Activity activity = getActivity();
+        if (activity == null || activity.isFinishing()) {
+            return false;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1 && activity.isDestroyed()) {
+            return false;
+        }
+        return true;
+    }
+
+    private void scheduleWebViewBoundsWatcherAttachRetry() {
+        if (!isActiveForWebViewBoundsWatcher()) {
+            return;
+        }
+        if (webViewBoundsWatcherAttachAttempts >= WEB_VIEW_BOUNDS_WATCHER_MAX_ATTACH_ATTEMPTS) {
+            return;
+        }
+        webViewBoundsWatcherAttachAttempts++;
+        FrameLayout root = contentRoot();
+        if (root == null) {
+            return;
+        }
+        cancelPendingWebViewBoundsWatcherAttach();
+        pendingWebViewBoundsWatcherAttach = this::attachWebViewBoundsWatcher;
+        root.postDelayed(pendingWebViewBoundsWatcherAttach, WEB_VIEW_BOUNDS_WATCHER_RETRY_DELAY_MS);
+    }
+
+    private void cancelPendingWebViewBoundsWatcherAttach() {
+        if (pendingWebViewBoundsWatcherAttach == null) {
+            return;
+        }
+        FrameLayout root = contentRoot();
+        if (root != null) {
+            root.removeCallbacks(pendingWebViewBoundsWatcherAttach);
+        }
+        pendingWebViewBoundsWatcherAttach = null;
     }
 
     private int systemDimension(String name) {
         int id = getContext().getResources().getIdentifier(name, "dimen", "android");
         return id == 0 ? 0 : getContext().getResources().getDimensionPixelSize(id);
+    }
+
+    private void refreshTabLabelRowHeightPx(String labelVisibilityMode, boolean icons) {
+        Resources resources = getContext().getResources();
+        float density = resources.getDisplayMetrics().density;
+        float scaledDensity = resources.getDisplayMetrics().scaledDensity;
+        if ("unlabeled".equals(labelVisibilityMode)) {
+            tabLabelRowHeightPx = TabbarLabelSupport.tabLabelHeightPx(density, scaledDensity);
+            return;
+        }
+        String[] titles = new String[tabItems.size()];
+        for (int index = 0; index < tabItems.size(); index++) {
+            titles[index] = tabItems.get(index).title;
+        }
+        tabLabelRowHeightPx = TabbarLabelSupport.maxTabLabelHeightPx(titles, density, scaledDensity);
+    }
+
+    private int tabbarLabelExtraHeightPx() {
+        if ("unlabeled".equals(tabbarLabelVisibilityMode)) {
+            return 0;
+        }
+        boolean labelVisible = true;
+        boolean iconVisible = tabbarIconsVisible && tabItems.stream().anyMatch((item) -> item.icon != null || item.selectedIcon != null);
+        int required = TabbarLabelSupport.tabSlotContentHeightPx(
+            dp(TAB_CONTENT_PADDING_DP),
+            dp(24),
+            dp(TAB_ICON_LABEL_GAP_DP),
+            tabLabelRowHeightPx,
+            labelVisible,
+            iconVisible
+        );
+        return TabbarLabelSupport.tabbarExtraHeightForContentPx(dp(tabbarStyle.height), required);
+    }
+
+    private int effectiveTabbarTotalHeightPx() {
+        return dp(tabbarStyle.totalHeight()) + tabbarLabelExtraHeightPx();
+    }
+
+    private int effectiveTabbarChromeHeightPx() {
+        return effectiveTabbarTotalHeightPx() + dp(tabbarStyle.bottomGap);
     }
 
     private int dp(int value) {
