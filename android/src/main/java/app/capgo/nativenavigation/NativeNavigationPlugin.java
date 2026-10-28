@@ -48,6 +48,7 @@ import android.widget.TextView;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.graphics.PathParser;
+import androidx.core.view.MenuItemCompat;
 import androidx.core.widget.TextViewCompat;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -169,6 +170,12 @@ public class NativeNavigationPlugin extends Plugin {
                 watchContentRootBounds();
             });
         }
+    }
+
+    @Override
+    protected void handleOnConfigurationChanged(Configuration newConfig) {
+        super.handleOnConfigurationChanged(newConfig);
+        clearLeadingIconCache();
     }
 
     @PluginMethod
@@ -897,11 +904,7 @@ public class NativeNavigationPlugin extends Plugin {
         if (nativeToolbar.getNavigationIcon() != icon) {
             nativeToolbar.setNavigationIcon(icon);
         }
-        String accessibilityLabel = rawItem.optString("accessibilityLabel", "");
-        if (accessibilityLabel.isEmpty()) {
-            accessibilityLabel = title.isEmpty() ? id : title;
-        }
-        nativeToolbar.setNavigationContentDescription(accessibilityLabel);
+        nativeToolbar.setNavigationContentDescription(barButtonAccessibilityLabel(rawItem, id, title));
         boolean enabled = rawItem.optBoolean("enabled", true);
         nativeToolbar.setNavigationOnClickListener(
             enabled
@@ -922,7 +925,20 @@ public class NativeNavigationPlugin extends Plugin {
     }
 
     private String leadingIconCacheKey(JSONObject descriptor, boolean rtl) {
-        return String.valueOf(descriptor) + "|" + rtl;
+        Configuration config = getContext().getResources().getConfiguration();
+        int uiMode = config.uiMode & Configuration.UI_MODE_NIGHT_MASK;
+        return String.valueOf(descriptor) + "|" + rtl + "|" + config.densityDpi + "|" + uiMode;
+    }
+
+    private static String barButtonAccessibilityLabel(JSONObject rawItem, String id, String title) {
+        String accessibilityLabel = rawItem.optString("accessibilityLabel", "");
+        if (!accessibilityLabel.isEmpty()) {
+            return accessibilityLabel;
+        }
+        if (!title.isEmpty()) {
+            return title;
+        }
+        return id;
     }
 
     private Drawable resolveLeadingIcon(JSONObject descriptor, boolean rtl) {
@@ -974,6 +990,7 @@ public class NativeNavigationPlugin extends Plugin {
             String title = rawItem.optString("title", "");
             MenuItem item = nativeToolbar.getMenu().add(Menu.NONE, itemId, index, title);
             item.setEnabled(rawItem.optBoolean("enabled", true));
+            MenuItemCompat.setContentDescription(item, barButtonAccessibilityLabel(rawItem, id, title));
             Drawable icon = iconFrom(rawItem.optJSONObject("icon"));
             if (icon != null) {
                 item.setIcon(icon);
