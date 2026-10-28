@@ -41,6 +41,17 @@ android {
         sourceCompatibility JavaVersion.VERSION_21
         targetCompatibility JavaVersion.VERSION_21
     }
+    testOptions {
+        unitTests {
+            includeAndroidResources = true
+        }
+    }
+}
+
+if (project.hasProperty('generateTabbarLabelScreenshots')) {
+    tasks.withType(Test).configureEach {
+        systemProperty 'generateTabbarLabelScreenshots', 'true'
+    }
 }
 
 repositories {

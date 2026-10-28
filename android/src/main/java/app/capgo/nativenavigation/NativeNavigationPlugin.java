@@ -80,7 +80,6 @@ public class NativeNavigationPlugin extends Plugin {
     private static final int INDICATOR_SLOT_INSET_DP = 2;
     private static final int FLOATING_INDICATOR_INSET_DP = 4;
     private static final int DEFAULT_TRANSITION_MS = 350;
-    private static final int TAB_LABEL_HEIGHT_DP = 18;
     private static final int TAB_ICON_LABEL_GAP_DP = 2;
     private static final int TABBAR_MINIMIZE_HEIGHT_REDUCTION_DP = 16;
     private static final int TABBAR_MINIMIZE_SIDE_INSET_DP = 24;
@@ -150,6 +149,7 @@ public class NativeNavigationPlugin extends Plugin {
     private Integer tabbarIndicatorColor = null;
     private String tabbarLabelVisibilityMode = "labeled";
     private boolean tabbarIconsVisible = true;
+    private int tabLabelRowHeightPx;
     private boolean tabbarMinimizeOnScroll = false;
     private boolean tabbarDragToSelect = true;
     private boolean tabbarEdgeBlur = false;
@@ -1157,6 +1157,7 @@ public class NativeNavigationPlugin extends Plugin {
             TabbarChromeSupport.resolveSelectedIndicatorColor(tabbarIndicatorColor, tintColor)
         );
         int centerIndex = centerTabIndex();
+        refreshTabLabelRowHeightPx(labelVisibilityMode, icons);
         applyTabbarBackground(centerIndex);
         for (int index = 0; index < tabItems.size(); index++) {
             final int itemIndex = index;
@@ -1300,7 +1301,7 @@ public class NativeNavigationPlugin extends Plugin {
     private void applyTabButtonMinimize(TabButton button) {
         float progress = tabbarMinimizeProgress;
         if (button.labelClip != null) {
-            int height = Math.round(dp(TAB_LABEL_HEIGHT_DP) * (1f - progress));
+            int height = Math.round(tabLabelRowHeightPx * (1f - progress));
             ViewGroup.LayoutParams params = button.labelClip.getLayoutParams();
             if (params != null && params.height != height) {
                 params.height = height;
@@ -1396,6 +1397,7 @@ public class NativeNavigationPlugin extends Plugin {
         }
 
         if (labelVisible) {
+            int labelRowHeight = tabLabelRowHeightPx;
             TextView label = new TextView(getContext());
             label.setText(item.title);
             label.setTextColor(itemColor);
@@ -1412,12 +1414,12 @@ public class NativeNavigationPlugin extends Plugin {
                 FrameLayout labelClip = new FrameLayout(getContext());
                 labelClip.addView(
                     label,
-                    new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(TAB_LABEL_HEIGHT_DP), Gravity.TOP)
+                    new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, labelRowHeight, Gravity.TOP)
                 );
-                content.addView(labelClip, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(TAB_LABEL_HEIGHT_DP)));
+                content.addView(labelClip, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, labelRowHeight));
                 button.labelClip = labelClip;
             } else {
-                content.addView(label, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(TAB_LABEL_HEIGHT_DP)));
+                content.addView(label, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, labelRowHeight));
             }
         }
 
@@ -1461,14 +1463,13 @@ public class NativeNavigationPlugin extends Plugin {
     }
 
     private int indicatorContentHeight(boolean labelVisible, boolean iconVisible) {
-        int height = 0;
-        if (iconVisible) {
-            height += dp(24);
-        }
-        if (labelVisible) {
-            height += dp(TAB_LABEL_HEIGHT_DP) + (iconVisible ? dp(TAB_ICON_LABEL_GAP_DP) : 0);
-        }
-        return height;
+        return TabbarLabelSupport.indicatorContentHeightPx(
+            tabLabelRowHeightPx,
+            dp(24),
+            dp(TAB_ICON_LABEL_GAP_DP),
+            labelVisible,
+            iconVisible
+        );
     }
 
     /** Tab item that reports how wide it wants to be, so the tabbar can size slots to their content. */
@@ -1804,6 +1805,7 @@ public class NativeNavigationPlugin extends Plugin {
         private TabbarStyle style = TabbarStyle.defaults(Color.rgb(0, 122, 255));
         private int backgroundColor = DEFAULT_TABBAR_BACKGROUND_COLOR;
         private int centerIndex = -1;
+        private int labelExtraHeightPx = 0;
         private DragListener dragListener;
         private int selectedIndex = -1;
         private boolean dragEnabled = true;
@@ -2103,12 +2105,17 @@ public class NativeNavigationPlugin extends Plugin {
             canvas.drawRoundRect(indicatorRect, height / 2f, height / 2f, indicatorPaint);
         }
 
-        void setTabbarStyle(TabbarStyle style, int backgroundColor, int centerIndex) {
+        void setTabbarStyle(TabbarStyle style, int backgroundColor, int centerIndex, int labelExtraHeightPx) {
             this.style = style;
             this.backgroundColor = backgroundColor;
             this.centerIndex = centerIndex;
+            this.labelExtraHeightPx = Math.max(0, labelExtraHeightPx);
             requestLayout();
             invalidate();
+        }
+
+        private int curveBarHeightPx() {
+            return dp(style.height) + labelExtraHeightPx;
         }
 
         @Override
@@ -2133,7 +2140,7 @@ public class NativeNavigationPlugin extends Plugin {
                 return;
             }
             if (hasCenterButton()) {
-                int barHeight = dp(style.height);
+                int barHeight = curveBarHeightPx();
                 int barTop = dp(style.barTop());
                 int centerGap = Math.min(dp(style.centerButtonDiameter + 4), Math.round(width * 0.34f));
                 int leftWidth = Math.max(0, Math.round(width / 2f - centerGap / 2f));
@@ -2176,7 +2183,7 @@ public class NativeNavigationPlugin extends Plugin {
             }
             if (hasCenterButton()) {
                 int barTop = dp(style.barTop());
-                int barHeight = dp(style.height);
+                int barHeight = curveBarHeightPx();
                 int buttonDiameter = dp(style.centerButtonDiameter);
                 int centerGap = Math.min(dp(style.centerButtonDiameter + 4), Math.round(width * 0.34f));
                 int leftWidth = Math.max(0, Math.round(width / 2f - centerGap / 2f));
@@ -2324,7 +2331,7 @@ public class NativeNavigationPlugin extends Plugin {
                 );
             }
             float barTop = dp(style.barTop());
-            float barHeight = dp(style.height);
+            float barHeight = curveBarHeightPx();
             float cornerRadius = Math.min(dp(style.cornerRadius), barHeight / 2f);
             float centerX = width / 2f;
             float centerRadius = dp(style.centerButtonDiameter) / 2f;
@@ -2650,6 +2657,7 @@ public class NativeNavigationPlugin extends Plugin {
         if (tabbar == null) {
             return;
         }
+        refreshTabLabelRowHeightPx(tabbarLabelVisibilityMode, tabbarIconsVisible);
         int drawColor = resolvedTabbarSurfaceColor();
         if (tabbarBackdrop != null) {
             tabbarBackdrop.setBackgroundColor(drawColor);
@@ -2660,7 +2668,8 @@ public class NativeNavigationPlugin extends Plugin {
         if (tabbarContainer != null) {
             tabbarContainer.setBackgroundColor(Color.TRANSPARENT);
         }
-        tabbar.setTabbarStyle(tabbarStyle, drawColor, centerIndex);
+        int labelExtraHeightPx = tabbarLabelExtraHeightPx();
+        tabbar.setTabbarStyle(tabbarStyle, drawColor, centerIndex, labelExtraHeightPx);
         applyTabbarContainerOutline();
     }
 
@@ -2950,7 +2959,7 @@ public class NativeNavigationPlugin extends Plugin {
         } else {
             bottomMargin = tabbarLayoutVisible ? bottom + dp(tabbarStyle.bottomGap) : bottom;
             float minimize = tabbarStyle.isCurve() ? 0f : tabbarMinimizeProgress;
-            tabbarHeight = dp(tabbarStyle.totalHeight()) - Math.round(dp(TABBAR_MINIMIZE_HEIGHT_REDUCTION_DP) * minimize);
+            tabbarHeight = effectiveTabbarTotalHeightPx() - Math.round(dp(TABBAR_MINIMIZE_HEIGHT_REDUCTION_DP) * minimize);
             int sideInset = Math.round(dp(TABBAR_MINIMIZE_SIDE_INSET_DP) * minimize);
             int availableWidth = Math.max(0, rootWidth - dp(tabbarStyle.horizontalMargin) * 2);
             int maxWidth = tabbarStyle.maxWidth > 0 ? dp(tabbarStyle.maxWidth) : availableWidth;
@@ -3082,14 +3091,14 @@ public class NativeNavigationPlugin extends Plugin {
 
     private float tabbarSlideDistance() {
         if (tabbarContainer == null) {
-            return dp(tabbarStyle.totalHeight() + tabbarStyle.bottomGap);
+            return effectiveTabbarChromeHeightPx();
         }
         ViewGroup.LayoutParams params = tabbarContainer.getLayoutParams();
         int bottomMargin = params instanceof ViewGroup.MarginLayoutParams ? ((ViewGroup.MarginLayoutParams) params).bottomMargin : 0;
         return TabbarChromeSupport.tabbarSlideDistancePx(
             tabbarContainer.getHeight(),
             bottomMargin,
-            dp(tabbarStyle.totalHeight() + tabbarStyle.bottomGap)
+            effectiveTabbarChromeHeightPx()
         );
     }
 
@@ -3369,7 +3378,7 @@ public class NativeNavigationPlugin extends Plugin {
         int right = sidebar && !layoutRtl ? rail : 0;
         int bottom = sidebar
             ? navigationBarInset()
-            : (tabbarVisible ? navigationBarInset() + dp(tabbarStyle.totalHeight()) + dp(tabbarStyle.bottomGap) : 0);
+            : (tabbarVisible ? navigationBarInset() + effectiveTabbarChromeHeightPx() : 0);
         JSObject insets = new JSObject();
         insets.put("top", cssPx(top));
         insets.put("right", cssPx(right));
@@ -3682,6 +3691,46 @@ public class NativeNavigationPlugin extends Plugin {
     private int systemDimension(String name) {
         int id = getContext().getResources().getIdentifier(name, "dimen", "android");
         return id == 0 ? 0 : getContext().getResources().getDimensionPixelSize(id);
+    }
+
+    private void refreshTabLabelRowHeightPx(String labelVisibilityMode, boolean icons) {
+        Resources resources = getContext().getResources();
+        float density = resources.getDisplayMetrics().density;
+        float scaledDensity = resources.getDisplayMetrics().scaledDensity;
+        if ("unlabeled".equals(labelVisibilityMode)) {
+            tabLabelRowHeightPx = TabbarLabelSupport.tabLabelHeightPx(density, scaledDensity);
+            return;
+        }
+        String[] titles = new String[tabItems.size()];
+        for (int index = 0; index < tabItems.size(); index++) {
+            titles[index] = tabItems.get(index).title;
+        }
+        tabLabelRowHeightPx = TabbarLabelSupport.maxTabLabelHeightPx(titles, density, scaledDensity);
+    }
+
+    private int tabbarLabelExtraHeightPx() {
+        if ("unlabeled".equals(tabbarLabelVisibilityMode)) {
+            return 0;
+        }
+        boolean labelVisible = true;
+        boolean iconVisible = tabbarIconsVisible && tabItems.stream().anyMatch((item) -> item.icon != null || item.selectedIcon != null);
+        int required = TabbarLabelSupport.tabSlotContentHeightPx(
+            dp(TAB_CONTENT_PADDING_DP),
+            dp(24),
+            dp(TAB_ICON_LABEL_GAP_DP),
+            tabLabelRowHeightPx,
+            labelVisible,
+            iconVisible
+        );
+        return TabbarLabelSupport.tabbarExtraHeightForContentPx(dp(tabbarStyle.height), required);
+    }
+
+    private int effectiveTabbarTotalHeightPx() {
+        return dp(tabbarStyle.totalHeight()) + tabbarLabelExtraHeightPx();
+    }
+
+    private int effectiveTabbarChromeHeightPx() {
+        return effectiveTabbarTotalHeightPx() + dp(tabbarStyle.bottomGap);
     }
 
     private int dp(int value) {
