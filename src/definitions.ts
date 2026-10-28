@@ -345,6 +345,12 @@ export interface NativeNavigationBarButton {
   title?: string;
 
   /**
+   * Screen reader label. Defaults to `title`, then `id`. Set it for icon-only
+   * buttons, including the Android leading navigation slot.
+   */
+  accessibilityLabel?: string;
+
+  /**
    * Native icon descriptor.
    */
   icon?: NativeNavigationIcon;

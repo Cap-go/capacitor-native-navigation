@@ -292,6 +292,7 @@ public class NativeNavigationPlugin extends Plugin {
                     nativeToolbar.setNavigationIcon(null);
                     nativeToolbar.setNavigationOnClickListener(null);
                     nativeToolbar.setNavigationContentDescription(null);
+                    clearLeadingIconCache();
                 }
                 addToolbarItems(nativeToolbar, leftItems, "left");
             }
@@ -861,7 +862,7 @@ public class NativeNavigationPlugin extends Plugin {
                 continue;
             }
             JSONObject descriptor = rawItem.optJSONObject("icon");
-            if (descriptor != null && leadingIconFrom(descriptor, rtl) != null) {
+            if (descriptor != null && resolveLeadingIcon(descriptor, rtl) != null) {
                 return index;
             }
         }
@@ -892,10 +893,7 @@ public class NativeNavigationPlugin extends Plugin {
         String title = rawItem.optString("title", "");
         JSONObject descriptor = rawItem.optJSONObject("icon");
         boolean rtl = nativeToolbar.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
-        String key = String.valueOf(descriptor) + "|" + rtl;
-        Drawable icon = key.equals(leadingIconKey) ? leadingIcon : leadingIconFrom(descriptor, rtl);
-        leadingIconKey = key;
-        leadingIcon = icon;
+        Drawable icon = resolveLeadingIcon(descriptor, rtl);
         if (nativeToolbar.getNavigationIcon() != icon) {
             nativeToolbar.setNavigationIcon(icon);
         }
@@ -916,6 +914,31 @@ public class NativeNavigationPlugin extends Plugin {
                 }
                 : null
         );
+    }
+
+    private void clearLeadingIconCache() {
+        leadingIconKey = null;
+        leadingIcon = null;
+    }
+
+    private String leadingIconCacheKey(JSONObject descriptor, boolean rtl) {
+        return String.valueOf(descriptor) + "|" + rtl;
+    }
+
+    private Drawable resolveLeadingIcon(JSONObject descriptor, boolean rtl) {
+        if (descriptor == null) {
+            return null;
+        }
+        String key = leadingIconCacheKey(descriptor, rtl);
+        if (key.equals(leadingIconKey) && leadingIcon != null) {
+            return leadingIcon;
+        }
+        Drawable icon = leadingIconFrom(descriptor, rtl);
+        if (icon != null) {
+            leadingIconKey = key;
+            leadingIcon = icon;
+        }
+        return icon;
     }
 
     private Drawable leadingIconFrom(JSONObject descriptor, boolean rtl) {
