@@ -51,6 +51,20 @@ launch_app() {
   adb shell am start -W -n "${ACTIVITY}" >/dev/null 2>&1 || adb shell am start -n "${ACTIVITY}"
 }
 
+clear_logcat() {
+  local attempt=0
+  local max_attempts=5
+  while [ "${attempt}" -lt "${max_attempts}" ]; do
+    if adb logcat -c >/dev/null 2>&1; then
+      return 0
+    fi
+    attempt=$((attempt + 1))
+    sleep 1
+  done
+  echo "Failed to clear logcat after ${max_attempts} attempts" >&2
+  return 1
+}
+
 screenshot_ready_in_logcat() {
   adb logcat -d 2>/dev/null | tr -d '\r' | grep -q 'NATIVE_NAV_SCREENSHOT_READY'
 }
@@ -85,7 +99,7 @@ adb shell wm density 420 >/dev/null 2>&1 || true
 dismiss_blocking_dialogs
 adb uninstall "${PACKAGE}" >/dev/null 2>&1 || true
 adb install -r "${APK_PATH}"
-adb logcat -c >/dev/null 2>&1 || true
+clear_logcat
 launch_app
 sleep 12
 wait_for_screenshot_ready_log

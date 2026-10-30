@@ -14,7 +14,7 @@ on:
       - '.github/workflows/android-navbar-left-items-screenshot.yml'
       - '.github/scripts/capture-navbar-left-items-screenshot.sh'
       - '.github/scripts/capture-navbar-left-items-screenshots-in-ci.sh'
-      - 'docs/screenshots/pr-98/**'
+      - 'docs/screenshots/navbar-left-items/**'
 
 permissions:
   contents: read
@@ -27,6 +27,7 @@ jobs:
       - name: Check out
         uses: actions/checkout@v7
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
       - name: Setup Node.js
@@ -85,6 +86,7 @@ jobs:
       - name: Check out
         uses: actions/checkout@v7
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - name: Download screenshot APKs
         uses: actions/download-artifact@v7
@@ -116,5 +118,5 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: navbar-left-items-screenshots
-          path: docs/screenshots/pr-98/*.png
+          path: docs/screenshots/navbar-left-items/*.png
           if-no-files-found: error
