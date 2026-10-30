@@ -90,6 +90,7 @@ launch_app
 sleep 12
 wait_for_screenshot_ready_log
 sleep 2
+dismiss_blocking_dialogs
 wake_display
 adb exec-out screencap -p > "${WORK_PNG}"
 test -s "${WORK_PNG}"
