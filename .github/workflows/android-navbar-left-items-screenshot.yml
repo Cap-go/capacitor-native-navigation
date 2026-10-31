@@ -53,9 +53,20 @@ jobs:
           build_apk() {
             local plugin_source="$1"
             local apk_out="$2"
+            local root_plugin_source="android/src/main/java/app/capgo/nativenavigation/NativeNavigationPlugin.java"
+            local installed_plugin_source
             if [ "${plugin_source}" != "HEAD" ]; then
-              cp "${plugin_source}" android/src/main/java/app/capgo/nativenavigation/NativeNavigationPlugin.java
+              cp "${plugin_source}" "${root_plugin_source}"
+            else
+              plugin_source="${root_plugin_source}"
             fi
+            installed_plugin_source="$(find example-app/node_modules -type f -path '*/@capgo/capacitor-native-navigation/android/src/main/java/app/capgo/nativenavigation/NativeNavigationPlugin.java' -print -quit)"
+            test -n "${installed_plugin_source}"
+            if ! cmp -s "${plugin_source}" "${installed_plugin_source}"; then
+              cp "${plugin_source}" "${installed_plugin_source}"
+            fi
+            test "$(sha256sum "${plugin_source}" | cut -d' ' -f1)" = \
+              "$(sha256sum "${installed_plugin_source}" | cut -d' ' -f1)"
             bun run build
             cd example-app
             VITE_SCREENSHOT_MODE=navbar-left-items bun run build
