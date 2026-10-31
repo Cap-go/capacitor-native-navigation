@@ -100,7 +100,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - name: Download screenshot APKs
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: navbar-left-items-apks
           path: screenshot-apks
