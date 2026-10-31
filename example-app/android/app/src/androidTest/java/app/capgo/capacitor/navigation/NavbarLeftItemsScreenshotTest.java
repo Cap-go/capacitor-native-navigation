@@ -2,6 +2,7 @@ package app.capgo.capacitor.navigation;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeTrue;
 
 import android.graphics.Bitmap;
 import androidx.test.ext.junit.rules.ActivityScenarioRule;
@@ -28,9 +29,12 @@ public class NavbarLeftItemsScreenshotTest {
 
     @Test
     public void captureNavbarLeftAndRightItems() throws Exception {
+        assumeTrue(BuildConfig.SCREENSHOT_MODE);
         UiDevice device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
         UiObject2 readyFlag = device.wait(Until.findObject(By.text("screenshot-ready")), READY_TIMEOUT_MS);
         assertNotNull(readyFlag);
+        assertNotNull(device.findObject(By.text("Menu")));
+        assertNotNull(device.findObject(By.text("Add")));
         Thread.sleep(2_000);
 
         Bitmap bitmap = InstrumentationRegistry.getInstrumentation().getUiAutomation().takeScreenshot();
