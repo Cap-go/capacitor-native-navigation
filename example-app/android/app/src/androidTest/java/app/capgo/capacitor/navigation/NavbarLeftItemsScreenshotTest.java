@@ -33,8 +33,8 @@ public class NavbarLeftItemsScreenshotTest {
         UiDevice device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
         UiObject2 readyFlag = device.wait(Until.findObject(By.text("screenshot-ready")), READY_TIMEOUT_MS);
         assertNotNull(readyFlag);
-        assertNotNull(device.findObject(By.text("Menu")));
-        assertNotNull(device.findObject(By.text("Add")));
+        assertNotNull(device.wait(Until.findObject(By.desc("Menu")), READY_TIMEOUT_MS));
+        assertNotNull(device.wait(Until.findObject(By.desc("Add")), READY_TIMEOUT_MS));
         Thread.sleep(2_000);
 
         Bitmap bitmap = InstrumentationRegistry.getInstrumentation().getUiAutomation().takeScreenshot();
