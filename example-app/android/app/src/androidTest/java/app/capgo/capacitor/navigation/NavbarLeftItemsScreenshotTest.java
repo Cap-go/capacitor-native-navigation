@@ -29,7 +29,7 @@ public class NavbarLeftItemsScreenshotTest {
 
     @Test
     public void captureNavbarLeftAndRightItems() throws Exception {
-        assumeTrue(BuildConfig.SCREENSHOT_MODE);
+        assumeTrue(BuildConfig.SCREENSHOT_MODE && "navbar-left-items".equals(BuildConfig.SCREENSHOT_PRESET));
         UiDevice device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
         UiObject2 readyFlag = device.wait(Until.findObject(By.text("screenshot-ready")), READY_TIMEOUT_MS);
         assertNotNull(readyFlag);
