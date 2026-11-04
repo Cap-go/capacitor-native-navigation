@@ -358,6 +358,12 @@ const applyScreenshotMode = () => {
     stack = ['home', 'settings'];
     tabbarDemo.placement = 'bottom';
     tabbarDemo.alignment = 'center';
+  } else if (screenshotPreset === 'navbar-left-items') {
+    route = 'home';
+    activeTab = 'home';
+    stack = ['home'];
+    tabbarDemo.placement = 'bottom';
+    tabbarDemo.alignment = 'center';
   } else {
     route = 'home';
     activeTab = 'home';
@@ -859,6 +865,25 @@ const navbarDemoOptions = (resetScrollCollapsed) => {
 };
 
 const updateNavbar = async (resetScrollCollapsed = false) => {
+  if (screenshotPreset === 'navbar-left-items') {
+    const palette = chromePalette();
+    await NativeNavigation.setNavbar({
+      hidden: false,
+      title: 'Home',
+      large: false,
+      transparent: true,
+      backButton: { visible: false },
+      leftItems: [{ id: 'menu', title: 'Menu', icon: { svg: icons.home } }],
+      rightItems: [{ id: 'add', title: 'Add', icon: { svg: icons.compose } }],
+      colors: {
+        tint: palette.tint,
+        inactiveTint: palette.inactiveTint,
+        background: palette.background,
+        foreground: palette.foreground,
+      },
+    });
+    return;
+  }
   if (screenshotPreset === 'duo-dock') {
     const palette = chromePalette();
     await NativeNavigation.setNavbar({
