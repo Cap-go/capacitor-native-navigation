@@ -24,6 +24,17 @@ Native navbar, tab bar, safe-area handling, and WebView snapshot transitions for
 
 **iOS 27 and iPhone Duo.** On iPhone Duo, iOS moves the status bar and the system tab bar into one vertical rail on the folded outer display and on the open display in landscape. Open portrait keeps the horizontal bars. Navbar icon buttons join that rail, and the title stays horizontal. A back or close icon sits at the top. Search can be a detached button, prominent actions stay pinned, and buttons that share a `group` collapse into one control that expands. The curved center bar stays on the bottom. `configure({ verticalBarBehavior: 'disabled' })` keeps the horizontal bars for a screen that should not use the rail.
 
+## Built and maintained with AI
+
+We build, improve and fix our plugins with heavy use of AI. Capgo the product is mostly AI-optional for you; the AI is our own engineering system, and the speed it gives us is part of what you pay for.
+
+- Most plugin issues get a fix pull request the same day, often within a couple of hours, and are usually resolved in one to two days.
+- Every pull request is reviewed automatically by our AI review system, usually within minutes.
+- Our AI pre-checks tests, code review, conventions and security, then a human validates and merges.
+- In the last 90 days, 95% of plugin issues were resolved.
+
+[Learn more about how we build with AI](https://capgo.app/docs/plugins/ai-engineering/)
+
 ## Demo
 
 | App                                                                                            | Tap flow                                                                                                                                                | SVG icons                                                                                                                                                 | Styling                                                                                                                                                                                                        |
