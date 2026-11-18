@@ -10,7 +10,7 @@ Generate on macOS:
 ```bash
 export GENERATE_NAVBAR_SCROLL_SCREENSHOTS=1
 xcodebuild test -scheme CapgoCapacitorNativeNavigation \
-  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  -destination 'platform=macOS,variant=Mac Catalyst' \
   -only-testing:NativeNavigationPluginTests/NativeNavigationNavbarScrollJumpScreenshotTests
 ```
 

@@ -4,7 +4,12 @@ import UIKit
 
 /// Writes layout comparison PNGs when `GENERATE_NAVBAR_SCROLL_SCREENSHOTS=1` (macOS/iOS simulator only).
 final class NativeNavigationNavbarScrollJumpScreenshotTests: XCTestCase {
-    private let outputDir = "docs/screenshots/ios-navbar-scroll-jump"
+    private var outputDir: String {
+        if let workspace = ProcessInfo.processInfo.environment["GITHUB_WORKSPACE"], !workspace.isEmpty {
+            return workspace + "/docs/screenshots/ios-navbar-scroll-jump"
+        }
+        return "docs/screenshots/ios-navbar-scroll-jump"
+    }
 
     override func tearDown() {
         if ProcessInfo.processInfo.environment["GENERATE_NAVBAR_SCROLL_SCREENSHOTS"] == "1" {
