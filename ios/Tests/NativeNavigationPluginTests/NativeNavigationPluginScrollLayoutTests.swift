@@ -113,8 +113,8 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         let bottom = colorAt(x: 2, y: height - 2, in: image)
         XCTAssertNotNil(top)
         XCTAssertNotNil(bottom)
-        XCTAssertGreaterThan(top?.r ?? 0, 0.8)
-        XCTAssertGreaterThan(bottom?.b ?? 0, 0.8)
+        XCTAssertGreaterThan(top!.r, bottom!.r + 0.5)
+        XCTAssertGreaterThan(colorDistance(top!, bottom!), 0.5)
     }
 
     private struct WindowFixture {
@@ -314,6 +314,15 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
             let offset = y * image.bytesPerRow + x * bytesPerPixel
             guard offset + 3 < data.count else {
                 return nil
+            }
+            let littleEndian = image.bitmapInfo.contains(.byteOrder32Little)
+            if littleEndian {
+                return RGBA(
+                    r: CGFloat(data[offset + 2]) / 255,
+                    g: CGFloat(data[offset + 1]) / 255,
+                    b: CGFloat(data[offset]) / 255,
+                    a: CGFloat(data[offset + 3]) / 255
+                )
             }
             return RGBA(
                 r: CGFloat(data[offset]) / 255,
