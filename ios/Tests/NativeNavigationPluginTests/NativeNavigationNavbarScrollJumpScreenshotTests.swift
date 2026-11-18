@@ -91,12 +91,20 @@ final class NativeNavigationNavbarScrollJumpScreenshotTests: XCTestCase {
         host.addSubview(guide)
         host.addSubview(container)
         host.addSubview(title)
-        host.layoutIfNeeded()
+
+        let window = UIWindow(frame: canvas)
+        let controller = UIViewController()
+        controller.view.addSubview(host)
+        host.frame = canvas
+        host.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        window.rootViewController = controller
+        window.isHidden = false
+        window.layoutIfNeeded()
 
         let format = UIGraphicsImageRendererFormat()
         format.scale = 2
-        return UIGraphicsImageRenderer(bounds: canvas, format: format).image { _ in
-            host.drawHierarchy(in: canvas, afterScreenUpdates: true)
+        return UIGraphicsImageRenderer(bounds: canvas, format: format).image { context in
+            host.layer.render(in: context.cgContext)
         }
     }
 
