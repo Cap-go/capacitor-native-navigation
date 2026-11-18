@@ -3537,6 +3537,17 @@ extension NativeNavigationPlugin {
         _ = ensureNavBar()
         let item = UINavigationItem(title: "Scroll layout")
         navBar?.setItems([item], animated: false)
+        if #available(iOS 13.0, *) {
+            let appearance = UINavigationBarAppearance()
+            appearance.configureWithOpaqueBackground()
+            appearance.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.88)
+            appearance.titleTextAttributes = [.foregroundColor: UIColor.white]
+            navBar?.standardAppearance = appearance
+            navBar?.scrollEdgeAppearance = appearance
+        } else {
+            navBar?.barTintColor = UIColor.systemBlue.withAlphaComponent(0.88)
+            navBar?.isTranslucent = false
+        }
         layoutChrome()
     }
 
