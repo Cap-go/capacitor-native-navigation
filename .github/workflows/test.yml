@@ -76,10 +76,8 @@ jobs:
         run: bun run check:wiring
       - name: Check Cap 9 deprecated APIs
         run: bun run check:cap9-deprecated
-      - name: Build
+      - name: Build and test iOS
         id: build_code
-        run: bun run verify:ios
-      - name: Run iOS unit tests
         env:
           NAVBAR_SCROLL_SCREENSHOT_OUTPUT_DIR: ${{ github.event_name == 'pull_request' && format('{0}/ios-navbar-scroll-jump', runner.temp) || '' }}
         run: |
