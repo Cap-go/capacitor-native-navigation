@@ -25,4 +25,4 @@ To prove the guard, temporarily replace `nativeNavigationSetViewFrame` calls in 
 
 ## CI artifacts
 
-On pull requests, CI sets `NAVBAR_SCROLL_SCREENSHOT_OUTPUT_DIR` to `$RUNNER_TEMP/ios-navbar-scroll-jump`, writes `ios-navbar-scroll-jump-collapsed.png` and `ios-navbar-scroll-jump-revealed.png`, and uploads that folder. PNGs are not committed to the repository.
+On pull requests, CI sets `TEST_RUNNER_NAVBAR_SCROLL_SCREENSHOT_OUTPUT_DIR` to `$RUNNER_TEMP/ios-navbar-scroll-jump`, writes `ios-navbar-scroll-jump-collapsed.png` and `ios-navbar-scroll-jump-revealed.png`, and uploads that folder. PNGs are not committed to the repository.

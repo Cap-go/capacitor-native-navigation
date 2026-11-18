@@ -79,7 +79,7 @@ jobs:
       - name: Build and test iOS
         id: build_code
         env:
-          NAVBAR_SCROLL_SCREENSHOT_OUTPUT_DIR: ${{ github.event_name == 'pull_request' && format('{0}/ios-navbar-scroll-jump', runner.temp) || '' }}
+          TEST_RUNNER_NAVBAR_SCROLL_SCREENSHOT_OUTPUT_DIR: ${{ github.event_name == 'pull_request' && format('{0}/ios-navbar-scroll-jump', runner.temp) || '' }}
         run: |
           set -euo pipefail
           xcrun simctl boot "iPhone 17" 2>/dev/null || true

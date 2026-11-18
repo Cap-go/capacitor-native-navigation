@@ -75,7 +75,9 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         label: String,
         in rootView: UIView
     ) throws {
-        guard let outputDir = ProcessInfo.processInfo.environment["NAVBAR_SCROLL_SCREENSHOT_OUTPUT_DIR"],
+        let env = ProcessInfo.processInfo.environment
+        guard let outputDir = env["NAVBAR_SCROLL_SCREENSHOT_OUTPUT_DIR"]
+            ?? env["TEST_RUNNER_NAVBAR_SCROLL_SCREENSHOT_OUTPUT_DIR"],
               !outputDir.isEmpty else {
             return
         }
