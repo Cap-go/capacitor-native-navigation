@@ -1,19 +1,28 @@
 # iOS navbar scroll collapse layout (issue #104)
 
-Before/after PNGs compare navbar container placement while a scroll-collapse `transform` is active:
+Regression coverage lives in `NativeNavigationPluginScrollLayoutTests`:
 
-- **Before:** `container.frame = ...` (UIKit shifts `center`, ~44pt jump)
-- **After:** `nativeNavigationSetViewFrame` (`bounds` + `center`)
+- Boots `NativeNavigationPlugin` on a real root view, calls `setNavbarScrollCollapsed` and `layoutChrome()`, and asserts `navContainer.center` stays on the intended layout rect while the collapse `transform` is active.
+- Reassigning `container.frame` under that transform (the pre-fix bug) fails those center assertions.
 
-Generate on macOS:
+## Local commands
+
+Build only (same as `verify:ios`):
+
+```bash
+xcodebuild -scheme CapgoCapacitorNativeNavigation -destination generic/platform=iOS
+```
+
+Run all plugin unit tests on the simulator:
 
 ```bash
 xcodebuild test -scheme CapgoCapacitorNativeNavigation \
   -destination 'platform=iOS Simulator,name=iPhone 17' \
-  'OTHER_SWIFT_FLAGS=-D GENERATE_NAVBAR_SCROLL_SCREENSHOTS' \
-  -only-testing:NativeNavigationPluginTests/NativeNavigationNavbarScrollJumpScreenshotTests
+  -only-testing:NativeNavigationPluginTests
 ```
 
-CI forwards `GITHUB_WORKSPACE` and `NAVBAR_SCROLL_SCREENSHOT_OUTPUT_DIR` so PNGs land in this directory on the runner. Tests also attach PNGs to the XCTest result bundle.
+To prove the guard, temporarily replace `nativeNavigationSetViewFrame` calls in `layoutChrome()` with `container.frame = ...` and re-run `NativeNavigationPluginScrollLayoutTests/testNavbarScrollCollapseLayoutThroughPlugin`.
 
-Output: `ios-navbar-scroll-jump-before.png`, `ios-navbar-scroll-jump-after.png`.
+## CI artifacts
+
+On pull requests, CI sets `NAVBAR_SCROLL_SCREENSHOT_OUTPUT_DIR` to `$RUNNER_TEMP/ios-navbar-scroll-jump`, writes `ios-navbar-scroll-jump-collapsed.png` and `ios-navbar-scroll-jump-revealed.png`, and uploads that folder. PNGs are not committed to the repository.

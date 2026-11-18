@@ -79,26 +79,22 @@ jobs:
       - name: Build
         id: build_code
         run: bun run verify:ios
-      - name: Navbar scroll jump screenshots
-        if: github.event_name == 'pull_request'
-        continue-on-error: true
+      - name: Run iOS unit tests
         env:
-          GITHUB_WORKSPACE: ${{ github.workspace }}
-          NAVBAR_SCROLL_SCREENSHOT_OUTPUT_DIR: ${{ github.workspace }}/docs/screenshots/ios-navbar-scroll-jump
+          NAVBAR_SCROLL_SCREENSHOT_OUTPUT_DIR: ${{ github.event_name == 'pull_request' && format('{0}/ios-navbar-scroll-jump', runner.temp) || '' }}
         run: |
           set -euo pipefail
           xcodebuild test \
             -scheme CapgoCapacitorNativeNavigation \
             -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.2' \
-            'OTHER_SWIFT_FLAGS=-D GENERATE_NAVBAR_SCROLL_SCREENSHOTS' \
-            -only-testing:NativeNavigationPluginTests/NativeNavigationNavbarScrollJumpScreenshotTests
+            -only-testing:NativeNavigationPluginTests
       - name: Upload navbar scroll jump screenshots
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: ios-navbar-scroll-jump
-          path: docs/screenshots/ios-navbar-scroll-jump/*.png
-          if-no-files-found: warn
+          path: ${{ runner.temp }}/ios-navbar-scroll-jump/*.png
+          if-no-files-found: error
       - name: Verify packed package in example app (iOS)
         shell: bash
         run: bash ./.github/scripts/verify-packed-example.sh ios

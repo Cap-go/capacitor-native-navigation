@@ -110,6 +110,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var navbarScrollBehavior: NativeNavigationNavbarScrollBehavior = .none
     private var navbarScrollThreshold: CGFloat = 8
     private var navbarScrollCollapsed = false
+    internal var testing_layoutRootView: UIView?
+    internal var testing_safeAreaInsetsOverride: UIEdgeInsets?
     private var tabIds: [String] = []
     private var tabTitles: [String] = []
     private var tabDisplayTitles: [String?] = []
@@ -1120,6 +1122,10 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         UIAccessibility.isReduceTransparencyEnabled
     }
 
+    private var pluginRootView: UIView? {
+        testing_layoutRootView ?? bridge?.viewController?.view
+    }
+
     private func ensureNavBar() -> UINavigationBar {
         if let navBar = navBar {
             return navBar
@@ -1147,7 +1153,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         bar.autoresizingMask = [.flexibleWidth, .flexibleBottomMargin]
         container.addSubview(bar)
 
-        bridge?.viewController?.view.addSubview(container)
+        pluginRootView?.addSubview(container)
         self.navContainer = container
         self.navBar = bar
         return bar
@@ -2606,11 +2612,11 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
 
     private func layoutChrome() {
-        guard let rootView = bridge?.viewController?.view else {
+        guard let rootView = pluginRootView else {
             return
         }
         rootView.layoutIfNeeded()
-        let safeInsets = rootView.safeAreaInsets
+        let safeInsets = testing_safeAreaInsetsOverride ?? rootView.safeAreaInsets
         let width = rootView.bounds.width
         let height = rootView.bounds.height
 
@@ -3333,8 +3339,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     #endif
 
     private func currentInsets() -> [String: Any] {
-        let rootView = bridge?.viewController?.view
-        let safeInsets = rootView?.safeAreaInsets ?? .zero
+        let rootView = pluginRootView
+        let safeInsets = testing_safeAreaInsetsOverride ?? rootView?.safeAreaInsets ?? .zero
         let rootWidth = rootView?.bounds.width ?? 0
         // In the rail the title is not a top bar. Search and segment rows still
         // occupy the top of the WebView.
@@ -3499,6 +3505,56 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             return "{}"
         }
         return json
+    }
+}
+
+// MARK: - Scroll layout integration test hooks
+
+extension NativeNavigationPlugin {
+    internal var testing_navContainer: UIView? { navContainer }
+
+    internal func testing_prepareNavbarScrollLayoutHarness(
+        rootView: UIView,
+        width: CGFloat = 390,
+        safeAreaTop: CGFloat = 59
+    ) {
+        rootView.frame = CGRect(x: 0, y: 0, width: width, height: 800)
+        testing_layoutRootView = rootView
+        testing_safeAreaInsetsOverride = UIEdgeInsets(top: safeAreaTop, left: 0, bottom: 0, right: 0)
+        isEnabled = true
+        navbarVisible = true
+        navbarUsesSystemRail = false
+        navbarHeight = 44
+        navbarScrollCollapsed = false
+        navbarScrollBehavior = .both
+        navContainer?.removeFromSuperview()
+        navContainer = nil
+        navBar = nil
+        navBlurView = nil
+        _ = ensureNavBar()
+        layoutChrome()
+    }
+
+    internal func testing_setNavbarScrollCollapsedForLayout(_ collapsed: Bool) {
+        setNavbarScrollCollapsed(collapsed, animated: false)
+    }
+
+    internal func testing_layoutChrome() {
+        layoutChrome()
+    }
+
+    internal func testing_navbarScrollHideDistance() -> CGFloat {
+        navbarHeight + navbarSearchHeight + navbarSegmentsHeight
+    }
+
+    internal func testing_expectedNavContainerLayoutFrame(width: CGFloat = 390, safeAreaTop: CGFloat = 59) -> CGRect {
+        let visibleNavbarHeight = navbarLarge && navbarLargeCollapsed ? 44 : navbarHeight
+        return CGRect(
+            x: 0,
+            y: 0,
+            width: width,
+            height: safeAreaTop + visibleNavbarHeight + navbarSearchHeight + navbarSegmentsHeight
+        )
     }
 }
 // swiftlint:enable type_body_length
