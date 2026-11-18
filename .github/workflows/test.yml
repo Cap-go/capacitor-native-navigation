@@ -84,9 +84,10 @@ jobs:
           NAVBAR_SCROLL_SCREENSHOT_OUTPUT_DIR: ${{ github.event_name == 'pull_request' && format('{0}/ios-navbar-scroll-jump', runner.temp) || '' }}
         run: |
           set -euo pipefail
+          xcrun simctl boot "iPhone 17" 2>/dev/null || true
           xcodebuild test \
             -scheme CapgoCapacitorNativeNavigation \
-            -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.2' \
+            -destination 'platform=iOS Simulator,name=iPhone 17' \
             -only-testing:NativeNavigationPluginTests
       - name: Upload navbar scroll jump screenshots
         if: github.event_name == 'pull_request'
