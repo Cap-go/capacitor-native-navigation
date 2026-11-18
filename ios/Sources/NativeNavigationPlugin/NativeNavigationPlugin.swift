@@ -2653,7 +2653,10 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 if isEnabled && navbarVisible && accessoryHeight > 0 {
                     let barWidth = max(0, width - safeInsets.left - safeInsets.right)
                     container.isHidden = false
-                    container.frame = CGRect(x: safeInsets.left, y: safeInsets.top, width: barWidth, height: accessoryHeight)
+                    nativeNavigationSetViewFrame(
+                        container,
+                        frame: CGRect(x: safeInsets.left, y: safeInsets.top, width: barWidth, height: accessoryHeight)
+                    )
                     navSearchBar?.frame = CGRect(x: 0, y: 0, width: barWidth, height: searchHeight)
                     navSearchBar?.isHidden = searchHeight == 0
                     navSegmentsView?.frame = CGRect(x: 0, y: searchHeight, width: barWidth, height: segmentsHeight)
@@ -2664,11 +2667,14 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             } else {
                 let topInset = navbarTopInset(safeInsets)
                 let visibleNavbarHeight = navbarLarge && navbarLargeCollapsed ? 44 : navbarHeight
-                container.frame = CGRect(
-                    x: 0,
-                    y: 0,
-                    width: width,
-                    height: topInset + visibleNavbarHeight + searchHeight + segmentsHeight
+                nativeNavigationSetViewFrame(
+                    container,
+                    frame: CGRect(
+                        x: 0,
+                        y: 0,
+                        width: width,
+                        height: topInset + visibleNavbarHeight + searchHeight + segmentsHeight
+                    )
                 )
                 navBlurView?.frame = container.bounds
                 navBlurView?.isHidden = false
@@ -3466,6 +3472,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         let id = top ? "cap-native-navigation-edge-blur-top" : "cap-native-navigation-edge-blur"
         let edge = top ? "top" : "bottom"
         let direction = top ? "to bottom" : "to top"
+        let heightTransition = nativeNavigationEdgeBlurHeightTransitionScript(top: top)
         return """
         (function(height){
           var id = '\(id)';
@@ -3485,6 +3492,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             });
           }
           if (root.parentNode !== document.body && document.body) { document.body.appendChild(root); }
+          \(heightTransition)
           root.style.height = height + 'px';
         })(\(height));
         """

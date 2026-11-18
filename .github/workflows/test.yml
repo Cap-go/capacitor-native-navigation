@@ -79,6 +79,24 @@ jobs:
       - name: Build
         id: build_code
         run: bun run verify:ios
+      - name: Navbar scroll jump screenshots
+        if: github.event_name == 'pull_request'
+        env:
+          GENERATE_NAVBAR_SCROLL_SCREENSHOTS: "1"
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          xcodebuild test \
+            -scheme CapgoCapacitorNativeNavigation \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -only-testing:NativeNavigationPluginTests/NativeNavigationNavbarScrollJumpScreenshotTests
+      - name: Upload navbar scroll jump screenshots
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-navbar-scroll-jump
+          path: docs/screenshots/ios-navbar-scroll-jump/*.png
+          if-no-files-found: ignore
       - name: Verify packed package in example app (iOS)
         shell: bash
         run: bash ./.github/scripts/verify-packed-example.sh ios
