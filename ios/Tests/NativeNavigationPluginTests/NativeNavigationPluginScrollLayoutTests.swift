@@ -38,7 +38,8 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         plugin.testing_setNavbarScrollCollapsedForLayout(true)
         plugin.testing_layoutChrome()
         XCTAssertEqual(container.bounds.size, layoutFrame.size)
-        XCTAssertEqual(container.center, expectedCenter, accuracy: 0.01)
+        XCTAssertEqual(container.center.x, expectedCenter.x, accuracy: 0.01)
+        XCTAssertEqual(container.center.y, expectedCenter.y, accuracy: 0.01)
         XCTAssertEqual(container.transform.ty, -hideDistance, accuracy: 0.01)
 
         try writeLayoutScreenshotIfRequested(container: container, label: "collapsed", in: rootView)
@@ -46,7 +47,8 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         plugin.testing_setNavbarScrollCollapsedForLayout(false)
         plugin.testing_layoutChrome()
         XCTAssertEqual(container.transform, .identity)
-        XCTAssertEqual(container.center, expectedCenter, accuracy: 0.01)
+        XCTAssertEqual(container.center.x, expectedCenter.x, accuracy: 0.01)
+        XCTAssertEqual(container.center.y, expectedCenter.y, accuracy: 0.01)
 
         try writeLayoutScreenshotIfRequested(container: container, label: "revealed", in: rootView)
     }
@@ -59,7 +61,8 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         let fixed = UIView()
         fixed.transform = CGAffineTransform(translationX: 0, y: -44)
         nativeNavigationSetViewFrame(fixed, frame: layoutFrame)
-        XCTAssertEqual(fixed.center, expectedCenter, accuracy: 0.01)
+        XCTAssertEqual(fixed.center.x, expectedCenter.x, accuracy: 0.01)
+        XCTAssertEqual(fixed.center.y, expectedCenter.y, accuracy: 0.01)
 
         let buggy = UIView()
         buggy.transform = CGAffineTransform(translationX: 0, y: -44)
