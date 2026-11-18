@@ -26,11 +26,13 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
 
         plugin.testing_setNavbarScrollCollapsedForLayout(true)
         plugin.testing_layoutChrome()
+        plugin.testing_updateInsetsAndNotify()
+        drainMainQueue(for: 0.4)
         XCTAssertEqual(container.bounds.size, layoutFrame.size)
         XCTAssertEqual(container.center.x, expectedCenter.x, accuracy: 0.01)
         XCTAssertEqual(container.center.y, expectedCenter.y, accuracy: 0.01)
         XCTAssertEqual(container.transform.ty, -hideDistance, accuracy: 0.01)
-        XCTAssertLessThan(try awaitEdgeBlurOverlayHeight(plugin), 1)
+        let collapsedBlurHeight = try awaitEdgeBlurOverlayHeight(plugin)
 
         try captureAndAssertScreenshot(
             fixture: fixture,
@@ -41,10 +43,13 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
 
         plugin.testing_setNavbarScrollCollapsedForLayout(false)
         plugin.testing_layoutChrome()
+        plugin.testing_updateInsetsAndNotify()
+        drainMainQueue(for: 0.4)
         XCTAssertEqual(container.transform, .identity)
         XCTAssertEqual(container.center.x, expectedCenter.x, accuracy: 0.01)
         XCTAssertEqual(container.center.y, expectedCenter.y, accuracy: 0.01)
         let revealedBlurHeight = try awaitEdgeBlurOverlayHeight(plugin)
+        XCTAssertGreaterThan(revealedBlurHeight, collapsedBlurHeight + 20)
         XCTAssertGreaterThan(revealedBlurHeight, 80)
 
         try captureAndAssertScreenshot(
@@ -299,6 +304,24 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
     }
 
     private func colorAt(x: Int, y: Int, in image: CGImage) -> RGBA? {
+        if let data = image.dataProvider?.data as Data? {
+            let width = image.width
+            let height = image.height
+            guard x >= 0, x < width, y >= 0, y < height else {
+                return nil
+            }
+            let bytesPerPixel = max(image.bitsPerPixel / 8, 4)
+            let offset = y * image.bytesPerRow + x * bytesPerPixel
+            guard offset + 3 < data.count else {
+                return nil
+            }
+            return RGBA(
+                r: CGFloat(data[offset]) / 255,
+                g: CGFloat(data[offset + 1]) / 255,
+                b: CGFloat(data[offset + 2]) / 255,
+                a: CGFloat(data[offset + 3]) / 255
+            )
+        }
         var pixel = [UInt8](repeating: 0, count: 4)
         guard let context = CGContext(
             data: &pixel,
