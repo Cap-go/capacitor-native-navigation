@@ -112,6 +112,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var navbarScrollCollapsed = false
     internal var testing_layoutRootView: UIView?
     internal var testing_safeAreaInsetsOverride: UIEdgeInsets?
+    internal private(set) var testing_lastNotifiedNavbarHeight: CGFloat = 0
+    private weak var testing_navbarEdgeBlurPreviewView: UIView?
     private var tabIds: [String] = []
     private var tabTitles: [String] = []
     private var tabDisplayTitles: [String?] = []
@@ -3405,6 +3407,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private func updateInsetsAndNotify() {
         layoutChrome()
         let insets = currentInsets()
+        testing_lastNotifiedNavbarHeight = insets["navbarHeight"] as? CGFloat ?? 0
         notifyListeners("safeAreaChanged", data: ["insets": insets])
         notifyVerticalBarChange(insets)
         applyTabbarEdgeBlur(tabbarHeight: insets["tabbarHeight"] as? CGFloat ?? 0)
@@ -3532,15 +3535,63 @@ extension NativeNavigationPlugin {
         navBar = nil
         navBlurView = nil
         _ = ensureNavBar()
+        let item = UINavigationItem(title: "Scroll layout")
+        navBar?.setItems([item], animated: false)
         layoutChrome()
     }
 
-    internal func testing_setNavbarScrollCollapsedForLayout(_ collapsed: Bool) {
-        setNavbarScrollCollapsed(collapsed, animated: false)
+    internal func testing_setNavbarScrollCollapsedForLayout(_ collapsed: Bool, animated: Bool = false) {
+        setNavbarScrollCollapsed(collapsed, animated: animated)
     }
 
     internal func testing_layoutChrome() {
         layoutChrome()
+    }
+
+    internal func testing_activeNavbarEdgeBlurHeight() -> CGFloat {
+        let navHeight = currentInsets()["navbarHeight"] as? CGFloat ?? 0
+        let wantsBlur = navbarEdgeBlur ?? usesSystemLiquidGlass
+        let active = isEnabled && wantsBlur && navbarVisible && navHeight > 0
+        let folded = navbarLarge && navbarLargeCollapsed ? navbarHeight - 44 : 0
+        guard active else {
+            return 0
+        }
+        return (navHeight - folded) + 48
+    }
+
+    internal func testing_syncNavbarEdgeBlurPreview(on rootView: UIView) {
+        testing_navbarEdgeBlurPreviewView?.removeFromSuperview()
+        let height = testing_activeNavbarEdgeBlurHeight()
+        guard height > 0 else {
+            return
+        }
+        let preview = UIView(frame: CGRect(x: 0, y: 0, width: rootView.bounds.width, height: height))
+        preview.isUserInteractionEnabled = false
+        preview.backgroundColor = .clear
+        preview.autoresizingMask = [.flexibleWidth, .flexibleBottomMargin]
+        let stops: [CGFloat] = [100, 84, 68, 52, 36, 20]
+        let blurHeight = height
+        for stop in stops {
+            let layerHeight = blurHeight * (stop / 100)
+            let effect = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
+            effect.frame = preview.bounds
+            effect.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            effect.alpha = 0.55
+            let mask = CAGradientLayer()
+            mask.frame = effect.bounds
+            mask.colors = [UIColor.black.cgColor, UIColor.clear.cgColor]
+            mask.startPoint = CGPoint(x: 0.5, y: 0)
+            mask.endPoint = CGPoint(x: 0.5, y: 1)
+            mask.locations = [0, NSNumber(value: Double(layerHeight / max(blurHeight, 1)))]
+            effect.layer.mask = mask
+            preview.addSubview(effect)
+        }
+        if let navContainer {
+            rootView.insertSubview(preview, belowSubview: navContainer)
+        } else {
+            rootView.addSubview(preview)
+        }
+        testing_navbarEdgeBlurPreviewView = preview
     }
 
     internal func testing_navbarScrollHideDistance() -> CGFloat {

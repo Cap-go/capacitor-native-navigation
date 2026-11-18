@@ -4,29 +4,17 @@ import UIKit
 
 final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
     private let canvasWidth: CGFloat = 390
+    private let canvasHeight: CGFloat = 844
     private let safeAreaTop: CGFloat = 59
 
+    private var expectedNavBarBandMaxY: CGFloat {
+        safeAreaTop + 44
+    }
+
     func testNavbarScrollCollapseLayoutThroughPlugin() throws {
-        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: canvasWidth, height: 844))
-        let host = UIViewController()
-        window.rootViewController = host
-        window.isHidden = false
-
-        let rootView = UIView(frame: host.view.bounds)
-        rootView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        host.view.addSubview(rootView)
-
-        let plugin = NativeNavigationPlugin()
-        plugin.testing_prepareNavbarScrollLayoutHarness(
-            rootView: rootView,
-            width: canvasWidth,
-            safeAreaTop: safeAreaTop
-        )
-
-        guard let container = plugin.testing_navContainer else {
-            XCTFail("nav container missing after harness")
-            return
-        }
+        let fixture = try makeWindowFixture()
+        let plugin = fixture.plugin
+        let container = fixture.container
 
         let layoutFrame = plugin.testing_expectedNavContainerLayoutFrame(
             width: canvasWidth,
@@ -42,7 +30,11 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         XCTAssertEqual(container.center.y, expectedCenter.y, accuracy: 0.01)
         XCTAssertEqual(container.transform.ty, -hideDistance, accuracy: 0.01)
 
-        try writeLayoutScreenshotIfRequested(container: container, label: "collapsed", in: rootView)
+        try captureAndAssertScreenshot(
+            fixture: fixture,
+            label: "collapsed",
+            restoreNavbarVisibilityForCapture: true
+        )
 
         plugin.testing_setNavbarScrollCollapsedForLayout(false)
         plugin.testing_layoutChrome()
@@ -50,10 +42,32 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         XCTAssertEqual(container.center.x, expectedCenter.x, accuracy: 0.01)
         XCTAssertEqual(container.center.y, expectedCenter.y, accuracy: 0.01)
 
-        try writeLayoutScreenshotIfRequested(container: container, label: "revealed", in: rootView)
+        try captureAndAssertScreenshot(
+            fixture: fixture,
+            label: "revealed",
+            restoreNavbarVisibilityForCapture: false
+        )
     }
 
-    /// Reverting `layoutChrome` to assign `container.frame` during a collapse transform should fail the center assertions above.
+    func testAnimatedRevealNotifiesInsetsBeforeAnimationEnds() {
+        let fixture = try! makeWindowFixture()
+        let plugin = fixture.plugin
+        let expectedNavHeight = plugin.testing_expectedNavContainerLayoutFrame(
+            width: canvasWidth,
+            safeAreaTop: safeAreaTop
+        ).height
+
+        plugin.testing_setNavbarScrollCollapsedForLayout(true)
+        XCTAssertEqual(plugin.testing_lastNotifiedNavbarHeight, 0, accuracy: 0.01)
+
+        plugin.testing_setNavbarScrollCollapsedForLayout(false, animated: true)
+        XCTAssertGreaterThan(
+            plugin.testing_lastNotifiedNavbarHeight,
+            expectedNavHeight * 0.5,
+            "Reveal must notify full navbar insets immediately, not after 0.22s"
+        )
+    }
+
     func testSetViewFrameRegressionGuard() {
         let layoutFrame = CGRect(x: 0, y: 0, width: canvasWidth, height: safeAreaTop + 44)
         let expectedCenter = CGPoint(x: layoutFrame.midX, y: layoutFrame.midY)
@@ -70,34 +84,77 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         XCTAssertNotEqual(buggy.center.y, expectedCenter.y, accuracy: 0.5)
     }
 
-    private func writeLayoutScreenshotIfRequested(
-        container: UIView,
+    private struct WindowFixture {
+        let window: UIWindow
+        let rootView: UIView
+        let plugin: NativeNavigationPlugin
+        let container: UIView
+    }
+
+    private func makeWindowFixture() throws -> WindowFixture {
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: canvasWidth, height: canvasHeight))
+        window.backgroundColor = UIColor(red: 0.96, green: 0.96, blue: 0.98, alpha: 1)
+
+        let host = UIViewController()
+        host.view.backgroundColor = window.backgroundColor
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+
+        let rootView = UIView(frame: host.view.bounds)
+        rootView.backgroundColor = UIColor(red: 0.92, green: 0.94, blue: 0.98, alpha: 1)
+        rootView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        host.view.addSubview(rootView)
+
+        let webFill = UIView(frame: CGRect(x: 0, y: expectedNavBarBandMaxY, width: canvasWidth, height: canvasHeight - expectedNavBarBandMaxY))
+        webFill.backgroundColor = UIColor(red: 0.86, green: 0.9, blue: 0.97, alpha: 1)
+        webFill.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        rootView.addSubview(webFill)
+
+        let plugin = NativeNavigationPlugin()
+        plugin.testing_prepareNavbarScrollLayoutHarness(
+            rootView: rootView,
+            width: canvasWidth,
+            safeAreaTop: safeAreaTop
+        )
+        plugin.testing_syncNavbarEdgeBlurPreview(on: rootView)
+
+        guard let container = plugin.testing_navContainer else {
+            XCTFail("nav container missing after harness")
+            throw NSError(domain: "NativeNavigationPluginScrollLayoutTests", code: 1)
+        }
+
+        window.layoutIfNeeded()
+        return WindowFixture(window: window, rootView: rootView, plugin: plugin, container: container)
+    }
+
+    private func captureAndAssertScreenshot(
+        fixture: WindowFixture,
         label: String,
-        in rootView: UIView
+        restoreNavbarVisibilityForCapture: Bool
     ) throws {
         let env = ProcessInfo.processInfo.environment
-        guard let outputDir = env["NAVBAR_SCROLL_SCREENSHOT_OUTPUT_DIR"]
-            ?? env["TEST_RUNNER_NAVBAR_SCROLL_SCREENSHOT_OUTPUT_DIR"],
-              !outputDir.isEmpty else {
+        let outputDir = env["NAVBAR_SCROLL_SCREENSHOT_OUTPUT_DIR"]
+            ?? env["TEST_RUNNER_NAVBAR_SCROLL_SCREENSHOT_OUTPUT_DIR"]
+
+        let previousAlpha = fixture.container.alpha
+        if restoreNavbarVisibilityForCapture {
+            fixture.container.alpha = 1
+        }
+        fixture.plugin.testing_syncNavbarEdgeBlurPreview(on: fixture.rootView)
+        fixture.window.layoutIfNeeded()
+
+        let image = try renderWindow(fixture.window)
+        try assertNavbarVisible(in: image, label: label)
+
+        if restoreNavbarVisibilityForCapture {
+            fixture.container.alpha = previousAlpha
+        }
+
+        guard let outputDir, !outputDir.isEmpty else {
             return
         }
 
         try FileManager.default.createDirectory(atPath: outputDir, withIntermediateDirectories: true)
-        let bounds = rootView.bounds
-        rootView.layoutIfNeeded()
-
-        let title = UILabel()
-        title.text = "Plugin scroll layout (\(label))"
-        title.font = .systemFont(ofSize: 13, weight: .semibold)
-        title.frame = CGRect(x: 12, y: bounds.height - 48, width: bounds.width - 24, height: 40)
-
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 2
-        let image = UIGraphicsImageRenderer(bounds: bounds, format: format).image { context in
-            rootView.layer.render(in: context.cgContext)
-            title.layer.render(in: context.cgContext)
-        }
-
         let fileName = "ios-navbar-scroll-jump-\(label).png"
         let url = URL(fileURLWithPath: outputDir).appendingPathComponent(fileName)
         guard let data = image.pngData() else {
@@ -110,5 +167,116 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         attachment.name = fileName
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    private func renderWindow(_ window: UIWindow) throws -> UIImage {
+        let bounds = window.bounds
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 2
+        format.opaque = true
+        return UIGraphicsImageRenderer(bounds: bounds, format: format).image { _ in
+            XCTAssertTrue(
+                window.drawHierarchy(in: bounds, afterScreenUpdates: true),
+                "drawHierarchy failed"
+            )
+        }
+    }
+
+    private func assertNavbarVisible(in image: UIImage, label: String) throws {
+        guard let cgImage = image.cgImage else {
+            XCTFail("Missing CGImage for \(label)")
+            return
+        }
+        let scale = image.scale
+        let bandMaxY = Int(expectedNavBarBandMaxY * scale)
+        let width = cgImage.width
+        let background = averageColor(
+            in: cgImage,
+            rect: CGRect(x: 0, y: bandMaxY + 40, width: width, height: 80)
+        )
+        var navbarSamples = 0
+        var navbarContrastHits = 0
+        let xPositions = [width / 6, width / 2, (width * 5) / 6]
+        for x in xPositions {
+            for y in stride(from: Int(safeAreaTop * scale), through: bandMaxY, by: 8) {
+                guard let pixel = colorAt(x: x, y: y, in: cgImage) else {
+                    continue
+                }
+                navbarSamples += 1
+                if pixel.a > 0.08 && colorDistance(pixel, background) > 0.06 {
+                    navbarContrastHits += 1
+                }
+            }
+        }
+        XCTAssertGreaterThan(navbarSamples, 12, "Navbar sample grid empty for \(label)")
+        XCTAssertGreaterThan(
+            navbarContrastHits,
+            navbarSamples / 4,
+            "Navbar region looks empty or matches page background for \(label)"
+        )
+    }
+
+    private struct RGBA {
+        let r: CGFloat
+        let g: CGFloat
+        let b: CGFloat
+        let a: CGFloat
+    }
+
+    private func colorAt(x: Int, y: Int, in image: CGImage) -> RGBA? {
+        var pixel = [UInt8](repeating: 0, count: 4)
+        guard let context = CGContext(
+            data: &pixel,
+            width: 1,
+            height: 1,
+            bitsPerComponent: 8,
+            bytesPerRow: 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return nil
+        }
+        context.draw(image, in: CGRect(x: -x, y: -y, width: image.width, height: image.height))
+        return RGBA(
+            r: CGFloat(pixel[0]) / 255,
+            g: CGFloat(pixel[1]) / 255,
+            b: CGFloat(pixel[2]) / 255,
+            a: CGFloat(pixel[3]) / 255
+        )
+    }
+
+    private func averageColor(in image: CGImage, rect: CGRect) -> RGBA {
+        let clamped = rect.integral
+        var total = RGBA(r: 0, g: 0, b: 0, a: 0)
+        var count = 0
+        let minX = max(0, Int(clamped.minX))
+        let maxX = min(image.width - 1, Int(clamped.maxX))
+        let minY = max(0, Int(clamped.minY))
+        let maxY = min(image.height - 1, Int(clamped.maxY))
+        for x in stride(from: minX, through: maxX, by: 12) {
+            for y in stride(from: minY, through: maxY, by: 12) {
+                if let sample = colorAt(x: x, y: y, in: image) {
+                    total = RGBA(
+                        r: total.r + sample.r,
+                        g: total.g + sample.g,
+                        b: total.b + sample.b,
+                        a: total.a + sample.a
+                    )
+                    count += 1
+                }
+            }
+        }
+        guard count > 0 else {
+            return RGBA(r: 1, g: 1, b: 1, a: 1)
+        }
+        let divisor = CGFloat(count)
+        return RGBA(r: total.r / divisor, g: total.g / divisor, b: total.b / divisor, a: total.a / divisor)
+    }
+
+    private func colorDistance(_ left: RGBA, _ right: RGBA) -> CGFloat {
+        let dr = left.r - right.r
+        let dg = left.g - right.g
+        let db = left.b - right.b
+        return sqrt(dr * dr + dg * dg + db * db)
     }
 }
