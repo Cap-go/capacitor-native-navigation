@@ -82,6 +82,9 @@ jobs:
       - name: Navbar scroll jump screenshots
         if: github.event_name == 'pull_request'
         continue-on-error: true
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+          NAVBAR_SCROLL_SCREENSHOT_OUTPUT_DIR: ${{ github.workspace }}/docs/screenshots/ios-navbar-scroll-jump
         run: |
           set -euo pipefail
           xcodebuild test \
@@ -95,7 +98,7 @@ jobs:
         with:
           name: ios-navbar-scroll-jump
           path: docs/screenshots/ios-navbar-scroll-jump/*.png
-          if-no-files-found: ignore
+          if-no-files-found: warn
       - name: Verify packed package in example app (iOS)
         shell: bash
         run: bash ./.github/scripts/verify-packed-example.sh ios

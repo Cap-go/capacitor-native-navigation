@@ -5,6 +5,10 @@ import UIKit
 /// Writes layout comparison PNGs when `GENERATE_NAVBAR_SCROLL_SCREENSHOTS=1` (macOS/iOS simulator only).
 final class NativeNavigationNavbarScrollJumpScreenshotTests: XCTestCase {
     private var outputDir: String {
+        if let explicit = ProcessInfo.processInfo.environment["NAVBAR_SCROLL_SCREENSHOT_OUTPUT_DIR"],
+           !explicit.isEmpty {
+            return explicit
+        }
         if let workspace = ProcessInfo.processInfo.environment["GITHUB_WORKSPACE"], !workspace.isEmpty {
             return workspace + "/docs/screenshots/ios-navbar-scroll-jump"
         }
@@ -53,6 +57,16 @@ final class NativeNavigationNavbarScrollJumpScreenshotTests: XCTestCase {
         try FileManager.default.createDirectory(atPath: outputDir, withIntermediateDirectories: true)
         try write(png: before, name: "ios-navbar-scroll-jump-before.png")
         try write(png: after, name: "ios-navbar-scroll-jump-after.png")
+
+        let names = ["ios-navbar-scroll-jump-before.png", "ios-navbar-scroll-jump-after.png"]
+        for name in names {
+            let path = URL(fileURLWithPath: outputDir).appendingPathComponent(name).path
+            XCTAssertTrue(FileManager.default.fileExists(atPath: path), "Missing \(name) at \(path)")
+            let attachment = XCTAttachment(contentsOfFile: URL(fileURLWithPath: path))
+            attachment.name = name
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
     }
 
     private func renderLayoutComparison(

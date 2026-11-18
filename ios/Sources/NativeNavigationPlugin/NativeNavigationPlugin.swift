@@ -2579,13 +2579,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         }
         navbarScrollCollapsed = collapsed
         applyNavbarScrollCollapsedAppearance(animated: animated)
-        if animated && !collapsed {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-                self.updateInsetsAndNotify()
-            }
-        } else {
-            updateInsetsAndNotify()
-        }
+        updateInsetsAndNotify()
     }
 
     private func applyNavbarScrollCollapsedAppearance(animated: Bool) {
