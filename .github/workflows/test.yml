@@ -57,6 +57,23 @@ jobs:
       - name: Verify packed package in example app (Android)
         shell: bash
         run: bash ./.github/scripts/verify-packed-example.sh android
+  verify_ios_packed:
+    runs-on: macOS-latest
+    # Keep this job capped at 10 minutes; never raise it unless explicitly asked.
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.x
+      - uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: bun i
+      - name: Verify packed package in example app (iOS)
+        shell: bash
+        run: bash ./.github/scripts/verify-packed-example.sh ios
   build_ios:
     runs-on: macOS-latest
     # Keep this job capped at 10 minutes; never raise it unless explicitly asked.
@@ -94,9 +111,6 @@ jobs:
           name: ios-navbar-scroll-jump
           path: ${{ runner.temp }}/ios-navbar-scroll-jump/*.png
           if-no-files-found: error
-      - name: Verify packed package in example app (iOS)
-        shell: bash
-        run: bash ./.github/scripts/verify-packed-example.sh ios
   web:
     runs-on: ubuntu-latest
     # Keep this job capped at 10 minutes; never raise it unless explicitly asked.
