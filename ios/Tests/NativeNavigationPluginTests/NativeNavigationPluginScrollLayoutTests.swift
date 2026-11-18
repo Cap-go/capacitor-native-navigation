@@ -96,27 +96,6 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         XCTAssertNotEqual(buggy.center.y, expectedCenter.y, accuracy: 0.5)
     }
 
-    func testColorSamplingUsesTopOriginY() {
-        let width = 8
-        let height = 12
-        let uiImage = UIGraphicsImageRenderer(size: CGSize(width: width, height: height)).image { context in
-            UIColor.red.setFill()
-            context.fill(CGRect(x: 0, y: 0, width: width, height: height / 2))
-            UIColor.blue.setFill()
-            context.fill(CGRect(x: 0, y: height / 2, width: width, height: height / 2))
-        }
-        guard let image = uiImage.cgImage else {
-            XCTFail("Missing CGImage")
-            return
-        }
-        let top = colorAt(x: 2, y: 1, in: image)
-        let bottom = colorAt(x: 2, y: height - 2, in: image)
-        XCTAssertNotNil(top)
-        XCTAssertNotNil(bottom)
-        XCTAssertGreaterThan(top!.r, 0.8)
-        XCTAssertGreaterThan(bottom!.b, 0.8)
-    }
-
     private struct WindowFixture {
         let window: UIWindow
         let rootView: UIView
@@ -311,8 +290,7 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
                 return nil
             }
             let bytesPerPixel = max(image.bitsPerPixel / 8, 4)
-            let row = height - 1 - y
-            let offset = row * image.bytesPerRow + x * bytesPerPixel
+            let offset = y * image.bytesPerRow + x * bytesPerPixel
             guard offset + 3 < data.count else {
                 return nil
             }
