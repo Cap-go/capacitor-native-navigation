@@ -4,6 +4,7 @@ import Foundation
 import Capacitor
 import ObjectiveC
 import UIKit
+import WebKit
 
 private struct NativeNavigationTransitionContext {
     let webView: UIView
@@ -113,7 +114,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     internal var testing_layoutRootView: UIView?
     internal var testing_safeAreaInsetsOverride: UIEdgeInsets?
     internal private(set) var testing_lastNotifiedNavbarHeight: CGFloat = 0
-    private weak var testing_navbarEdgeBlurPreviewView: UIView?
+    private weak var testing_edgeBlurWebView: WKWebView?
     private var tabIds: [String] = []
     private var tabTitles: [String] = []
     private var tabDisplayTitles: [String?] = []
@@ -3468,7 +3469,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         // Follow the visible bar: a folded large title is shorter than the inset it keeps.
         let folded = navbarLarge && navbarLargeCollapsed ? self.navbarHeight - 44 : 0
         let height = active ? Int((navbarHeight - folded).rounded()) + 48 : 0
-        bridge?.webView?.evaluateJavaScript(edgeBlurScript(top: true, height: height))
+        (testing_edgeBlurWebView ?? bridge?.webView)?.evaluateJavaScript(edgeBlurScript(top: true, height: height))
     }
 
     private func edgeBlurScript(top: Bool, height: Int) -> String {
@@ -3530,6 +3531,7 @@ extension NativeNavigationPlugin {
         navbarHeight = 44
         navbarScrollCollapsed = false
         navbarScrollBehavior = .both
+        navbarEdgeBlur = true
         navContainer?.removeFromSuperview()
         navContainer = nil
         navBar = nil
@@ -3559,50 +3561,33 @@ extension NativeNavigationPlugin {
         layoutChrome()
     }
 
-    internal func testing_activeNavbarEdgeBlurHeight() -> CGFloat {
-        let navHeight = currentInsets()["navbarHeight"] as? CGFloat ?? 0
-        let wantsBlur = navbarEdgeBlur ?? usesSystemLiquidGlass
-        let active = isEnabled && wantsBlur && navbarVisible && navHeight > 0
-        let folded = navbarLarge && navbarLargeCollapsed ? navbarHeight - 44 : 0
-        guard active else {
-            return 0
-        }
-        return (navHeight - folded) + 48
+    internal func testing_setEdgeBlurWebView(_ webView: WKWebView?) {
+        testing_edgeBlurWebView = webView
     }
 
-    internal func testing_syncNavbarEdgeBlurPreview(on rootView: UIView) {
-        testing_navbarEdgeBlurPreviewView?.removeFromSuperview()
-        let height = testing_activeNavbarEdgeBlurHeight()
-        guard height > 0 else {
+    internal func testing_updateInsetsAndNotify() {
+        updateInsetsAndNotify()
+    }
+
+    internal func testing_navbarEdgeBlurOverlayHeight(completion: @escaping (CGFloat) -> Void) {
+        let script = """
+        (function(){
+          var root = document.getElementById('cap-native-navigation-edge-blur-top');
+          if (!root) { return 0; }
+          return parseFloat(root.style.height) || 0;
+        })();
+        """
+        guard let webView = testing_edgeBlurWebView ?? bridge?.webView else {
+            completion(0)
             return
         }
-        let preview = UIView(frame: CGRect(x: 0, y: 0, width: rootView.bounds.width, height: height))
-        preview.isUserInteractionEnabled = false
-        preview.backgroundColor = .clear
-        preview.autoresizingMask = [.flexibleWidth, .flexibleBottomMargin]
-        let stops: [CGFloat] = [100, 84, 68, 52, 36, 20]
-        let blurHeight = height
-        for stop in stops {
-            let layerHeight = blurHeight * (stop / 100)
-            let effect = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
-            effect.frame = preview.bounds
-            effect.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            effect.alpha = 0.55
-            let mask = CAGradientLayer()
-            mask.frame = effect.bounds
-            mask.colors = [UIColor.black.cgColor, UIColor.clear.cgColor]
-            mask.startPoint = CGPoint(x: 0.5, y: 0)
-            mask.endPoint = CGPoint(x: 0.5, y: 1)
-            mask.locations = [0, NSNumber(value: Double(layerHeight / max(blurHeight, 1)))]
-            effect.layer.mask = mask
-            preview.addSubview(effect)
+        webView.evaluateJavaScript(script) { result, _ in
+            if let number = result as? NSNumber {
+                completion(CGFloat(truncating: number))
+            } else {
+                completion(0)
+            }
         }
-        if let navContainer {
-            rootView.insertSubview(preview, belowSubview: navContainer)
-        } else {
-            rootView.addSubview(preview)
-        }
-        testing_navbarEdgeBlurPreviewView = preview
     }
 
     internal func testing_navbarScrollHideDistance() -> CGFloat {

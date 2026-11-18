@@ -1,5 +1,6 @@
 import XCTest
 import UIKit
+import WebKit
 @testable import NativeNavigationPlugin
 
 final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
@@ -29,6 +30,7 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         XCTAssertEqual(container.center.x, expectedCenter.x, accuracy: 0.01)
         XCTAssertEqual(container.center.y, expectedCenter.y, accuracy: 0.01)
         XCTAssertEqual(container.transform.ty, -hideDistance, accuracy: 0.01)
+        XCTAssertLessThan(try awaitEdgeBlurOverlayHeight(plugin), 1)
 
         try captureAndAssertScreenshot(
             fixture: fixture,
@@ -42,6 +44,8 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         XCTAssertEqual(container.transform, .identity)
         XCTAssertEqual(container.center.x, expectedCenter.x, accuracy: 0.01)
         XCTAssertEqual(container.center.y, expectedCenter.y, accuracy: 0.01)
+        let revealedBlurHeight = try awaitEdgeBlurOverlayHeight(plugin)
+        XCTAssertGreaterThan(revealedBlurHeight, 80)
 
         try captureAndAssertScreenshot(
             fixture: fixture,
@@ -51,8 +55,8 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         )
     }
 
-    func testAnimatedRevealNotifiesInsetsBeforeAnimationEnds() {
-        let fixture = try! makeWindowFixture()
+    func testAnimatedRevealNotifiesInsetsBeforeAnimationEnds() throws {
+        let fixture = try makeWindowFixture()
         let plugin = fixture.plugin
         let expectedNavHeight = plugin.testing_expectedNavContainerLayoutFrame(
             width: canvasWidth,
@@ -87,9 +91,31 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         XCTAssertNotEqual(buggy.center.y, expectedCenter.y, accuracy: 0.5)
     }
 
+    func testColorSamplingUsesTopOriginY() {
+        let width = 8
+        let height = 12
+        let uiImage = UIGraphicsImageRenderer(size: CGSize(width: width, height: height)).image { context in
+            UIColor.red.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: width, height: height / 2))
+            UIColor.blue.setFill()
+            context.fill(CGRect(x: 0, y: height / 2, width: width, height: height / 2))
+        }
+        guard let image = uiImage.cgImage else {
+            XCTFail("Missing CGImage")
+            return
+        }
+        let top = colorAt(x: 2, y: 1, in: image)
+        let bottom = colorAt(x: 2, y: height - 2, in: image)
+        XCTAssertNotNil(top)
+        XCTAssertNotNil(bottom)
+        XCTAssertGreaterThan(top?.r ?? 0, 0.8)
+        XCTAssertGreaterThan(bottom?.b ?? 0, 0.8)
+    }
+
     private struct WindowFixture {
         let window: UIWindow
         let rootView: UIView
+        let webView: WKWebView
         let plugin: NativeNavigationPlugin
         let container: UIView
     }
@@ -108,18 +134,28 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         rootView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         host.view.addSubview(rootView)
 
-        let webFill = UIView(frame: CGRect(x: 0, y: expectedNavBarBandMaxY, width: canvasWidth, height: canvasHeight - expectedNavBarBandMaxY))
-        webFill.backgroundColor = UIColor(red: 0.86, green: 0.9, blue: 0.97, alpha: 1)
-        webFill.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        rootView.addSubview(webFill)
+        let webView = WKWebView(frame: rootView.bounds)
+        webView.isOpaque = true
+        webView.backgroundColor = UIColor(red: 0.86, green: 0.9, blue: 0.97, alpha: 1)
+        webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        rootView.addSubview(webView)
+        drainMainQueue(for: 0.25)
+        webView.loadHTMLString(
+            "<html><head><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head>"
+                + "<body style=\"margin:0;background:#dbe6f5;min-height:200vh\"></body></html>",
+            baseURL: URL(string: "https://capacitor.test")
+        )
+        drainMainQueue(for: 0.35)
 
         let plugin = NativeNavigationPlugin()
+        plugin.testing_setEdgeBlurWebView(webView)
         plugin.testing_prepareNavbarScrollLayoutHarness(
             rootView: rootView,
             width: canvasWidth,
             safeAreaTop: safeAreaTop
         )
-        plugin.testing_syncNavbarEdgeBlurPreview(on: rootView)
+        plugin.testing_updateInsetsAndNotify()
+        drainMainQueue(for: 0.2)
 
         guard let container = plugin.testing_navContainer else {
             XCTFail("nav container missing after harness")
@@ -127,7 +163,28 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         }
 
         window.layoutIfNeeded()
-        return WindowFixture(window: window, rootView: rootView, plugin: plugin, container: container)
+        return WindowFixture(window: window, rootView: rootView, webView: webView, plugin: plugin, container: container)
+    }
+
+    private func drainMainQueue(for seconds: TimeInterval) {
+        let deadline = Date().addingTimeInterval(seconds)
+        while Date() < deadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        }
+    }
+
+    private func awaitEdgeBlurOverlayHeight(_ plugin: NativeNavigationPlugin) throws -> CGFloat {
+        let expectation = expectation(description: "edge blur overlay height")
+        var measured: CGFloat = -1
+        plugin.testing_navbarEdgeBlurOverlayHeight { height in
+            measured = height
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 3)
+        guard measured >= 0 else {
+            throw NSError(domain: "NativeNavigationPluginScrollLayoutTests", code: 2)
+        }
+        return measured
     }
 
     private func navbarBandRect(in fixture: WindowFixture) -> CGRect {
@@ -149,7 +206,8 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         if restoreNavbarVisibilityForCapture {
             fixture.container.alpha = 1
         }
-        fixture.plugin.testing_syncNavbarEdgeBlurPreview(on: fixture.rootView)
+        fixture.plugin.testing_updateInsetsAndNotify()
+        drainMainQueue(for: 0.15)
         fixture.window.layoutIfNeeded()
 
         let image = renderWindow(fixture.window)
@@ -253,7 +311,8 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         ) else {
             return nil
         }
-        context.draw(image, in: CGRect(x: -x, y: -y, width: image.width, height: image.height))
+        let flippedY = image.height - 1 - y
+        context.draw(image, in: CGRect(x: -x, y: -flippedY, width: image.width, height: image.height))
         return RGBA(
             r: CGFloat(pixel[0]) / 255,
             g: CGFloat(pixel[1]) / 255,
