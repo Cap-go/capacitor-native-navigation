@@ -8,21 +8,28 @@ final class NativeNavigationNavbarScrollJumpScreenshotTests: XCTestCase {
         if let workspace = ProcessInfo.processInfo.environment["GITHUB_WORKSPACE"], !workspace.isEmpty {
             return workspace + "/docs/screenshots/ios-navbar-scroll-jump"
         }
+        var dir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        while dir.path != "/" {
+            if FileManager.default.fileExists(atPath: dir.appendingPathComponent("Package.swift").path) {
+                return dir.appendingPathComponent("docs/screenshots/ios-navbar-scroll-jump").path
+            }
+            dir.deleteLastPathComponent()
+        }
         return "docs/screenshots/ios-navbar-scroll-jump"
     }
 
     override func tearDown() {
-        if ProcessInfo.processInfo.environment["GENERATE_NAVBAR_SCROLL_SCREENSHOTS"] == "1" {
-            let marker = URL(fileURLWithPath: outputDir).appendingPathComponent("navbar-scroll-jump.done")
-            FileManager.default.createFile(atPath: marker.path, contents: Data())
-        }
+        #if GENERATE_NAVBAR_SCROLL_SCREENSHOTS
+        let marker = URL(fileURLWithPath: outputDir).appendingPathComponent("navbar-scroll-jump.done")
+        FileManager.default.createFile(atPath: marker.path, contents: Data())
+        #endif
         super.tearDown()
     }
 
     func testNavbarScrollCollapseLayoutSnapshotsWhenRequested() throws {
-        guard ProcessInfo.processInfo.environment["GENERATE_NAVBAR_SCROLL_SCREENSHOTS"] == "1" else {
-            throw XCTSkip("Set GENERATE_NAVBAR_SCROLL_SCREENSHOTS=1 on macOS to write PNGs")
-        }
+        #if !GENERATE_NAVBAR_SCROLL_SCREENSHOTS
+        throw XCTSkip("Pass OTHER_SWIFT_FLAGS=-D GENERATE_NAVBAR_SCROLL_SCREENSHOTS to write PNGs")
+        #endif
 
         let frame = CGRect(x: 0, y: 59, width: 390, height: 103)
         let hideDistance: CGFloat = 88

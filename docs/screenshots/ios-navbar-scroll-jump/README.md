@@ -8,9 +8,9 @@ Before/after PNGs compare navbar container placement while a scroll-collapse `tr
 Generate on macOS:
 
 ```bash
-export GENERATE_NAVBAR_SCROLL_SCREENSHOTS=1
 xcodebuild test -scheme CapgoCapacitorNativeNavigation \
   -destination 'platform=iOS Simulator,name=iPhone 17' \
+  'OTHER_SWIFT_FLAGS=-D GENERATE_NAVBAR_SCROLL_SCREENSHOTS' \
   -only-testing:NativeNavigationPluginTests/NativeNavigationNavbarScrollJumpScreenshotTests
 ```
 

@@ -81,14 +81,13 @@ jobs:
         run: bun run verify:ios
       - name: Navbar scroll jump screenshots
         if: github.event_name == 'pull_request'
-        env:
-          GENERATE_NAVBAR_SCROLL_SCREENSHOTS: "1"
         continue-on-error: true
         run: |
           set -euo pipefail
           xcodebuild test \
             -scheme CapgoCapacitorNativeNavigation \
             -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.2' \
+            'OTHER_SWIFT_FLAGS=-D GENERATE_NAVBAR_SCROLL_SCREENSHOTS' \
             -only-testing:NativeNavigationPluginTests/NativeNavigationNavbarScrollJumpScreenshotTests
       - name: Upload navbar scroll jump screenshots
         if: github.event_name == 'pull_request'
