@@ -267,25 +267,27 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         )
         try writeScreenshot(mainCollapsed, directory: docsDir, fileName: "ios-main-collapsed.png")
 
-        plugin.testing_setNavbarScrollCollapsedForLayout(true)
-        plugin.testing_layoutChrome()
+        plugin.testing_setNavbarScrollCollapsedForLayout(false, animated: true)
+        drainMainQueue(for: 0.05)
         let mainRevealedJump = try captureWindowScreenshot(
             fixture: fixture,
             expectNavbarVisible: true,
-            captureOverrideAlpha: 1,
+            captureOverrideAlpha: nil,
             band: band,
             label: "main-revealed-jump",
             assertBand: false
         )
         try writeScreenshot(mainRevealedJump, directory: docsDir, fileName: "ios-main-revealed-jump.png")
 
-        plugin.testing_useLegacyNavContainerFrameLayout = false
-        plugin.testing_setNavbarScrollCollapsedForLayout(true)
-        plugin.testing_layoutChrome()
-        plugin.testing_updateInsetsAndNotify()
+        let prFixture = try makeWindowFixture()
+        let prPlugin = prFixture.plugin
+        prPlugin.testing_useLegacyNavContainerFrameLayout = false
+        prPlugin.testing_setNavbarScrollCollapsedForLayout(true)
+        prPlugin.testing_layoutChrome()
+        prPlugin.testing_updateInsetsAndNotify()
         drainMainQueue(for: 0.2)
         let prCollapsed = try captureWindowScreenshot(
-            fixture: fixture,
+            fixture: prFixture,
             expectNavbarVisible: false,
             captureOverrideAlpha: nil,
             band: band,
@@ -293,12 +295,10 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         )
         try writeScreenshot(prCollapsed, directory: docsDir, fileName: "ios-pr-collapsed.png")
 
-        plugin.testing_setNavbarScrollCollapsedForLayout(false)
-        plugin.testing_layoutChrome()
-        plugin.testing_updateInsetsAndNotify()
-        drainMainQueue(for: 0.2)
+        prPlugin.testing_setNavbarScrollCollapsedForLayout(false, animated: true)
+        drainMainQueue(for: 0.25)
         let prRevealed = try captureWindowScreenshot(
-            fixture: fixture,
+            fixture: prFixture,
             expectNavbarVisible: true,
             captureOverrideAlpha: nil,
             band: band,

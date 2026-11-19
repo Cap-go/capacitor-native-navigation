@@ -5,7 +5,7 @@ iPhone 17 simulator, 390x844 canvas, safe area top 59pt. Harness title: Scroll l
 | File | Meaning |
 | --- | --- |
 | `ios-main-collapsed.png` | `main` layout (`container.frame` under collapse transform), collapsed with production alpha 0 (bar hidden) |
-| `ios-main-revealed-jump.png` | `main` layout with collapse transform plus alpha 1 for capture only: bar snaps into the slot while still translated (the #104 jump) |
+| `ios-main-revealed-jump.png` | `main` layout mid animated reveal (0.05s after reveal starts): `layoutChrome` assigns `frame` under the outgoing collapse transform, so the bar jumps in the slot before the slide finishes |
 | `ios-pr-collapsed.png` | This branch (`nativeNavigationSetViewFrame`), collapsed, alpha 0 (bar hidden) |
 | `ios-pr-revealed.png` | This branch, revealed, navbar in the layout slot |
 
