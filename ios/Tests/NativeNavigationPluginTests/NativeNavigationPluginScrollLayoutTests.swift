@@ -124,12 +124,17 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         rootView.addSubview(webView)
         drainMainQueue(for: 0.25)
+        let loadObserver = WebViewLoadObserver()
+        let loadExpectation = expectation(description: "WKWebView HTML load finished")
+        loadObserver.loadExpectation = loadExpectation
+        webView.navigationDelegate = loadObserver
         webView.loadHTMLString(
             "<html><head><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head>"
                 + "<body style=\"margin:0;background:#dbe6f5;min-height:200vh\"></body></html>",
             baseURL: URL(string: "https://capacitor.test")
         )
-        drainMainQueue(for: 0.35)
+        wait(for: [loadExpectation], timeout: 5)
+        webView.navigationDelegate = nil
 
         let plugin = NativeNavigationPlugin()
         plugin.testing_setEdgeBlurWebView(webView)
@@ -283,23 +288,8 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
     }
 
     private func colorAt(x: Int, y: Int, in image: CGImage) -> RGBA? {
-        if let data = image.dataProvider?.data as Data? {
-            let width = image.width
-            let height = image.height
-            guard x >= 0, x < width, y >= 0, y < height else {
-                return nil
-            }
-            let bytesPerPixel = max(image.bitsPerPixel / 8, 4)
-            let offset = y * image.bytesPerRow + x * bytesPerPixel
-            guard offset + 3 < data.count else {
-                return nil
-            }
-            return RGBA(
-                r: CGFloat(data[offset]) / 255,
-                g: CGFloat(data[offset + 1]) / 255,
-                b: CGFloat(data[offset + 2]) / 255,
-                a: CGFloat(data[offset + 3]) / 255
-            )
+        guard x >= 0, x < image.width, y >= 0, y < image.height else {
+            return nil
         }
         var pixel = [UInt8](repeating: 0, count: 4)
         guard let context = CGContext(
@@ -356,5 +346,13 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         let dg = left.g - right.g
         let db = left.b - right.b
         return sqrt(dr * dr + dg * dg + db * db)
+    }
+}
+
+private final class WebViewLoadObserver: NSObject, WKNavigationDelegate {
+    var loadExpectation: XCTestExpectation?
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        loadExpectation?.fulfill()
     }
 }
