@@ -13,7 +13,7 @@ Regression coverage lives in `NativeNavigationPluginScrollLayoutTests`:
 xcodebuild -scheme CapgoCapacitorNativeNavigation -destination generic/platform=iOS
 ```
 
-Run plugin unit tests on the iOS Simulator (not run in CI today):
+Run plugin unit tests on the iOS Simulator (CI `build_ios` job runs the same command):
 
 ```bash
 xcodebuild test -scheme CapgoCapacitorNativeNavigation \

@@ -3458,10 +3458,11 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     /// view, which the WebView does not get. Draw the same progressive blur under the navbar.
     private func applyNavbarEdgeBlur(navbarHeight: CGFloat) {
         let wantsBlur = navbarEdgeBlur ?? usesSystemLiquidGlass
-        let active = isEnabled && wantsBlur && navbarVisible && navbarHeight > 0
+        let layoutNavbarHeight = navbarScrollCollapsed ? 0 : navbarHeight
+        let active = isEnabled && wantsBlur && navbarVisible && layoutNavbarHeight > 0
         // Follow the visible bar: a folded large title is shorter than the inset it keeps.
         let folded = navbarLarge && navbarLargeCollapsed ? self.navbarHeight - 44 : 0
-        let height = active ? Int((navbarHeight - folded).rounded()) + 48 : 0
+        let height = active ? Int((layoutNavbarHeight - folded).rounded()) + 48 : 0
         bridge?.webView?.evaluateJavaScript(edgeBlurScript(top: true, height: height))
     }
 

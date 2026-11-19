@@ -79,6 +79,11 @@ jobs:
       - name: Build
         id: build_code
         run: bun run verify:ios
+      - name: Run NativeNavigationPluginTests on iOS Simulator
+        run: |
+          xcodebuild test -scheme CapgoCapacitorNativeNavigation \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -only-testing:NativeNavigationPluginTests
       - name: Verify packed package in example app (iOS)
         shell: bash
         run: bash ./.github/scripts/verify-packed-example.sh ios

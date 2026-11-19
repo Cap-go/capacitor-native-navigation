@@ -62,6 +62,24 @@ extension NativeNavigationPlugin {
         updateInsetsAndNotify()
     }
 
+    func scrollLayout_webNavbarHeight(in webView: WKWebView, completion: @escaping (CGFloat) -> Void) {
+        let script = """
+        (function(){
+          var style = getComputedStyle(document.documentElement);
+          var raw = style.getPropertyValue('--cap-native-navbar-height').trim();
+          if (!raw) { return 0; }
+          return parseFloat(raw) || 0;
+        })();
+        """
+        webView.evaluateJavaScript(script) { result, _ in
+            if let number = result as? NSNumber {
+                completion(CGFloat(truncating: number))
+            } else {
+                completion(0)
+            }
+        }
+    }
+
     func scrollLayout_navbarEdgeBlurOverlayHeight(in webView: WKWebView, completion: @escaping (CGFloat) -> Void) {
         let script = """
         (function(){
@@ -97,7 +115,7 @@ extension NativeNavigationPlugin {
             callbackId: "scroll-layout-test",
             methodName: "scrollLayout",
             options: options,
-            success: { _ in },
+            success: { _, _ in },
             error: { _ in }
         ) else {
             return
