@@ -7,6 +7,7 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
     private let canvasWidth: CGFloat = 390
     private let canvasHeight: CGFloat = 844
     private let safeAreaTop: CGFloat = 59
+    private var webViewLoadObserverRetention = [WebViewLoadObserver]()
 
     private var expectedNavBarBandMaxY: CGFloat {
         safeAreaTop + 44
@@ -80,6 +81,11 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         XCTAssertGreaterThan(plugin.testing_lastNotifiedNavbarHeight, expectedNavHeight * 0.85)
     }
 
+    override func tearDown() {
+        webViewLoadObserverRetention.removeAll()
+        super.tearDown()
+    }
+
     func testSetViewFrameRegressionGuard() {
         let layoutFrame = CGRect(x: 0, y: 0, width: canvasWidth, height: safeAreaTop + 44)
         let expectedCenter = CGPoint(x: layoutFrame.midX, y: layoutFrame.midY)
@@ -124,17 +130,12 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         rootView.addSubview(webView)
         drainMainQueue(for: 0.25)
-        let loadObserver = WebViewLoadObserver()
-        let loadExpectation = expectation(description: "WKWebView HTML load finished")
-        loadObserver.loadExpectation = loadExpectation
-        webView.navigationDelegate = loadObserver
-        webView.loadHTMLString(
-            "<html><head><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head>"
+        waitForWebViewHTMLLoad(
+            webView,
+            html: "<html><head><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head>"
                 + "<body style=\"margin:0;background:#dbe6f5;min-height:200vh\"></body></html>",
             baseURL: URL(string: "https://capacitor.test")
         )
-        wait(for: [loadExpectation], timeout: 5)
-        webView.navigationDelegate = nil
 
         let plugin = NativeNavigationPlugin()
         plugin.testing_setEdgeBlurWebView(webView)
@@ -159,6 +160,56 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         let deadline = Date().addingTimeInterval(seconds)
         while Date() < deadline {
             RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        }
+    }
+
+    private func waitForWebViewHTMLLoad(_ webView: WKWebView, html: String, baseURL: URL?, timeout: TimeInterval = 5) {
+        let ready = expectation(description: "WKWebView HTML load finished")
+        var fulfilled = false
+        let lock = NSLock()
+        let fulfillOnce: () -> Void = {
+            lock.lock()
+            defer { lock.unlock() }
+            guard !fulfilled else {
+                return
+            }
+            fulfilled = true
+            ready.fulfill()
+        }
+
+        let observer = WebViewLoadObserver()
+        observer.onDidFinish = fulfillOnce
+        webViewLoadObserverRetention.append(observer)
+        webView.navigationDelegate = observer
+
+        webView.loadHTMLString(html, baseURL: baseURL)
+        probeWebViewDocumentReady(webView, fulfillOnce: fulfillOnce, deadline: Date().addingTimeInterval(timeout))
+
+        wait(for: [ready], timeout: timeout)
+        webView.navigationDelegate = nil
+        webViewLoadObserverRetention.removeAll { $0 === observer }
+    }
+
+    private func probeWebViewDocumentReady(
+        _ webView: WKWebView,
+        fulfillOnce: @escaping () -> Void,
+        deadline: Date
+    ) {
+        guard Date() < deadline else {
+            return
+        }
+        webView.evaluateJavaScript("document.readyState") { [weak self] result, _ in
+            let state = result as? String
+            if state == "complete", !webView.isLoading {
+                fulfillOnce()
+                return
+            }
+            guard let self, Date() < deadline else {
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                self.probeWebViewDocumentReady(webView, fulfillOnce: fulfillOnce, deadline: deadline)
+            }
         }
     }
 
@@ -350,9 +401,14 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
 }
 
 private final class WebViewLoadObserver: NSObject, WKNavigationDelegate {
-    var loadExpectation: XCTestExpectation?
+    var onDidFinish: (() -> Void)?
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        loadExpectation?.fulfill()
+        webView.evaluateJavaScript("document.readyState") { [weak self] result, _ in
+            guard (result as? String) == "complete", !webView.isLoading else {
+                return
+            }
+            self?.onDidFinish?()
+        }
     }
 }
