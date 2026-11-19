@@ -279,15 +279,13 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         )
         try writeScreenshot(mainRevealedJump, directory: docsDir, fileName: "ios-main-revealed-jump.png")
 
-        let prFixture = try makeWindowFixture()
-        let prPlugin = prFixture.plugin
-        prPlugin.testing_useLegacyNavContainerFrameLayout = false
-        prPlugin.testing_setNavbarScrollCollapsedForLayout(true)
-        prPlugin.testing_layoutChrome()
-        prPlugin.testing_updateInsetsAndNotify()
+        plugin.testing_useLegacyNavContainerFrameLayout = false
+        plugin.testing_setNavbarScrollCollapsedForLayout(true)
+        plugin.testing_layoutChrome()
+        plugin.testing_updateInsetsAndNotify()
         drainMainQueue(for: 0.2)
         let prCollapsed = try captureWindowScreenshot(
-            fixture: prFixture,
+            fixture: fixture,
             expectNavbarVisible: false,
             captureOverrideAlpha: nil,
             band: band,
@@ -295,10 +293,10 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         )
         try writeScreenshot(prCollapsed, directory: docsDir, fileName: "ios-pr-collapsed.png")
 
-        prPlugin.testing_setNavbarScrollCollapsedForLayout(false, animated: true)
+        plugin.testing_setNavbarScrollCollapsedForLayout(false, animated: true)
         drainMainQueue(for: 0.25)
         let prRevealed = try captureWindowScreenshot(
-            fixture: prFixture,
+            fixture: fixture,
             expectNavbarVisible: true,
             captureOverrideAlpha: nil,
             band: band,
