@@ -268,7 +268,6 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         try writeScreenshot(mainCollapsed, directory: docsDir, fileName: "ios-main-collapsed.png")
 
         plugin.testing_setNavbarScrollCollapsedForLayout(false, animated: true)
-        drainMainQueue(for: 0.05)
         let mainRevealedJump = try captureWindowScreenshot(
             fixture: fixture,
             expectNavbarVisible: true,
