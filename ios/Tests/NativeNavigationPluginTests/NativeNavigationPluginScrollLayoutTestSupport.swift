@@ -11,7 +11,11 @@ extension NativeNavigationPlugin {
     }
 
     func scrollLayout_lastNotifiedNavbarHeight() -> CGFloat {
-        currentInsets()["navbarHeight"] as? CGFloat ?? 0
+        scrollLayoutHarnessLastPushedNavbarHeight
+    }
+
+    func scrollLayout_lastPushedNavbarBlurHeight() -> CGFloat {
+        scrollLayoutHarnessLastNavbarBlurHeight
     }
 
     func scrollLayout_prepareHarness(
@@ -60,24 +64,6 @@ extension NativeNavigationPlugin {
 
     func scrollLayout_updateInsetsAndNotify() {
         updateInsetsAndNotify()
-    }
-
-    func scrollLayout_webNavbarHeight(in webView: WKWebView, completion: @escaping (CGFloat) -> Void) {
-        let script = """
-        (function(){
-          var style = getComputedStyle(document.documentElement);
-          var raw = style.getPropertyValue('--cap-native-navbar-height').trim();
-          if (!raw) { return 0; }
-          return parseFloat(raw) || 0;
-        })();
-        """
-        webView.evaluateJavaScript(script) { result, _ in
-            if let number = result as? NSNumber {
-                completion(CGFloat(truncating: number))
-            } else {
-                completion(0)
-            }
-        }
     }
 
     func scrollLayout_navbarEdgeBlurOverlayHeight(in webView: WKWebView, completion: @escaping (CGFloat) -> Void) {

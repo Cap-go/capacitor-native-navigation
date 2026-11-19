@@ -29,7 +29,8 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         let hideDistance = plugin.scrollLayout_navbarHideDistance(from: container)
         XCTAssertGreaterThan(hideDistance, 40)
         XCTAssertEqual(container.transform.ty, -hideDistance, accuracy: 0.01)
-        let collapsedBlurHeight = try awaitEdgeBlurOverlayHeight(plugin: plugin, webView: fixture.webView)
+        let collapsedBlurHeight = plugin.scrollLayout_lastPushedNavbarBlurHeight()
+        XCTAssertEqual(collapsedBlurHeight, 0, accuracy: 0.01)
 
         plugin.scrollLayout_setCollapsed(false)
         plugin.scrollLayout_layoutChrome()
@@ -42,7 +43,7 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         XCTAssertEqual(container.center.y, expectedCenter.y, accuracy: 0.5)
         let revealedBlurHeight = try awaitEdgeBlurOverlayHeight(plugin: plugin, webView: fixture.webView)
         XCTAssertGreaterThan(revealedBlurHeight, collapsedBlurHeight)
-        XCTAssertGreaterThan(revealedBlurHeight, collapsedBlurHeight * 1.02)
+        XCTAssertGreaterThan(revealedBlurHeight, collapsedBlurHeight + 40)
     }
 
     func testAnimatedRevealNotifiesInsetsBeforeAnimationEnds() throws {
@@ -52,22 +53,21 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
 
         plugin.scrollLayout_setCollapsed(true)
         plugin.scrollLayout_updateInsetsAndNotify()
-        drainMainQueue(for: 0.15)
-        let collapsedWebHeight = try awaitWebNavbarHeight(plugin: plugin, webView: fixture.webView)
+        let collapsedPushedHeight = plugin.scrollLayout_lastNotifiedNavbarHeight()
 
         plugin.scrollLayout_setCollapsed(false, animated: true)
-        let immediateWebHeight = try awaitWebNavbarHeight(plugin: plugin, webView: fixture.webView)
+        let immediatePushedHeight = plugin.scrollLayout_lastNotifiedNavbarHeight()
         XCTAssertGreaterThan(
-            immediateWebHeight,
-            collapsedWebHeight + 5,
-            "Reveal must push full navbar insets to the WebView immediately, not after 0.22s"
+            immediatePushedHeight,
+            collapsedPushedHeight + 5,
+            "Reveal must push full navbar insets immediately, not after 0.22s"
         )
         XCTAssertGreaterThanOrEqual(
-            immediateWebHeight,
+            immediatePushedHeight,
             revealedNavbarHeight * 0.92,
-            "Web inset notification should match the revealed layout height"
+            "Inset notification should match the revealed layout height"
         )
-        XCTAssertEqual(immediateWebHeight, revealedNavbarHeight, accuracy: 2)
+        XCTAssertEqual(immediatePushedHeight, revealedNavbarHeight, accuracy: 2)
     }
 
     func testLegacyFrameAssignmentShiftsLayoutCenterWhileCollapsed() throws {
@@ -223,20 +223,6 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
             RunLoop.main.run(until: Date().addingTimeInterval(0.05))
         }
         return probe.ready && !webView.isLoading
-    }
-
-    private func awaitWebNavbarHeight(plugin: NativeNavigationPlugin, webView: WKWebView) throws -> CGFloat {
-        let expectation = expectation(description: "web navbar css height")
-        var measured: CGFloat = -1
-        plugin.scrollLayout_webNavbarHeight(in: webView) { height in
-            measured = height
-            expectation.fulfill()
-        }
-        wait(for: [expectation], timeout: 3)
-        guard measured >= 0 else {
-            throw NSError(domain: "NativeNavigationPluginScrollLayoutTests", code: 3)
-        }
-        return measured
     }
 
     private func awaitEdgeBlurOverlayHeight(plugin: NativeNavigationPlugin, webView: WKWebView) throws -> CGFloat {

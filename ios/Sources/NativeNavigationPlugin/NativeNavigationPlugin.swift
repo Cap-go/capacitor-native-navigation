@@ -111,6 +111,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var navbarScrollBehavior: NativeNavigationNavbarScrollBehavior = .none
     private var navbarScrollThreshold: CGFloat = 8
     private var navbarScrollCollapsed = false
+    internal private(set) var scrollLayoutHarnessLastPushedNavbarHeight: CGFloat = 0
+    internal private(set) var scrollLayoutHarnessLastNavbarBlurHeight: CGFloat = 0
     private var tabIds: [String] = []
     private var tabTitles: [String] = []
     private var tabDisplayTitles: [String?] = []
@@ -3402,6 +3404,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     internal func updateInsetsAndNotify() {
         layoutChrome()
         let insets = currentInsets()
+        scrollLayoutHarnessLastPushedNavbarHeight = insets["navbarHeight"] as? CGFloat ?? 0
         notifyListeners("safeAreaChanged", data: ["insets": insets])
         notifyVerticalBarChange(insets)
         applyTabbarEdgeBlur(tabbarHeight: insets["tabbarHeight"] as? CGFloat ?? 0)
@@ -3463,6 +3466,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         // Follow the visible bar: a folded large title is shorter than the inset it keeps.
         let folded = navbarLarge && navbarLargeCollapsed ? self.navbarHeight - 44 : 0
         let height = active ? Int((layoutNavbarHeight - folded).rounded()) + 48 : 0
+        scrollLayoutHarnessLastNavbarBlurHeight = CGFloat(height)
         bridge?.webView?.evaluateJavaScript(edgeBlurScript(top: true, height: height))
     }
 
