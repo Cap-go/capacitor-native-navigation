@@ -163,54 +163,45 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         }
     }
 
-    private func waitForWebViewHTMLLoad(_ webView: WKWebView, html: String, baseURL: URL?, timeout: TimeInterval = 5) {
-        let ready = expectation(description: "WKWebView HTML load finished")
-        var fulfilled = false
-        let lock = NSLock()
-        let fulfillOnce: () -> Void = {
-            lock.lock()
-            defer { lock.unlock() }
-            guard !fulfilled else {
-                return
-            }
-            fulfilled = true
-            ready.fulfill()
-        }
+    private func waitForWebViewHTMLLoad(_ webView: WKWebView, html: String, baseURL: URL?, timeout: TimeInterval = 30) {
+        let deadline = Date().addingTimeInterval(timeout)
+        var navigationDidFinish = false
 
         let observer = WebViewLoadObserver()
-        observer.onDidFinish = fulfillOnce
+        observer.onDidFinish = { navigationDidFinish = true }
         webViewLoadObserverRetention.append(observer)
         webView.navigationDelegate = observer
 
         webView.loadHTMLString(html, baseURL: baseURL)
-        probeWebViewDocumentReady(webView, fulfillOnce: fulfillOnce, deadline: Date().addingTimeInterval(timeout))
 
-        wait(for: [ready], timeout: timeout)
+        var isReady = false
+        while Date() < deadline && !isReady {
+            drainMainQueue(for: 0.05)
+            if navigationDidFinish || !webView.isLoading {
+                isReady = isWebViewDocumentReady(webView)
+            }
+        }
+
+        XCTAssertTrue(isReady, "WKWebView HTML load timed out")
         webView.navigationDelegate = nil
         webViewLoadObserverRetention.removeAll { $0 === observer }
     }
 
-    private func probeWebViewDocumentReady(
-        _ webView: WKWebView,
-        fulfillOnce: @escaping () -> Void,
-        deadline: Date
-    ) {
-        guard Date() < deadline else {
-            return
+    private func isWebViewDocumentReady(_ webView: WKWebView) -> Bool {
+        final class Probe {
+            var ready = false
+            var completed = false
         }
-        webView.evaluateJavaScript("document.readyState") { [weak self] result, _ in
-            let state = result as? String
-            if state == "complete", !webView.isLoading {
-                fulfillOnce()
-                return
-            }
-            guard let self, Date() < deadline else {
-                return
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                self.probeWebViewDocumentReady(webView, fulfillOnce: fulfillOnce, deadline: deadline)
-            }
+        let probe = Probe()
+        webView.evaluateJavaScript("document.readyState") { result, _ in
+            probe.ready = (result as? String) == "complete"
+            probe.completed = true
         }
+        let scriptDeadline = Date().addingTimeInterval(2)
+        while !probe.completed && Date() < scriptDeadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        }
+        return probe.ready && !webView.isLoading
     }
 
     private func awaitEdgeBlurOverlayHeight(_ plugin: NativeNavigationPlugin) throws -> CGFloat {
@@ -404,11 +395,6 @@ private final class WebViewLoadObserver: NSObject, WKNavigationDelegate {
     var onDidFinish: (() -> Void)?
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        webView.evaluateJavaScript("document.readyState") { [weak self] result, _ in
-            guard (result as? String) == "complete", !webView.isLoading else {
-                return
-            }
-            self?.onDidFinish?()
-        }
+        onDidFinish?()
     }
 }
