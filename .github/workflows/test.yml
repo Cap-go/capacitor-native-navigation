@@ -57,7 +57,7 @@ jobs:
       - name: Verify packed package in example app (Android)
         shell: bash
         run: bash ./.github/scripts/verify-packed-example.sh android
-  verify_ios_packed:
+  build_ios:
     runs-on: macOS-latest
     # Keep this job capped at 10 minutes; never raise it unless explicitly asked.
     timeout-minutes: 10
@@ -70,72 +70,18 @@ jobs:
           node-version: 24.x
       - uses: oven-sh/setup-bun@v2
       - name: Install dependencies
-        run: bun i
-      - name: Verify packed package in example app (iOS)
-        shell: bash
-        run: bash ./.github/scripts/verify-packed-example.sh ios
-  build_ios:
-    runs-on: macOS-latest
-    permissions:
-      contents: write
-    # Keep this job capped at 10 minutes; never raise it unless explicitly ask.
-    timeout-minutes: 10
-    steps:
-      - name: Check out
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.head_ref }}
-          fetch-depth: 0
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 24.x
-      - uses: oven-sh/setup-bun@v2
-      - name: Install dependencies
         id: install_code
         run: bun i
       - name: Check plugin wiring
         run: bun run check:wiring
       - name: Check Cap 9 deprecated APIs
         run: bun run check:cap9-deprecated
-      - name: Build and test iOS
+      - name: Build
         id: build_code
-        env:
-          TEST_RUNNER_NAVBAR_SCROLL_SCREENSHOT_OUTPUT_DIR: ${{ github.event_name == 'pull_request' && format('{0}/ios-navbar-scroll-jump', runner.temp) || '' }}
-          TEST_RUNNER_NAVBAR_SCROLL_PR_DOCS_DIR: ${{ github.event_name == 'pull_request' && format('{0}/docs/screenshots/ios-navbar-scroll-jump/pr-105', github.workspace) || '' }}
-        run: |
-          set -euo pipefail
-          xcrun simctl boot "iPhone 17" 2>/dev/null || true
-          xcodebuild test \
-            -scheme CapgoCapacitorNativeNavigation \
-            -destination 'platform=iOS Simulator,name=iPhone 17' \
-            -only-testing:NativeNavigationPluginTests
-      - name: Upload navbar scroll jump screenshots
-        if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-navbar-scroll-jump
-          path: ${{ runner.temp }}/ios-navbar-scroll-jump/*.png
-          if-no-files-found: error
-      - name: Upload PR comparison screenshots
-        if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-navbar-scroll-jump-pr-105
-          path: docs/screenshots/ios-navbar-scroll-jump/pr-105/*.png
-          if-no-files-found: error
-      - name: Commit PR comparison screenshots
-        if: github.event_name == 'pull_request'
-        env:
-          HEAD_REF: ${{ github.head_ref }}
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/screenshots/ios-navbar-scroll-jump/pr-105/*.png
-          git diff --staged --quiet && exit 0
-          git commit -m "ci: add iOS navbar scroll jump PR screenshots"
-          git push origin "HEAD:${HEAD_REF}"
+        run: bun run verify:ios
+      - name: Verify packed package in example app (iOS)
+        shell: bash
+        run: bash ./.github/scripts/verify-packed-example.sh ios
   web:
     runs-on: ubuntu-latest
     # Keep this job capped at 10 minutes; never raise it unless explicitly asked.
