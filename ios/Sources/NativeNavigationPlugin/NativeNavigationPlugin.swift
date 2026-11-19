@@ -113,6 +113,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var navbarScrollCollapsed = false
     internal var testing_layoutRootView: UIView?
     internal var testing_safeAreaInsetsOverride: UIEdgeInsets?
+    internal var testing_useLegacyNavContainerFrameLayout = false
     internal private(set) var testing_lastNotifiedNavbarHeight: CGFloat = 0
     private weak var testing_edgeBlurWebView: WKWebView?
     private var tabIds: [String] = []
@@ -2670,15 +2671,17 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             } else {
                 let topInset = navbarTopInset(safeInsets)
                 let visibleNavbarHeight = navbarLarge && navbarLargeCollapsed ? 44 : navbarHeight
-                nativeNavigationSetViewFrame(
-                    container,
-                    frame: CGRect(
-                        x: 0,
-                        y: 0,
-                        width: width,
-                        height: topInset + visibleNavbarHeight + searchHeight + segmentsHeight
-                    )
+                let navContainerFrame = CGRect(
+                    x: 0,
+                    y: 0,
+                    width: width,
+                    height: topInset + visibleNavbarHeight + searchHeight + segmentsHeight
                 )
+                if testing_useLegacyNavContainerFrameLayout {
+                    container.frame = navContainerFrame
+                } else {
+                    nativeNavigationSetViewFrame(container, frame: navContainerFrame)
+                }
                 navBlurView?.frame = container.bounds
                 navBlurView?.isHidden = false
                 navBar?.isHidden = !isEnabled || !navbarVisible

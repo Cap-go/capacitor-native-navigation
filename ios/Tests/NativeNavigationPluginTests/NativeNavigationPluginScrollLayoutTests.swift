@@ -38,8 +38,9 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         try captureAndAssertScreenshot(
             fixture: fixture,
             label: "collapsed",
-            restoreNavbarVisibilityForCapture: true,
-            navbarSearchRect: navbarBandRect(in: fixture)
+            expectNavbarVisible: false,
+            captureOverrideAlpha: nil,
+            navbarSearchRect: CGRect(x: 0, y: 0, width: canvasWidth, height: expectedNavBarBandMaxY)
         )
 
         plugin.testing_setNavbarScrollCollapsedForLayout(false)
@@ -56,9 +57,12 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         try captureAndAssertScreenshot(
             fixture: fixture,
             label: "revealed",
-            restoreNavbarVisibilityForCapture: false,
+            expectNavbarVisible: true,
+            captureOverrideAlpha: nil,
             navbarSearchRect: CGRect(x: 0, y: 0, width: canvasWidth, height: expectedNavBarBandMaxY)
         )
+
+        try capturePRComparisonScreenshots(fixture: fixture)
     }
 
     func testAnimatedRevealNotifiesInsetsBeforeAnimationEnds() throws {
@@ -223,48 +227,155 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         return rect.insetBy(dx: 8, dy: 4)
     }
 
+    private func prDocsOutputDirectory() -> String? {
+        let env = ProcessInfo.processInfo.environment
+        let path = env["NAVBAR_SCROLL_PR_DOCS_DIR"] ?? env["TEST_RUNNER_NAVBAR_SCROLL_PR_DOCS_DIR"]
+        guard let path, !path.isEmpty else {
+            return nil
+        }
+        return path
+    }
+
+    private func ciScreenshotOutputDirectory() -> String? {
+        let env = ProcessInfo.processInfo.environment
+        let path = env["NAVBAR_SCROLL_SCREENSHOT_OUTPUT_DIR"]
+            ?? env["TEST_RUNNER_NAVBAR_SCROLL_SCREENSHOT_OUTPUT_DIR"]
+        guard let path, !path.isEmpty else {
+            return nil
+        }
+        return path
+    }
+
+    private func capturePRComparisonScreenshots(fixture: WindowFixture) throws {
+        guard let docsDir = prDocsOutputDirectory() else {
+            return
+        }
+        let plugin = fixture.plugin
+        let band = CGRect(x: 0, y: 0, width: canvasWidth, height: expectedNavBarBandMaxY)
+
+        plugin.testing_useLegacyNavContainerFrameLayout = true
+        plugin.testing_setNavbarScrollCollapsedForLayout(true)
+        plugin.testing_layoutChrome()
+        plugin.testing_updateInsetsAndNotify()
+        drainMainQueue(for: 0.2)
+        let mainCollapsed = try captureWindowScreenshot(
+            fixture: fixture,
+            expectNavbarVisible: false,
+            captureOverrideAlpha: nil,
+            band: band,
+            label: "main-collapsed"
+        )
+        try writeScreenshot(mainCollapsed, directory: docsDir, fileName: "ios-main-collapsed.png")
+
+        plugin.testing_setNavbarScrollCollapsedForLayout(true)
+        plugin.testing_layoutChrome()
+        let mainRevealedJump = try captureWindowScreenshot(
+            fixture: fixture,
+            expectNavbarVisible: true,
+            captureOverrideAlpha: 1,
+            band: band,
+            label: "main-revealed-jump",
+            assertBand: false
+        )
+        try writeScreenshot(mainRevealedJump, directory: docsDir, fileName: "ios-main-revealed-jump.png")
+
+        plugin.testing_useLegacyNavContainerFrameLayout = false
+        plugin.testing_setNavbarScrollCollapsedForLayout(true)
+        plugin.testing_layoutChrome()
+        plugin.testing_updateInsetsAndNotify()
+        drainMainQueue(for: 0.2)
+        let prCollapsed = try captureWindowScreenshot(
+            fixture: fixture,
+            expectNavbarVisible: false,
+            captureOverrideAlpha: nil,
+            band: band,
+            label: "pr-collapsed"
+        )
+        try writeScreenshot(prCollapsed, directory: docsDir, fileName: "ios-pr-collapsed.png")
+
+        plugin.testing_setNavbarScrollCollapsedForLayout(false)
+        plugin.testing_layoutChrome()
+        plugin.testing_updateInsetsAndNotify()
+        drainMainQueue(for: 0.2)
+        let prRevealed = try captureWindowScreenshot(
+            fixture: fixture,
+            expectNavbarVisible: true,
+            captureOverrideAlpha: nil,
+            band: band,
+            label: "pr-revealed"
+        )
+        try writeScreenshot(prRevealed, directory: docsDir, fileName: "ios-pr-revealed.png")
+    }
+
     private func captureAndAssertScreenshot(
         fixture: WindowFixture,
         label: String,
-        restoreNavbarVisibilityForCapture: Bool,
+        expectNavbarVisible: Bool,
+        captureOverrideAlpha: CGFloat?,
         navbarSearchRect: CGRect
     ) throws {
-        let env = ProcessInfo.processInfo.environment
-        let outputDir = env["NAVBAR_SCROLL_SCREENSHOT_OUTPUT_DIR"]
-            ?? env["TEST_RUNNER_NAVBAR_SCROLL_SCREENSHOT_OUTPUT_DIR"]
+        let image = try captureWindowScreenshot(
+            fixture: fixture,
+            expectNavbarVisible: expectNavbarVisible,
+            captureOverrideAlpha: captureOverrideAlpha,
+            band: navbarSearchRect,
+            label: label
+        )
 
-        let previousAlpha = fixture.container.alpha
-        if restoreNavbarVisibilityForCapture {
-            fixture.container.alpha = 1
-        }
-        fixture.plugin.testing_updateInsetsAndNotify()
-        drainMainQueue(for: 0.15)
-        fixture.window.layoutIfNeeded()
-
-        let image = renderWindow(fixture.window)
-        try assertNavbarVisible(in: image, band: navbarSearchRect, label: label)
-
-        if restoreNavbarVisibilityForCapture {
-            fixture.container.alpha = previousAlpha
-        }
-
-        guard let outputDir, !outputDir.isEmpty else {
+        guard let outputDir = ciScreenshotOutputDirectory() else {
             return
         }
 
         try FileManager.default.createDirectory(atPath: outputDir, withIntermediateDirectories: true)
         let fileName = "ios-navbar-scroll-jump-\(label).png"
         let url = URL(fileURLWithPath: outputDir).appendingPathComponent(fileName)
-        guard let data = image.pngData() else {
-            XCTFail("Failed to encode \(fileName)")
-            return
-        }
-        try data.write(to: url)
+        try writeScreenshot(image, directory: outputDir, fileName: fileName)
 
         let attachment = XCTAttachment(contentsOfFile: url)
         attachment.name = fileName
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    private func captureWindowScreenshot(
+        fixture: WindowFixture,
+        expectNavbarVisible: Bool,
+        captureOverrideAlpha: CGFloat?,
+        band: CGRect,
+        label: String,
+        assertBand: Bool = true
+    ) throws -> UIImage {
+        let previousAlpha = fixture.container.alpha
+        if let captureOverrideAlpha {
+            fixture.container.alpha = captureOverrideAlpha
+        }
+        fixture.plugin.testing_updateInsetsAndNotify()
+        drainMainQueue(for: 0.15)
+        fixture.window.layoutIfNeeded()
+
+        let image = renderWindow(fixture.window)
+        if assertBand {
+            if expectNavbarVisible {
+                try assertNavbarVisible(in: image, band: band, label: label)
+            } else {
+                try assertNavbarHidden(in: image, band: band, label: label)
+            }
+        }
+
+        if captureOverrideAlpha != nil {
+            fixture.container.alpha = previousAlpha
+        }
+        return image
+    }
+
+    private func writeScreenshot(_ image: UIImage, directory: String, fileName: String) throws {
+        try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+        let url = URL(fileURLWithPath: directory).appendingPathComponent(fileName)
+        guard let data = image.pngData() else {
+            XCTFail("Failed to encode \(fileName)")
+            return
+        }
+        try data.write(to: url)
     }
 
     private func renderWindow(_ window: UIWindow) -> UIImage {
@@ -319,6 +430,49 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
             navbarContrastHits,
             navbarSamples / 4,
             "Navbar region looks empty or matches page background for \(label)"
+        )
+    }
+
+    private func assertNavbarHidden(in image: UIImage, band: CGRect, label: String) throws {
+        guard let cgImage = image.cgImage else {
+            XCTFail("Missing CGImage for \(label)")
+            return
+        }
+        let scale = image.scale
+        let bandRect = CGRect(
+            x: band.origin.x * scale,
+            y: band.origin.y * scale,
+            width: band.width * scale,
+            height: band.height * scale
+        ).integral
+        let width = cgImage.width
+        let background = averageColor(
+            in: cgImage,
+            rect: CGRect(x: bandRect.minX, y: bandRect.maxY + 24, width: bandRect.width, height: 80)
+        )
+        var navbarSamples = 0
+        var navbarContrastHits = 0
+        let minX = max(0, Int(bandRect.minX) + 8)
+        let maxX = min(width - 1, Int(bandRect.maxX) - 8)
+        let minY = max(0, Int(bandRect.minY) + 4)
+        let maxY = min(cgImage.height - 1, Int(bandRect.maxY) - 4)
+        let xPositions = [minX, (minX + maxX) / 2, maxX]
+        for x in xPositions {
+            for y in stride(from: minY, through: maxY, by: 8) {
+                guard let pixel = colorAt(x: x, y: y, in: cgImage) else {
+                    continue
+                }
+                navbarSamples += 1
+                if pixel.a > 0.08 && colorDistance(pixel, background) > 0.06 {
+                    navbarContrastHits += 1
+                }
+            }
+        }
+        XCTAssertGreaterThan(navbarSamples, 12, "Navbar sample grid empty for \(label)")
+        XCTAssertLessThanOrEqual(
+            navbarContrastHits,
+            navbarSamples / 6,
+            "Navbar region still shows chrome for \(label)"
         )
     }
 

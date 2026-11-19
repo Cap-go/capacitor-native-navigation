@@ -97,6 +97,7 @@ jobs:
         id: build_code
         env:
           TEST_RUNNER_NAVBAR_SCROLL_SCREENSHOT_OUTPUT_DIR: ${{ github.event_name == 'pull_request' && format('{0}/ios-navbar-scroll-jump', runner.temp) || '' }}
+          TEST_RUNNER_NAVBAR_SCROLL_PR_DOCS_DIR: ${{ github.event_name == 'pull_request' && format('{0}/docs/screenshots/ios-navbar-scroll-jump/pr-105', github.workspace) || '' }}
         run: |
           set -euo pipefail
           xcrun simctl boot "iPhone 17" 2>/dev/null || true
@@ -110,6 +111,13 @@ jobs:
         with:
           name: ios-navbar-scroll-jump
           path: ${{ runner.temp }}/ios-navbar-scroll-jump/*.png
+          if-no-files-found: error
+      - name: Upload PR comparison screenshots
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-navbar-scroll-jump-pr-105
+          path: docs/screenshots/ios-navbar-scroll-jump/pr-105/*.png
           if-no-files-found: error
   web:
     runs-on: ubuntu-latest
