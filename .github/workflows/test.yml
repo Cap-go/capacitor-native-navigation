@@ -76,11 +76,16 @@ jobs:
         run: bash ./.github/scripts/verify-packed-example.sh ios
   build_ios:
     runs-on: macOS-latest
-    # Keep this job capped at 10 minutes; never raise it unless explicitly asked.
+    permissions:
+      contents: write
+    # Keep this job capped at 10 minutes; never raise it unless explicitly ask.
     timeout-minutes: 10
     steps:
       - name: Check out
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
@@ -119,6 +124,18 @@ jobs:
           name: ios-navbar-scroll-jump-pr-105
           path: docs/screenshots/ios-navbar-scroll-jump/pr-105/*.png
           if-no-files-found: error
+      - name: Commit PR comparison screenshots
+        if: github.event_name == 'pull_request'
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/screenshots/ios-navbar-scroll-jump/pr-105/*.png
+          git diff --staged --quiet && exit 0
+          git commit -m "ci: add iOS navbar scroll jump PR screenshots"
+          git push origin "HEAD:${HEAD_REF}"
   web:
     runs-on: ubuntu-latest
     # Keep this job capped at 10 minutes; never raise it unless explicitly asked.
