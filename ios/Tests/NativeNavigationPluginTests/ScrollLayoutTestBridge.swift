@@ -38,6 +38,16 @@ final class ScrollLayoutTestBridge: NSObject, CAPBridgeProtocol {
         super.init()
     }
 
+    func getWebView() -> WKWebView? { webView }
+    func isSimulator() -> Bool { isSimEnvironment }
+    func isDevMode() -> Bool { isDevEnvironment }
+    func getStatusBarVisible() -> Bool { statusBarVisible }
+    func getStatusBarStyle() -> UIStatusBarStyle { statusBarStyle }
+    func getUserInterfaceStyle() -> UIUserInterfaceStyle { userInterfaceStyle }
+    func getLocalUrl() -> String { config.localURL.absoluteString }
+    func getSavedCall(_ callbackId: String) -> CAPPluginCall? { savedCall(withID: callbackId) }
+    func releaseCall(callbackId: String) { releaseCall(withID: callbackId) }
+
     func plugin(withName: String) -> CAPPlugin? { nil }
     func saveCall(_ call: CAPPluginCall) {}
     func savedCall(withID: String) -> CAPPluginCall? { nil }
@@ -60,6 +70,11 @@ final class ScrollLayoutTestBridge: NSObject, CAPBridgeProtocol {
     func setServerBasePath(_: String) {}
     func registerPluginType(_: CAPPlugin.Type) {}
     func registerPluginInstance(_: CAPPlugin) {}
-    func registerCallInterceptor(_: String, handler _: @escaping ([String: Any]) -> Void) {}
     func showAlertWith(title: String, message: String, buttonTitle: String) {}
+    func presentVC(_ viewControllerToPresent: UIViewController, animated flag: Bool, completion: (() -> Void)?) {
+        viewController?.present(viewControllerToPresent, animated: flag, completion: completion)
+    }
+    func dismissVC(animated flag: Bool, completion: (() -> Void)?) {
+        viewController?.dismiss(animated: flag, completion: completion)
+    }
 }

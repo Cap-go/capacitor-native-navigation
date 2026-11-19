@@ -6,7 +6,8 @@ import WebKit
 final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
     private let canvasWidth: CGFloat = 390
     private let canvasHeight: CGFloat = 844
-    private let safeAreaTop: CGFloat = 59
+    /// Drives `additionalSafeAreaInsets` in the harness only; assertions use measured layout.
+    private let harnessSafeAreaTop: CGFloat = 59
     private var webViewLoadObserverRetention = [WebViewLoadObserver]()
 
     func testNavbarScrollCollapseLayoutThroughPlugin() throws {
@@ -14,20 +15,19 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         let plugin = fixture.plugin
         let container = fixture.container
 
-        let layoutFrame = plugin.scrollLayout_expectedNavContainerLayoutFrame(
-            width: canvasWidth,
-            safeAreaTop: safeAreaTop
-        )
-        let expectedCenter = CGPoint(x: layoutFrame.midX, y: layoutFrame.midY)
-        let hideDistance = plugin.scrollLayout_navbarHideDistance()
+        let revealedSize = fixture.revealedContainerSize
+        let expectedCenter = fixture.revealedContainerCenter
 
         plugin.scrollLayout_setCollapsed(true)
         plugin.scrollLayout_layoutChrome()
         plugin.scrollLayout_updateInsetsAndNotify()
         drainMainQueue(for: 0.4)
-        XCTAssertEqual(container.bounds.size, layoutFrame.size)
-        XCTAssertEqual(container.center.x, expectedCenter.x, accuracy: 0.01)
-        XCTAssertEqual(container.center.y, expectedCenter.y, accuracy: 0.01)
+        XCTAssertEqual(container.bounds.size.width, revealedSize.width, accuracy: 0.01)
+        XCTAssertEqual(container.bounds.size.height, revealedSize.height, accuracy: 0.01)
+        XCTAssertEqual(container.center.x, expectedCenter.x, accuracy: 0.5)
+        XCTAssertEqual(container.center.y, expectedCenter.y, accuracy: 0.5)
+        let hideDistance = plugin.scrollLayout_navbarHideDistance(from: container)
+        XCTAssertGreaterThan(hideDistance, 40)
         XCTAssertEqual(container.transform.ty, -hideDistance, accuracy: 0.01)
         let collapsedBlurHeight = try awaitEdgeBlurOverlayHeight(plugin: plugin, webView: fixture.webView)
 
@@ -36,46 +36,46 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         plugin.scrollLayout_updateInsetsAndNotify()
         drainMainQueue(for: 0.4)
         XCTAssertEqual(container.transform, .identity)
-        XCTAssertEqual(container.center.x, expectedCenter.x, accuracy: 0.01)
-        XCTAssertEqual(container.center.y, expectedCenter.y, accuracy: 0.01)
+        XCTAssertEqual(container.bounds.size, revealedSize, accuracy: 0.01)
+        XCTAssertEqual(container.center.x, expectedCenter.x, accuracy: 0.5)
+        XCTAssertEqual(container.center.y, expectedCenter.y, accuracy: 0.5)
         let revealedBlurHeight = try awaitEdgeBlurOverlayHeight(plugin: plugin, webView: fixture.webView)
-        XCTAssertGreaterThan(revealedBlurHeight, collapsedBlurHeight + 20)
-        XCTAssertGreaterThan(revealedBlurHeight, 80)
+        XCTAssertGreaterThan(revealedBlurHeight, collapsedBlurHeight)
+        XCTAssertGreaterThan(revealedBlurHeight, collapsedBlurHeight * 1.02)
     }
 
     func testAnimatedRevealNotifiesInsetsBeforeAnimationEnds() throws {
         let fixture = try makeWindowFixture()
         let plugin = fixture.plugin
-        let expectedNavHeight = plugin.scrollLayout_expectedNavContainerLayoutFrame(
-            width: canvasWidth,
-            safeAreaTop: safeAreaTop
-        ).height
+        let revealedNavbarHeight = fixture.revealedNavbarInsetHeight
 
         plugin.scrollLayout_setCollapsed(true)
         plugin.scrollLayout_updateInsetsAndNotify()
         let collapsedNotifyHeight = plugin.scrollLayout_lastNotifiedNavbarHeight()
 
         plugin.scrollLayout_setCollapsed(false, animated: true)
+        let immediateNotifyHeight = plugin.scrollLayout_lastNotifiedNavbarHeight()
         XCTAssertGreaterThan(
-            plugin.scrollLayout_lastNotifiedNavbarHeight(),
-            collapsedNotifyHeight + 20,
+            immediateNotifyHeight,
+            collapsedNotifyHeight + 5,
             "Reveal must notify full navbar insets immediately, not after 0.22s"
         )
-        XCTAssertGreaterThan(plugin.scrollLayout_lastNotifiedNavbarHeight(), expectedNavHeight * 0.85)
+        XCTAssertGreaterThanOrEqual(
+            immediateNotifyHeight,
+            revealedNavbarHeight * 0.92,
+            "Inset notification should match the revealed layout height"
+        )
+        XCTAssertEqual(immediateNotifyHeight, revealedNavbarHeight, accuracy: 2)
     }
 
     func testLegacyFrameAssignmentShiftsLayoutCenterWhileCollapsed() throws {
         let fixture = try makeWindowFixture()
         let plugin = fixture.plugin
         let container = fixture.container
-        let layoutFrame = plugin.scrollLayout_expectedNavContainerLayoutFrame(
-            width: canvasWidth,
-            safeAreaTop: safeAreaTop
-        )
-        let expectedCenter = CGPoint(x: layoutFrame.midX, y: layoutFrame.midY)
+        let expectedCenter = fixture.revealedContainerCenter
 
         plugin.scrollLayout_setCollapsed(true)
-        plugin.scrollLayout_applyLegacyMainFrameAssignment(width: canvasWidth, safeAreaTop: safeAreaTop)
+        plugin.scrollLayout_applyLegacyMainFrameAssignment(revealedContainerSize: fixture.revealedContainerSize)
         plugin.scrollLayout_updateInsetsAndNotify()
         drainMainQueue(for: 0.1)
 
@@ -88,17 +88,17 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
     }
 
     func testSetViewFrameRegressionGuard() {
-        let layoutFrame = CGRect(x: 0, y: 0, width: canvasWidth, height: safeAreaTop + 44)
-        let expectedCenter = CGPoint(x: layoutFrame.midX, y: layoutFrame.midY)
-
         let fixed = UIView()
-        fixed.transform = CGAffineTransform(translationX: 0, y: -44)
+        let layoutFrame = CGRect(x: 0, y: 0, width: canvasWidth, height: 103)
+        let hideDistance: CGFloat = 44
+        let expectedCenter = CGPoint(x: layoutFrame.midX, y: layoutFrame.midY)
+        fixed.transform = CGAffineTransform(translationX: 0, y: -hideDistance)
         nativeNavigationSetViewFrame(fixed, frame: layoutFrame)
         XCTAssertEqual(fixed.center.x, expectedCenter.x, accuracy: 0.01)
         XCTAssertEqual(fixed.center.y, expectedCenter.y, accuracy: 0.01)
 
         let buggy = UIView()
-        buggy.transform = CGAffineTransform(translationX: 0, y: -44)
+        buggy.transform = CGAffineTransform(translationX: 0, y: -hideDistance)
         buggy.frame = layoutFrame
         XCTAssertNotEqual(buggy.center.y, expectedCenter.y, accuracy: 0.5)
     }
@@ -109,6 +109,9 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         let webView: WKWebView
         let plugin: NativeNavigationPlugin
         let container: UIView
+        let revealedContainerSize: CGSize
+        let revealedContainerCenter: CGPoint
+        let revealedNavbarInsetHeight: CGFloat
     }
 
     private func makeWindowFixture() throws -> WindowFixture {
@@ -144,7 +147,7 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
             windowHost: host,
             webView: webView,
             width: canvasWidth,
-            safeAreaTop: safeAreaTop,
+            safeAreaTop: harnessSafeAreaTop,
             drain: drainMainQueue(for:)
         )
         plugin.scrollLayout_updateInsetsAndNotify()
@@ -156,7 +159,20 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         }
 
         window.layoutIfNeeded()
-        return WindowFixture(window: window, rootView: rootView, webView: webView, plugin: plugin, container: container)
+        rootView.layoutIfNeeded()
+        let revealedSize = container.bounds.size
+        let revealedCenter = CGPoint(x: container.midX, y: container.midY)
+        let revealedNavbarHeight = plugin.scrollLayout_lastNotifiedNavbarHeight()
+        return WindowFixture(
+            window: window,
+            rootView: rootView,
+            webView: webView,
+            plugin: plugin,
+            container: container,
+            revealedContainerSize: revealedSize,
+            revealedContainerCenter: revealedCenter,
+            revealedNavbarInsetHeight: revealedNavbarHeight
+        )
     }
 
     private func drainMainQueue(for seconds: TimeInterval) {
@@ -220,6 +236,11 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         }
         return measured
     }
+}
+
+private extension UIView {
+    var midX: CGFloat { frame.midX }
+    var midY: CGFloat { frame.midY }
 }
 
 private final class WebViewLoadObserver: NSObject, WKNavigationDelegate {

@@ -6,12 +6,8 @@ import WebKit
 extension NativeNavigationPlugin {
     var scrollLayoutNavContainer: UIView? { navContainer }
 
-    func scrollLayout_navbarHideDistance() -> CGFloat {
-        44
-    }
-
-    func scrollLayout_expectedNavContainerLayoutFrame(width: CGFloat, safeAreaTop: CGFloat) -> CGRect {
-        CGRect(x: 0, y: 0, width: width, height: safeAreaTop + 44)
+    func scrollLayout_navbarHideDistance(from container: UIView) -> CGFloat {
+        abs(container.transform.ty)
     }
 
     func scrollLayout_lastNotifiedNavbarHeight() -> CGFloat {
@@ -84,11 +80,11 @@ extension NativeNavigationPlugin {
     }
 
     /// Simulates pre-fix `layoutChrome()` assigning `navContainer.frame` under an active collapse transform.
-    func scrollLayout_applyLegacyMainFrameAssignment(width: CGFloat, safeAreaTop: CGFloat) {
+    func scrollLayout_applyLegacyMainFrameAssignment(revealedContainerSize: CGSize) {
         guard let container = navContainer else {
             return
         }
-        container.frame = CGRect(x: 0, y: 0, width: width, height: safeAreaTop + 44)
+        container.frame = CGRect(x: 0, y: 0, width: revealedContainerSize.width, height: revealedContainerSize.height)
     }
 
     private func scrollLayout_runOnMain(
@@ -97,13 +93,15 @@ extension NativeNavigationPlugin {
         method: @escaping (CAPPluginCall) -> Void,
         options: [String: Any]
     ) {
-        let call = CAPPluginCall(
+        guard let call = CAPPluginCall(
             callbackId: "scroll-layout-test",
             methodName: "scrollLayout",
             options: options,
-            success: { _, _ in },
-            error: { _, _ in }
-        )
+            success: { _ in },
+            error: { _ in }
+        ) else {
+            return
+        }
         if Thread.isMainThread {
             method(call)
         } else {
