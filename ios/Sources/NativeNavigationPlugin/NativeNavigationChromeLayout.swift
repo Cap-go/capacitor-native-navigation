@@ -1,7 +1,27 @@
 import CoreGraphics
 import Foundation
+import UIKit
 
 let nativeNavigationNavbarSearchRowPoints: CGFloat = 52
+
+/// Lays out a view to match `frame` without disturbing an in-flight `transform` animation.
+/// Assigning `frame` while `transform` is non-identity leaves UIKit's `center` inconsistent with the rect.
+func nativeNavigationSetViewFrame(_ view: UIView, frame: CGRect) {
+    if view.transform == .identity {
+        view.frame = frame
+        return
+    }
+    view.bounds = CGRect(origin: .zero, size: frame.size)
+    view.center = CGPoint(x: frame.midX, y: frame.midY)
+}
+
+/// Matches the navbar scroll-collapse animation duration when resizing the top edge blur.
+func nativeNavigationEdgeBlurHeightTransitionScript(top: Bool) -> String {
+    guard top else {
+        return ""
+    }
+    return "root.style.transition = 'height 0.22s ease';"
+}
 
 func nativeNavigationNavbarSearchRowHeight(
     visible: Bool,

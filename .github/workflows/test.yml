@@ -79,6 +79,27 @@ jobs:
       - name: Build
         id: build_code
         run: bun run verify:ios
+      - name: Run NativeNavigationPluginTests on iOS Simulator
+        run: |
+          set -euo pipefail
+          SIM_ID="$(python3 - <<'PY'
+          import json, subprocess, sys
+          payload = json.loads(
+              subprocess.check_output(["xcrun", "simctl", "list", "devices", "available", "-j"], text=True)
+          )
+          for runtime, devices in payload.get("devices", {}).items():
+              if "iOS" not in runtime:
+                  continue
+              for device in devices:
+                  if device.get("isAvailable") and "iPhone" in device.get("name", ""):
+                      print(device["udid"])
+                      sys.exit(0)
+          sys.exit("No available iPhone simulator found")
+          PY
+          )"
+          xcodebuild test -scheme CapgoCapacitorNativeNavigation \
+            -destination "platform=iOS Simulator,id=${SIM_ID}" \
+            -only-testing:NativeNavigationPluginTests
       - name: Verify packed package in example app (iOS)
         shell: bash
         run: bash ./.github/scripts/verify-packed-example.sh ios

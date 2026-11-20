@@ -146,6 +146,35 @@ class NativeNavigationTests: XCTestCase {
         )
     }
 
+    func testSetViewFramePreservesCenterUnderScrollCollapseTransform() {
+        let frame = CGRect(x: 0, y: 59, width: 390, height: 103)
+        let collapsedY: CGFloat = -88
+
+        let fixed = UIView(frame: .zero)
+        fixed.transform = CGAffineTransform(translationX: 0, y: collapsedY)
+        nativeNavigationSetViewFrame(fixed, frame: frame)
+        XCTAssertEqual(fixed.bounds.size, frame.size)
+        XCTAssertEqual(fixed.center.x, frame.midX, accuracy: 0.01)
+        XCTAssertEqual(fixed.center.y, frame.midY, accuracy: 0.01)
+
+        let buggy = UIView(frame: .zero)
+        buggy.transform = CGAffineTransform(translationX: 0, y: collapsedY)
+        buggy.frame = frame
+        XCTAssertNotEqual(buggy.center.y, frame.midY, accuracy: 0.5)
+    }
+
+    func testSetViewFrameUsesFrameAssignmentWhenIdentity() {
+        let view = UIView()
+        let frame = CGRect(x: 12, y: 34, width: 200, height: 56)
+        nativeNavigationSetViewFrame(view, frame: frame)
+        XCTAssertEqual(view.frame, frame)
+    }
+
+    func testNavbarEdgeBlurHeightTransitionMatchesNavbarAnimation() {
+        XCTAssertTrue(nativeNavigationEdgeBlurHeightTransitionScript(top: true).contains("0.22s"))
+        XCTAssertTrue(nativeNavigationEdgeBlurHeightTransitionScript(top: false).isEmpty)
+    }
+
     func testNavbarScrollHideOnScrollDownRevealsAtTop() {
         XCTAssertEqual(
             nativeNavigationNavbarScrollAction(

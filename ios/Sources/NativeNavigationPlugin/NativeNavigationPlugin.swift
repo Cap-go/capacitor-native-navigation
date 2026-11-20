@@ -4,6 +4,7 @@ import Foundation
 import Capacitor
 import ObjectiveC
 import UIKit
+import WebKit
 
 private struct NativeNavigationTransitionContext {
     let webView: UIView
@@ -40,7 +41,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     ]
 
     private let implementation = NativeNavigation()
-    private var navContainer: UIView?
+    internal var navContainer: UIView?
     private var navBlurView: UIVisualEffectView?
     private var navBar: UINavigationBar?
     private var navSegmentsView: NativeNavigationSegmentRowsView?
@@ -110,6 +111,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var navbarScrollBehavior: NativeNavigationNavbarScrollBehavior = .none
     private var navbarScrollThreshold: CGFloat = 8
     private var navbarScrollCollapsed = false
+    internal private(set) var scrollLayoutHarnessLastPushedNavbarHeight: CGFloat = 0
+    internal private(set) var scrollLayoutHarnessLastNavbarBlurHeight: CGFloat = 0
     private var tabIds: [String] = []
     private var tabTitles: [String] = []
     private var tabDisplayTitles: [String?] = []
@@ -1120,7 +1123,11 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         UIAccessibility.isReduceTransparencyEnabled
     }
 
-    private func ensureNavBar() -> UINavigationBar {
+    private var pluginRootView: UIView? {
+        bridge?.viewController?.view
+    }
+
+    internal func ensureNavBar() -> UINavigationBar {
         if let navBar = navBar {
             return navBar
         }
@@ -1147,7 +1154,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         bar.autoresizingMask = [.flexibleWidth, .flexibleBottomMargin]
         container.addSubview(bar)
 
-        bridge?.viewController?.view.addSubview(container)
+        pluginRootView?.addSubview(container)
         self.navContainer = container
         self.navBar = bar
         return bar
@@ -2573,19 +2580,13 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         }
     }
 
-    private func setNavbarScrollCollapsed(_ collapsed: Bool, animated: Bool) {
+    internal func setNavbarScrollCollapsed(_ collapsed: Bool, animated: Bool) {
         guard navbarScrollCollapsed != collapsed else {
             return
         }
         navbarScrollCollapsed = collapsed
         applyNavbarScrollCollapsedAppearance(animated: animated)
-        if animated && !collapsed {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-                self.updateInsetsAndNotify()
-            }
-        } else {
-            updateInsetsAndNotify()
-        }
+        updateInsetsAndNotify()
     }
 
     private func applyNavbarScrollCollapsedAppearance(animated: Bool) {
@@ -2611,8 +2612,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         }
     }
 
-    private func layoutChrome() {
-        guard let rootView = bridge?.viewController?.view else {
+    internal func layoutChrome() {
+        guard let rootView = pluginRootView else {
             return
         }
         rootView.layoutIfNeeded()
@@ -2653,7 +2654,10 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 if isEnabled && navbarVisible && accessoryHeight > 0 {
                     let barWidth = max(0, width - safeInsets.left - safeInsets.right)
                     container.isHidden = false
-                    container.frame = CGRect(x: safeInsets.left, y: safeInsets.top, width: barWidth, height: accessoryHeight)
+                    nativeNavigationSetViewFrame(
+                        container,
+                        frame: CGRect(x: safeInsets.left, y: safeInsets.top, width: barWidth, height: accessoryHeight)
+                    )
                     navSearchBar?.frame = CGRect(x: 0, y: 0, width: barWidth, height: searchHeight)
                     navSearchBar?.isHidden = searchHeight == 0
                     navSegmentsView?.frame = CGRect(x: 0, y: searchHeight, width: barWidth, height: segmentsHeight)
@@ -2664,12 +2668,13 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             } else {
                 let topInset = navbarTopInset(safeInsets)
                 let visibleNavbarHeight = navbarLarge && navbarLargeCollapsed ? 44 : navbarHeight
-                container.frame = CGRect(
+                let navContainerFrame = CGRect(
                     x: 0,
                     y: 0,
                     width: width,
                     height: topInset + visibleNavbarHeight + searchHeight + segmentsHeight
                 )
+                nativeNavigationSetViewFrame(container, frame: navContainerFrame)
                 navBlurView?.frame = container.bounds
                 navBlurView?.isHidden = false
                 navBar?.isHidden = !isEnabled || !navbarVisible
@@ -3332,8 +3337,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
     #endif
 
-    private func currentInsets() -> [String: Any] {
-        let rootView = bridge?.viewController?.view
+    internal func currentInsets() -> [String: Any] {
+        let rootView = pluginRootView
         let safeInsets = rootView?.safeAreaInsets ?? .zero
         let rootWidth = rootView?.bounds.width ?? 0
         // In the rail the title is not a top bar. Search and segment rows still
@@ -3396,9 +3401,10 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         return ["insets": currentInsets()]
     }
 
-    private func updateInsetsAndNotify() {
+    internal func updateInsetsAndNotify() {
         layoutChrome()
         let insets = currentInsets()
+        scrollLayoutHarnessLastPushedNavbarHeight = insets["navbarHeight"] as? CGFloat ?? 0
         notifyListeners("safeAreaChanged", data: ["insets": insets])
         notifyVerticalBarChange(insets)
         applyTabbarEdgeBlur(tabbarHeight: insets["tabbarHeight"] as? CGFloat ?? 0)
@@ -3455,10 +3461,12 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     /// view, which the WebView does not get. Draw the same progressive blur under the navbar.
     private func applyNavbarEdgeBlur(navbarHeight: CGFloat) {
         let wantsBlur = navbarEdgeBlur ?? usesSystemLiquidGlass
-        let active = isEnabled && wantsBlur && navbarVisible && navbarHeight > 0
+        let layoutNavbarHeight = navbarScrollCollapsed ? 0 : navbarHeight
+        let active = isEnabled && wantsBlur && navbarVisible && layoutNavbarHeight > 0
         // Follow the visible bar: a folded large title is shorter than the inset it keeps.
         let folded = navbarLarge && navbarLargeCollapsed ? self.navbarHeight - 44 : 0
-        let height = active ? Int((navbarHeight - folded).rounded()) + 48 : 0
+        let height = active ? Int((layoutNavbarHeight - folded).rounded()) + 48 : 0
+        scrollLayoutHarnessLastNavbarBlurHeight = CGFloat(height)
         bridge?.webView?.evaluateJavaScript(edgeBlurScript(top: true, height: height))
     }
 
@@ -3466,6 +3474,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         let id = top ? "cap-native-navigation-edge-blur-top" : "cap-native-navigation-edge-blur"
         let edge = top ? "top" : "bottom"
         let direction = top ? "to bottom" : "to top"
+        let heightTransition = nativeNavigationEdgeBlurHeightTransitionScript(top: top)
         return """
         (function(height){
           var id = '\(id)';
@@ -3485,6 +3494,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             });
           }
           if (root.parentNode !== document.body && document.body) { document.body.appendChild(root); }
+          \(heightTransition)
           root.style.height = height + 'px';
         })(\(height));
         """
