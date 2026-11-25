@@ -193,13 +193,14 @@ final class NativeNavigationWebUIEngine {
     }
 
     private static final class NativeNavigationWebUIEngineRunOnce {
-        private static final java.util.Set<Integer> INSTALLED_WEB_VIEW_IDS =
-            java.util.Collections.synchronizedSet(new java.util.HashSet<>());
+        private static final java.util.Set<WebView> INSTALLED_WEB_VIEWS =
+            java.util.Collections.synchronizedSet(
+                java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>()));
 
         private NativeNavigationWebUIEngineRunOnce() {}
 
         static boolean isInstalled(WebView webView) {
-            return webView != null && INSTALLED_WEB_VIEW_IDS.contains(System.identityHashCode(webView));
+            return webView != null && INSTALLED_WEB_VIEWS.contains(webView);
         }
 
         static void install(WebView webView) {
@@ -208,7 +209,7 @@ final class NativeNavigationWebUIEngine {
             }
             try {
                 NativeUIProjection.install(webView);
-                INSTALLED_WEB_VIEW_IDS.add(System.identityHashCode(webView));
+                INSTALLED_WEB_VIEWS.add(webView);
             } catch (RuntimeException error) {
                 Log.w(
                     NativeNavigationWebUIEngine.class.getSimpleName(),
