@@ -1,5 +1,5 @@
 ext {
-    webviewNativeUiEngineVersion = project.hasProperty('webviewNativeUiEngineVersion') ? rootProject.ext.webviewNativeUiEngineVersion : '1.0.11'
+    webviewNativeUiEngineVersion = '1.0.11'
     junitVersion = project.hasProperty('junitVersion') ? rootProject.ext.junitVersion : '4.13.2'
     androidxAppCompatVersion = project.hasProperty('androidxAppCompatVersion') ? rootProject.ext.androidxAppCompatVersion : '1.7.1'
     androidxSwipeRefreshLayoutVersion = project.hasProperty('androidxSwipeRefreshLayoutVersion') ? rootProject.ext.androidxSwipeRefreshLayoutVersion : '1.1.0'

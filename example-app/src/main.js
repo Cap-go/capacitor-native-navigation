@@ -765,10 +765,14 @@ const registerEngineDialogOverlayHooks = async () => {
 const configureChrome = async () => {
   const applyNativeChrome = async () => {
     await applyConfigure();
-    await registerEngineDialogOverlayHooks();
     chromeConfigured = true;
     await updateNavbar();
     await updateTabbar();
+    try {
+      await registerEngineDialogOverlayHooks();
+    } catch (error) {
+      console.warn('registerEngineDialogOverlayHooks failed', error);
+    }
   };
 
   if (screenshotMode) {
