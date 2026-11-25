@@ -56,7 +56,7 @@ jobs:
             installed_root="$(find example-app/node_modules -type d -path '*/@capgo/capacitor-native-navigation/android/src/main/java/app/capgo/nativenavigation' -print -quit)"
             test -n "${installed_root}"
             if [ "${mode}" = "main" ]; then
-              git ls-tree --name-only origin/main android/src/main/java/app/capgo/nativenavigation | while read -r name; do
+              git ls-tree --name-only "origin/main:android/src/main/java/app/capgo/nativenavigation" | while read -r name; do
                 git show "origin/main:android/src/main/java/app/capgo/nativenavigation/${name}" > "${installed_root}/${name}"
               done
               for file in "${installed_root}"/*.java; do
