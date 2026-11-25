@@ -210,6 +210,10 @@ public class NativeNavigationPlugin extends Plugin {
         super.notifyListeners(eventName, data, retainUntilConsumed);
     }
 
+    void notifyWebUIChromeListeners(String eventName, JSObject data) {
+        notifyListeners(eventName, data, false);
+    }
+
     @PluginMethod
     public void configure(PluginCall call) {
         runOnUiThread(() -> {

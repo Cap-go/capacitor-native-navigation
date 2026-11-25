@@ -65,7 +65,7 @@ final class NativeNavigationWebUIEngine {
         JSObject payload = new JSObject();
         payload.put("surface", surface);
         String eventName = hidden ? "chromeHidden" : "chromeShown";
-        boundPlugin.notifyListeners(eventName, payload, false);
+        boundPlugin.notifyWebUIChromeListeners(eventName, payload);
     }
 
     void prewireChannel(WebView webView) {
