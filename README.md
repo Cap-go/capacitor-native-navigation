@@ -171,15 +171,26 @@ await NativeNavigation.configure({
 
 Keep using `setNavbar` and `setTabbar` as today. Route transitions still use the plugin snapshot path; the engine owns overlay handoff only while `webNativeUIEngine` is `true`.
 
-On iOS 26 and later the engine may use private snapshot APIs during overlay capture. If App Store review or your policy rejects that, set `NativeUICoveredSnapshots.experimentalInPlaceFilteringEnabled = false` in your app before navigation (see the engine README) or keep `webNativeUIEngine` off.
+On iOS 26 and later the engine enables a private Apple API workaround by default for applicable Liquid Glass captures. This carries App Store review and OS compatibility risks. To disable the workaround, set this in native app code at startup before navigation:
+
+```swift
+import WebViewNativeUIEngine
+
+NativeUICoveredSnapshots.experimentalInPlaceFilteringEnabled = false
+```
+
+Disabling the workaround does not remove the helper from the engine binary. You can also keep `webNativeUIEngine` off.
 
 ### Engine setup notes
 
-**CocoaPods iOS apps** need a direct npm dependency and a local pod (SwiftPM example apps do not):
+**CocoaPods iOS apps** need a direct npm dependency (SwiftPM example apps do not):
 
 ```bash
 npm install --save-exact @webview-native-ui/engine@1.0.11
+npx cap sync ios
 ```
+
+`npx cap sync ios` runs this plugin hook to add `pod 'WebViewNativeUIEngine', :path => ...` beside `capacitor_pods`. Manual fallback:
 
 ```ruby
 # ios/App/Podfile, inside the app target and outside capacitor_pods
@@ -201,7 +212,7 @@ end
 }
 ```
 
-Keep the same flag in your JavaScript `configure({ webNativeUIEngine: true })` call. With the option off, omit both entries. The channel prewire does not run.
+Keep the same flag in your JavaScript `configure({ webNativeUIEngine: true })` call. With the option off, omit the `capacitor.config` entry. The Android channel prewire still runs in plugin `load()`; projections activate only after `configure`.
 
 ## Modals, sheets, and popovers
 
@@ -294,6 +305,8 @@ If you prefer Manual Setup, install the plugin by running the following commands
 npm install @capgo/capacitor-native-navigation
 npx cap sync
 ```
+
+CocoaPods iOS apps that enable `webNativeUIEngine` need the engine npm package (`npm install --save-exact @webview-native-ui/engine@1.0.11`). After `npx cap sync ios`, this plugin adds `pod 'WebViewNativeUIEngine'` to the app `Podfile` from the installed npm package. SwiftPM iOS apps resolve the engine through this plugin's `Package.swift` with no extra steps. The podspec dependency cannot embed a `node_modules` path; CocoaPods Trunk does not host `WebViewNativeUIEngine`.
 
 ## Minimal Usage
 

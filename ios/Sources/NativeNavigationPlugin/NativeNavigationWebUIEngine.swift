@@ -34,6 +34,9 @@ final class NativeNavigationWebUIEngine {
         guard isActive else {
             return
         }
+        if eventName == "transitionStart" || eventName == "transitionEnd" {
+            return
+        }
         navbarProjection?.receive(eventName, data: data)
         tabbarProjection?.receive(eventName, data: data)
     }

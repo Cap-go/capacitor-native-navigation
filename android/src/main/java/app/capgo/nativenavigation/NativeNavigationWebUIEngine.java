@@ -46,6 +46,9 @@ final class NativeNavigationWebUIEngine {
         if (!active) {
             return;
         }
+        if ("transitionStart".equals(eventName) || "transitionEnd".equals(eventName)) {
+            return;
+        }
         if (navbarProjection != null) {
             navbarProjection.receive(eventName, data);
         }
@@ -86,13 +89,18 @@ final class NativeNavigationWebUIEngine {
         }
     }
 
-  private boolean install(NativeNavigationPlugin plugin) {
+    private boolean install(NativeNavigationPlugin plugin) {
         WebView webView = plugin.getBridge().getWebView();
         if (webView == null) {
             return false;
         }
+        if (!NativeNavigationWebUIEngineRunOnce.isInstalled()) {
+            prewireChannel(webView);
+        }
+        if (!NativeNavigationWebUIEngineRunOnce.isInstalled()) {
+            return false;
+        }
         injectProjectionSlots(webView);
-        NativeNavigationWebUIEngineRunOnce.install(webView);
         if (navbarProjection == null) {
             navbarProjection = makeProjection(plugin, NAVBAR_SELECTOR, "navbar", plugin::getNavbarProjectionView);
         }
@@ -164,12 +172,23 @@ final class NativeNavigationWebUIEngine {
 
         private NativeNavigationWebUIEngineRunOnce() {}
 
+        static boolean isInstalled() {
+            return installed;
+        }
+
         static void install(WebView webView) {
-            if (installed) {
+            if (installed || webView == null) {
                 return;
             }
-            NativeUIProjection.install(webView);
-            installed = true;
+            try {
+                NativeUIProjection.install(webView);
+                installed = true;
+            } catch (RuntimeException error) {
+                Log.w(
+                    NativeNavigationWebUIEngine.class.getSimpleName(),
+                    "Web UI engine channel prewire failed",
+                    error);
+            }
         }
     }
 }

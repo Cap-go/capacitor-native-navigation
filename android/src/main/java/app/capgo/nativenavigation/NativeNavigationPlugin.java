@@ -174,7 +174,7 @@ public class NativeNavigationPlugin extends Plugin {
             activity.runOnUiThread(() -> {
                 enableEdgeToEdge();
                 watchContentRootBounds();
-                if (getConfig().getBoolean("webNativeUIEngine", false) && getBridge() != null) {
+                if (getBridge() != null) {
                     webUIEngine.prewireChannel(getBridge().getWebView());
                 }
             });
