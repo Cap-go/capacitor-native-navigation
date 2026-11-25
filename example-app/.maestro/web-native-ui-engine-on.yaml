@@ -1,0 +1,17 @@
+appId: app.capgo.capacitor.navigation
+---
+- launchApp
+- tapOn:
+    id: "engine-modal-open"
+- extendedWaitUntil:
+    visible:
+      id: "engine-projection-active"
+    timeout: 8000
+- assertVisible:
+    id: "engine-projection-active"
+- tapOn:
+    id: "engine-modal-close"
+- extendedWaitUntil:
+    visible:
+      id: "engine-projection-inactive"
+    timeout: 8000

@@ -310,6 +310,18 @@ export interface NativeNavigationConfigureOptions {
    * @since 8.14.0
    */
   verticalBarBehavior?: NativeNavigationVerticalBarBehavior;
+
+  /**
+   * Opt in to WebView Native UI Engine so Ionic modals, sheets, and other Web
+   * overlays can cover the native navbar and tabbar with a captured snapshot.
+   * When `false`, the plugin does not register engine projections or overlay
+   * listeners. When `true`, call `configure` before the first navigation and
+   * keep using the same `setNavbar` and `setTabbar` APIs.
+   *
+   * @default false
+   * @since 8.17.0
+   */
+  webNativeUIEngine?: boolean;
 }
 
 /**

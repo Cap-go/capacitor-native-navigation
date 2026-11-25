@@ -64,6 +64,7 @@ dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
     implementation project(':capacitor-android')
     annotationProcessor project(':capacitor-android')
+    implementation 'io.github.webview-native-ui:engine:1.0.11'
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation "androidx.swiperefreshlayout:swiperefreshlayout:$androidxSwipeRefreshLayoutVersion"
     testImplementation "junit:junit:$junitVersion"

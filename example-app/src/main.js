@@ -179,6 +179,7 @@ const configDemo = {
   animationDuration: '360',
   glass: 'liquidGlass',
   transitionDuration: '',
+  webNativeUIEngine: import.meta.env.VITE_WEB_NATIVE_UI_ENGINE === 'true',
 };
 const configToggles = [['enabled', 'Native chrome enabled']];
 const configSelects = [
@@ -721,6 +722,7 @@ const applyConfigure = async () => {
     enabled: configDemo.enabled,
     contentInsetMode: configDemo.contentInsetMode,
     animationDuration: Number(configDemo.animationDuration),
+    webNativeUIEngine: configDemo.webNativeUIEngine,
     colors: {
       tint: chromePalette().tint,
       inactiveTint: chromePalette().inactiveTint,
@@ -1628,6 +1630,40 @@ window.addEventListener('storage', (event) => {
 if (screenshotMode) {
   void SplashScreen.hide({ fadeOutDuration: 0 });
 }
+const installEngineModalDemo = () => {
+  const wrap = document.createElement('section');
+  wrap.className = 'engine-modal-demo';
+  wrap.innerHTML = `
+    <button type="button" id="engine-modal-open">Open engine modal</button>
+    <p id="engine-projection-active" hidden>Engine navbar snapshot active</p>
+    <p id="engine-projection-inactive" hidden>Engine navbar snapshot inactive</p>
+    <dialog id="engine-modal-sheet" class="engine-modal-sheet">
+      <p id="engine-modal-sheet-title">Engine modal layer</p>
+      <button type="button" id="engine-modal-close">Close</button>
+    </dialog>
+  `;
+  app.appendChild(wrap);
+  const dialog = wrap.querySelector('#engine-modal-sheet');
+  const refreshProbe = () => {
+    const slot = document.getElementById('cap-native-navigation-navbar-slot');
+    const active = Boolean(slot?.querySelector('img[data-native-ui-projection-image]'));
+    wrap.querySelector('#engine-projection-active')?.toggleAttribute('hidden', !active);
+    wrap.querySelector('#engine-projection-inactive')?.toggleAttribute('hidden', active);
+  };
+  wrap.querySelector('#engine-modal-open')?.addEventListener('click', () => {
+    window.dispatchEvent(new Event('capNativeNavigationEngineModalWillPresent'));
+    dialog?.showModal();
+    window.setTimeout(refreshProbe, 120);
+  });
+  wrap.querySelector('#engine-modal-close')?.addEventListener('click', () => {
+    dialog?.close();
+    window.dispatchEvent(new Event('capNativeNavigationEngineModalDidDismiss'));
+    window.setTimeout(refreshProbe, 120);
+  });
+  refreshProbe();
+};
+installEngineModalDemo();
+
 void configureChrome().catch((error) => {
   console.error('configureChrome failed', error);
 });

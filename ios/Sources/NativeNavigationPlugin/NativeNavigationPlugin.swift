@@ -135,6 +135,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private lazy var pullToRefresh = NativeNavigationPullToRefresh { [weak self] in
         self?.notifyListeners("pullToRefresh", data: [:])
     }
+    private let webUIEngine = NativeNavigationWebUIEngine()
 
     private var usesSystemLiquidGlass: Bool {
         if #available(iOS 26.0, *) {
@@ -207,7 +208,13 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
 
     deinit {
+        webUIEngine.teardown()
         NotificationCenter.default.removeObserver(self)
+    }
+
+    public override func notifyListeners(_ eventName: String, data: [String: Any]?, retainUntilConsumed: Bool) {
+        webUIEngine.forward(eventName: eventName, data: data)
+        super.notifyListeners(eventName, data: data, retainUntilConsumed: retainUntilConsumed)
     }
 
     @objc func configure(_ call: CAPPluginCall) {
@@ -221,6 +228,9 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 NativeNavigationVerticalBarPreference.disabled = behavior == "disabled"
                 self.installDuoObservers()
                 self.requestVerticalBarUpdate()
+            }
+            if call.options?["webNativeUIEngine"] != nil {
+                self.webUIEngine.setActive(call.getBool("webNativeUIEngine", false), plugin: self)
             }
 
             if !self.isEnabled {
@@ -279,6 +289,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 self.hideSystemRailNavbar()
                 self.stopNavbarScrollObservation(resetCollapsed: true)
                 self.updateInsetsAndNotify()
+                self.webUIEngine.notifyChrome(surface: "navbar", hidden: true)
                 call.resolve(self.insetsResult())
                 return
             }
@@ -325,6 +336,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             self.configureNavbarScrollBehavior(from: call)
             self.layoutChrome()
             self.updateInsetsAndNotify()
+            self.webUIEngine.notifyChrome(surface: "navbar", hidden: false)
             call.resolve(self.insetsResult())
         }
     }
@@ -404,6 +416,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             guard !hidden else {
                 self.hideTabBarChrome(animated: animated)
                 self.updateInsetsAndNotify()
+                self.webUIEngine.notifyChrome(surface: "tabbar", hidden: true)
                 call.resolve(self.insetsResult())
                 return
             }
@@ -514,6 +527,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             }
             self.layoutChrome()
             self.updateInsetsAndNotify()
+            self.webUIEngine.notifyChrome(surface: "tabbar", hidden: !self.tabbarVisible)
             call.resolve(self.insetsResult())
         }
     }
@@ -2610,6 +2624,24 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         } else {
             updates()
         }
+    }
+
+    internal func nativeNavigationNavbarProjectionVisible() -> Bool {
+        isEnabled && navbarVisible
+    }
+
+    internal func nativeNavigationTabbarProjectionVisible() -> Bool {
+        isEnabled && tabbarVisible
+    }
+
+    internal func nativeNavigationTabbarProjectionView() -> UIView? {
+        if usesSystemTabBar {
+            return tabBarController?.tabBar
+        }
+        if tabbarStyle.shape == .floating {
+            return floatingTabBar
+        }
+        return tabContainer ?? tabBar
     }
 
     internal func layoutChrome() {

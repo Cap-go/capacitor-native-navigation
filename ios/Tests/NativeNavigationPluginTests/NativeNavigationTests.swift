@@ -48,6 +48,11 @@ class NativeNavigationTests: XCTestCase {
         XCTAssertEqual(webView.frame, controller.view.bounds)
     }
 
+    func testWebUIEngineStartsInactive() {
+        let engine = NativeNavigationWebUIEngine()
+        XCTAssertFalse(engine.isActive)
+    }
+
     func testTabContentControllerKeepsSnapshotPlaceholderWhenWebViewMoves() {
         let webView = UIView()
         let firstController = NativeNavigationTabContentController()

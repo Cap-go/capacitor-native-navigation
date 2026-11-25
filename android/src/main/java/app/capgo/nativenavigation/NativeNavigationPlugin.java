@@ -126,6 +126,7 @@ public class NativeNavigationPlugin extends Plugin {
     private GlassOptions tabbarGlassOptions = GlassOptions.defaults();
     private JSObject navbarGlassConfig;
     private JSObject tabbarGlassConfig;
+    private final NativeNavigationWebUIEngine webUIEngine = new NativeNavigationWebUIEngine();
     private int defaultTransitionMs = DEFAULT_TRANSITION_MS;
     private int activeTransitionMs = DEFAULT_TRANSITION_MS;
     private int tintColor = Color.rgb(0, 122, 255);
@@ -195,8 +196,15 @@ public class NativeNavigationPlugin extends Plugin {
 
     @Override
     protected void handleOnDestroy() {
+        webUIEngine.teardown();
         cancelPendingWebViewBoundsWatcherAttach();
         super.handleOnDestroy();
+    }
+
+    @Override
+    protected void notifyListeners(String eventName, JSObject data, boolean retainUntilConsumed) {
+        webUIEngine.forward(eventName, data);
+        super.notifyListeners(eventName, data, retainUntilConsumed);
     }
 
     @PluginMethod
@@ -214,6 +222,9 @@ public class NativeNavigationPlugin extends Plugin {
             Double duration = call.getDouble("animationDuration");
             if (duration != null) {
                 defaultTransitionMs = Math.max(0, duration.intValue());
+            }
+            if (call.getData().has("webNativeUIEngine")) {
+                webUIEngine.setActive(call.getBoolean("webNativeUIEngine", false), this);
             }
             if (!enabled) {
                 navbarVisible = false;
@@ -265,6 +276,7 @@ public class NativeNavigationPlugin extends Plugin {
                 }
                 stopNavbarScrollObservation(true);
                 updateInsetsAndNotify();
+                webUIEngine.notifyChrome("navbar", true);
                 call.resolve(insetsResult());
                 return;
             }
@@ -342,6 +354,7 @@ public class NativeNavigationPlugin extends Plugin {
             configureNavbarScrollBehavior(call);
             layoutChrome();
             updateInsetsAndNotify();
+            webUIEngine.notifyChrome("navbar", false);
             call.resolve(insetsResult());
         });
     }
@@ -427,6 +440,7 @@ public class NativeNavigationPlugin extends Plugin {
                 setTabbarMinimized(false, false);
                 setTabbarChromeVisible(false, animated);
                 updateInsetsAndNotify();
+                webUIEngine.notifyChrome("tabbar", true);
                 call.resolve(insetsResult());
                 return;
             }
@@ -509,6 +523,7 @@ public class NativeNavigationPlugin extends Plugin {
                 nativeTabbar.setVisibility(View.GONE);
                 layoutChrome();
                 updateInsetsAndNotify();
+                webUIEngine.notifyChrome("tabbar", true);
                 call.resolve(insetsResult());
                 return;
             }
@@ -527,6 +542,7 @@ public class NativeNavigationPlugin extends Plugin {
             layoutChrome();
             setTabbarChromeVisible(true, animated);
             updateInsetsAndNotify();
+            webUIEngine.notifyChrome("tabbar", !tabbarVisible);
             call.resolve(insetsResult());
         });
     }
@@ -3915,6 +3931,22 @@ public class NativeNavigationPlugin extends Plugin {
 
     private float dp(double value) {
         return (float) (value * getContext().getResources().getDisplayMetrics().density);
+    }
+
+    View getNavbarProjectionView() {
+        return navbarContainer;
+    }
+
+    View getTabbarProjectionView() {
+        return tabbarContainer;
+    }
+
+    boolean isNavbarProjectionVisible() {
+        return enabled && navbarVisible;
+    }
+
+    boolean isTabbarProjectionVisible() {
+        return enabled && tabbarVisible;
     }
 
     private static final class GlassOptions {

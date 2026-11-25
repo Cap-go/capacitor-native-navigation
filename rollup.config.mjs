@@ -18,5 +18,5 @@ export default {
       inlineDynamicImports: true,
     },
   ],
-  external: ['@capacitor/core'],
+  external: ['@capacitor/core', '@webview-native-ui/engine', '@webview-native-ui/engine/ionic'],
 };
