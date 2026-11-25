@@ -239,6 +239,13 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 self.restoreWebViewFromSystemTabController()
                 self.tabBarController?.view.isHidden = true
                 self.tabBar?.isHidden = true
+                if self.webUIEngine.isActive {
+                    self.webUIEngine.notifyChrome(surface: "navbar", hidden: true)
+                    self.webUIEngine.notifyChrome(surface: "tabbar", hidden: true)
+                }
+            } else if self.webUIEngine.isActive {
+                self.webUIEngine.notifyChrome(surface: "navbar", hidden: !self.nativeNavigationNavbarProjectionVisible())
+                self.webUIEngine.notifyChrome(surface: "tabbar", hidden: !self.nativeNavigationTabbarProjectionVisible())
             }
 
             self.updateInsetsAndNotify()
@@ -251,6 +258,9 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             guard self.isEnabled else {
                 self.navbarVisible = false
                 self.stopNavbarScrollObservation(resetCollapsed: true)
+                if self.webUIEngine.isActive {
+                    self.webUIEngine.notifyChrome(surface: "navbar", hidden: true)
+                }
                 self.updateInsetsAndNotify()
                 call.resolve(self.insetsResult())
                 return
@@ -398,6 +408,9 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         DispatchQueue.main.async {
             guard self.isEnabled else {
                 self.tabbarVisible = false
+                if self.webUIEngine.isActive {
+                    self.webUIEngine.notifyChrome(surface: "tabbar", hidden: true)
+                }
                 self.updateInsetsAndNotify()
                 call.resolve(self.insetsResult())
                 return
@@ -2635,7 +2648,9 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
 
     internal func nativeNavigationNavbarProjectionView() -> UIView? {
-        if navbarUsesSystemRail, let navigationBar = bridge?.viewController?.navigationController?.navigationBar {
+        if navbarUsesSystemRail,
+           let navigationBar = nativeNavigationTabContentController(from: tabBarController?.selectedViewController)?
+            .navigationController?.navigationBar {
             return navigationBar
         }
         return navContainer

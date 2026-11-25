@@ -744,9 +744,28 @@ const applyConfigure = async () => {
   showInsets(result.insets);
 };
 
+const registerEngineDialogOverlayHooks = async () => {
+  if (!configDemo.webNativeUIEngine) {
+    return;
+  }
+  const { enableSupportIonicOverlays } = await import('@webview-native-ui/engine/ionic');
+  enableSupportIonicOverlays({
+    additional: [
+      {
+        selector: '#engine-modal-sheet',
+        events: {
+          willPresent: 'capNativeNavigationEngineModalWillPresent',
+          didDismiss: 'capNativeNavigationEngineModalDidDismiss',
+        },
+      },
+    ],
+  });
+};
+
 const configureChrome = async () => {
   const applyNativeChrome = async () => {
     await applyConfigure();
+    await registerEngineDialogOverlayHooks();
     chromeConfigured = true;
     await updateNavbar();
     await updateTabbar();
@@ -1640,29 +1659,38 @@ const installEngineModalDemo = () => {
   wrap.className = 'engine-modal-demo';
   wrap.innerHTML = `
     <button type="button" id="engine-modal-open">Open engine modal</button>
+    <p id="engine-runtime-off" hidden>Engine runtime disabled</p>
+    <p id="engine-projection-inactive" hidden>Engine navbar snapshot inactive</p>
     <dialog id="engine-modal-sheet" class="engine-modal-sheet">
       <p id="engine-modal-sheet-title">Engine modal layer</p>
       <p id="engine-projection-active" hidden>Engine navbar snapshot active</p>
-      <p id="engine-projection-inactive" hidden>Engine navbar snapshot inactive</p>
       <button type="button" id="engine-modal-close">Close</button>
     </dialog>
   `;
   document.body.appendChild(wrap);
+  const engineOn = import.meta.env.VITE_WEB_NATIVE_UI_ENGINE === 'true';
+  wrap.querySelector('#engine-runtime-off')?.toggleAttribute('hidden', engineOn);
   const dialog = wrap.querySelector('#engine-modal-sheet');
   const refreshProbe = () => {
     const slot = document.getElementById('cap-native-navigation-navbar-slot');
-    const active = Boolean(slot?.querySelector('img[data-native-ui-projection-image]'));
+    const active = Boolean(slot?.querySelector('[data-native-ui-projection-node]'));
     wrap.querySelector('#engine-projection-active')?.toggleAttribute('hidden', !active);
     wrap.querySelector('#engine-projection-inactive')?.toggleAttribute('hidden', active);
   };
+  const pollProbe = (deadline = Date.now() + 4000) => {
+    refreshProbe();
+    if (Date.now() < deadline) {
+      window.requestAnimationFrame(() => pollProbe(deadline));
+    }
+  };
   wrap.querySelector('#engine-modal-open')?.addEventListener('click', () => {
-    window.dispatchEvent(new Event('capNativeNavigationEngineModalWillPresent'));
+    dialog?.dispatchEvent(new Event('capNativeNavigationEngineModalWillPresent', { bubbles: true }));
     dialog?.showModal();
-    window.setTimeout(refreshProbe, 120);
+    pollProbe();
   });
   dialog?.addEventListener('close', () => {
-    window.dispatchEvent(new Event('capNativeNavigationEngineModalDidDismiss'));
-    window.setTimeout(refreshProbe, 120);
+    dialog?.dispatchEvent(new Event('capNativeNavigationEngineModalDidDismiss', { bubbles: true }));
+    pollProbe();
   });
   wrap.querySelector('#engine-modal-close')?.addEventListener('click', () => {
     dialog?.close();

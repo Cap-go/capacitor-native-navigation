@@ -316,9 +316,12 @@ export interface NativeNavigationConfigureOptions {
    * native navbar and tabbar with a captured snapshot. Ionic modals, sheets,
    * and similar overlays are wired automatically when the option is on. Plain
    * `<dialog>` elements and other custom overlays need matching lifecycle
-   * events (see the plugin README engine modal example). When `false`, the
-   * plugin does not register engine projections or overlay listeners. When
-   * `true`, call `configure` before the first navigation and keep using the
+   * events (see the README "Modals, sheets, and popovers" section). When `false`, the
+   * plugin does not register engine projections or overlay listeners. Setting
+   * this back to `false` tears down native projections; the engine overlay
+   * coordinator may stay active for the WebView session (engine 1.0.11 has no
+   * global disable API). When `true`, call `configure` before the first
+   * navigation and keep using the
    * same `setNavbar` and `setTabbar` APIs. On Android, also set
    * `webNativeUIEngine: true` under `plugins.NativeNavigation` in
    * `capacitor.config` so the engine channel installs in plugin `load()` before

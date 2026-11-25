@@ -28,6 +28,7 @@ final class NativeNavigationWebUIEngine {
             return
         }
         isActive = true
+        refreshProjections(plugin: plugin)
     }
 
     func forward(eventName: String, data: [String: Any]?) {
@@ -84,8 +85,6 @@ final class NativeNavigationWebUIEngine {
         guard navbarProjection != nil, tabbarProjection != nil else {
             return false
         }
-        notifyChrome(surface: "navbar", hidden: !plugin.nativeNavigationNavbarProjectionVisible())
-        notifyChrome(surface: "tabbar", hidden: !plugin.nativeNavigationTabbarProjectionVisible())
         return true
     }
 

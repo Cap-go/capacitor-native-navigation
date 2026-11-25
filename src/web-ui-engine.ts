@@ -16,6 +16,7 @@ const SLOT_STYLE = [
 ].join(';');
 
 let ionicOverlaysEnabled = false;
+let activationGeneration = 0;
 
 const ensureSlot = (doc: Document, id: string, placement: 'top' | 'bottom'): HTMLElement => {
   const existing = doc.getElementById(id);
@@ -43,26 +44,22 @@ export const ensureProjectionSlots = (doc: Document = globalThis.document!): voi
 };
 
 export const activateWebNativeUIEngine = async (): Promise<void> => {
+  const generation = ++activationGeneration;
   ensureProjectionSlots();
   if (ionicOverlaysEnabled) {
     return;
   }
-  const { enableSupportIonicOverlays } = await import('@webview-native-ui/engine/ionic');
-  enableSupportIonicOverlays({
-    additional: [
-      {
-        selector: '#engine-modal-sheet',
-        events: {
-          willPresent: 'capNativeNavigationEngineModalWillPresent',
-          didDismiss: 'capNativeNavigationEngineModalDidDismiss',
-        },
-      },
-    ],
-  });
   ionicOverlaysEnabled = true;
+  const { enableSupportIonicOverlays } = await import('@webview-native-ui/engine/ionic');
+  if (generation !== activationGeneration) {
+    ionicOverlaysEnabled = false;
+    return;
+  }
+  enableSupportIonicOverlays();
 };
 
 export const deactivateWebNativeUIEngine = (): void => {
+  activationGeneration += 1;
   ionicOverlaysEnabled = false;
 };
 

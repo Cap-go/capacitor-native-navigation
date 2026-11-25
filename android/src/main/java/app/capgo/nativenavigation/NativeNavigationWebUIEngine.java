@@ -40,6 +40,7 @@ final class NativeNavigationWebUIEngine {
             return;
         }
         active = true;
+        refreshChrome(plugin);
     }
 
     void forward(String eventName, JSObject data) {
@@ -110,8 +111,6 @@ final class NativeNavigationWebUIEngine {
         if (navbarProjection == null || tabbarProjection == null) {
             return false;
         }
-        notifyChrome("navbar", !plugin.isNavbarProjectionVisible());
-        notifyChrome("tabbar", !plugin.isTabbarProjectionVisible());
         return true;
     }
 

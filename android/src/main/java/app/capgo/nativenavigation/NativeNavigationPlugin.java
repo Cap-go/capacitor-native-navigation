@@ -244,6 +244,13 @@ public class NativeNavigationPlugin extends Plugin {
                 if (tabbarBackdrop != null) {
                     tabbarBackdrop.setVisibility(View.GONE);
                 }
+                if (webUIEngine.isActive()) {
+                    webUIEngine.notifyChrome("navbar", true);
+                    webUIEngine.notifyChrome("tabbar", true);
+                }
+            } else if (webUIEngine.isActive()) {
+                webUIEngine.notifyChrome("navbar", !isNavbarProjectionVisible());
+                webUIEngine.notifyChrome("tabbar", !isTabbarProjectionVisible());
             }
             if (enabled) {
                 reapplyVisibleChromeBackgrounds();
@@ -259,6 +266,9 @@ public class NativeNavigationPlugin extends Plugin {
             if (!enabled) {
                 navbarVisible = false;
                 stopNavbarScrollObservation(true);
+                if (webUIEngine.isActive()) {
+                    webUIEngine.notifyChrome("navbar", true);
+                }
                 updateInsetsAndNotify();
                 call.resolve(insetsResult());
                 return;
@@ -431,6 +441,9 @@ public class NativeNavigationPlugin extends Plugin {
         runOnUiThread(() -> {
             if (!enabled) {
                 tabbarVisible = false;
+                if (webUIEngine.isActive()) {
+                    webUIEngine.notifyChrome("tabbar", true);
+                }
                 updateInsetsAndNotify();
                 call.resolve(insetsResult());
                 return;
