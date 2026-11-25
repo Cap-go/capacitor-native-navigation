@@ -14,7 +14,8 @@
     "ios/Sources",
     "ios/Tests",
     "Package.swift",
-    "CapgoCapacitorNativeNavigation.podspec"
+    "CapgoCapacitorNativeNavigation.podspec",
+    "scripts/capacitor-ios-engine-pod.mjs"
   ],
   "author": "Martin Donadieu <martin@capgo.app>",
   "license": "MPL-2.0",

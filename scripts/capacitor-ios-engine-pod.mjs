@@ -3,6 +3,10 @@ import { createRequire } from 'node:module';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+if (process.env.CAPACITOR_PLATFORM_NAME && process.env.CAPACITOR_PLATFORM_NAME !== 'ios') {
+  process.exit(0);
+}
+
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const appRoot = process.cwd();
 const podfilePath = join(appRoot, 'ios', 'App', 'Podfile');
