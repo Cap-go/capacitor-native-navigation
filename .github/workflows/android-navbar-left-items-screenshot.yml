@@ -67,11 +67,13 @@ jobs:
                 fi
               done
             else
-              local source_root
-              source_root="$(cd android/src/main/java/app/capgo/nativenavigation && pwd -P)"
-              if [ "$(cd "${installed_root}" && pwd -P)" != "${source_root}" ]; then
-                cp -f android/src/main/java/app/capgo/nativenavigation/*.java "${installed_root}/"
-              fi
+              local source_file dest_file
+              for source_file in android/src/main/java/app/capgo/nativenavigation/*.java; do
+                dest_file="${installed_root}/$(basename "${source_file}")"
+                if [ ! "${source_file}" -ef "${dest_file}" ]; then
+                  cp -f "${source_file}" "${dest_file}"
+                fi
+              done
             fi
           }
           build_apk() {
