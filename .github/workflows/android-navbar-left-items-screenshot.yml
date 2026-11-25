@@ -67,14 +67,25 @@ jobs:
                 fi
               done
             else
-              local source_file dest_file
-              for source_file in android/src/main/java/app/capgo/nativenavigation/*.java; do
-                dest_file="${installed_root}/$(basename "${source_file}")"
-                if [ ! "${source_file}" -ef "${dest_file}" ]; then
-                  cp -f "${source_file}" "${dest_file}"
+              local staging_dir
+              staging_dir="$(mktemp -d)"
+              git ls-tree --name-only "HEAD:android/src/main/java/app/capgo/nativenavigation" | while read -r name; do
+                git show "HEAD:android/src/main/java/app/capgo/nativenavigation/${name}" > "${staging_dir}/${name}"
+              done
+              for file in "${staging_dir}"/*.java; do
+                [ -e "${file}" ] || continue
+                cp -f "${file}" "${installed_root}/$(basename "${file}")"
+              done
+              for file in "${installed_root}"/*.java; do
+                [ -e "${file}" ] || continue
+                base="$(basename "${file}")"
+                if ! git cat-file -e "HEAD:android/src/main/java/app/capgo/nativenavigation/${base}" 2>/dev/null; then
+                  rm -f "${file}"
                 fi
               done
+              rm -rf "${staging_dir}"
             fi
+            git checkout HEAD -- android/src/main/java/app/capgo/nativenavigation/ 2>/dev/null || true
           }
           build_apk() {
             local android_source_mode="$1"
