@@ -14,6 +14,7 @@ final class NativeNavigationWebUIEngine {
 
     private NativeUIProjection navbarProjection;
     private NativeUIProjection tabbarProjection;
+    private NativeNavigationPlugin boundPlugin;
     private boolean active;
 
     boolean isActive() {
@@ -21,18 +22,24 @@ final class NativeNavigationWebUIEngine {
     }
 
     void setActive(boolean enable, NativeNavigationPlugin plugin) {
-        if (enable == active) {
-            if (enable) {
-                refreshChrome(plugin);
+        boundPlugin = plugin;
+        if (!enable) {
+            if (active) {
+                active = false;
+                teardown();
             }
             return;
         }
-        active = enable;
-        if (enable) {
-            install(plugin);
-        } else {
-            teardown();
+        if (active) {
+            refreshChrome(plugin);
+            return;
         }
+        if (!install(plugin)) {
+            active = false;
+            teardown();
+            return;
+        }
+        active = true;
     }
 
     void forward(String eventName, JSObject data) {
@@ -48,17 +55,13 @@ final class NativeNavigationWebUIEngine {
     }
 
     void notifyChrome(String surface, boolean hidden) {
-        if (!active) {
+        if (!active || boundPlugin == null) {
             return;
         }
         JSObject payload = new JSObject();
         payload.put("surface", surface);
         String eventName = hidden ? "chromeHidden" : "chromeShown";
-        if ("navbar".equals(surface) && navbarProjection != null) {
-            navbarProjection.receive(eventName, payload);
-        } else if ("tabbar".equals(surface) && tabbarProjection != null) {
-            tabbarProjection.receive(eventName, payload);
-        }
+        boundPlugin.notifyListeners(eventName, payload, false);
     }
 
     void prewireChannel(WebView webView) {
@@ -83,18 +86,25 @@ final class NativeNavigationWebUIEngine {
         }
     }
 
-    private void install(NativeNavigationPlugin plugin) {
+  private boolean install(NativeNavigationPlugin plugin) {
         WebView webView = plugin.getBridge().getWebView();
+        if (webView == null) {
+            return false;
+        }
         injectProjectionSlots(webView);
         NativeNavigationWebUIEngineRunOnce.install(webView);
         if (navbarProjection == null) {
-            navbarProjection = makeProjection(plugin, NAVBAR_SELECTOR, plugin::getNavbarProjectionView);
+            navbarProjection = makeProjection(plugin, NAVBAR_SELECTOR, "navbar", plugin::getNavbarProjectionView);
         }
         if (tabbarProjection == null) {
-            tabbarProjection = makeProjection(plugin, TABBAR_SELECTOR, plugin::getTabbarProjectionView);
+            tabbarProjection = makeProjection(plugin, TABBAR_SELECTOR, "tabbar", plugin::getTabbarProjectionView);
+        }
+        if (navbarProjection == null || tabbarProjection == null) {
+            return false;
         }
         notifyChrome("navbar", !plugin.isNavbarProjectionVisible());
         notifyChrome("tabbar", !plugin.isTabbarProjectionVisible());
+        return true;
     }
 
     private void refreshChrome(NativeNavigationPlugin plugin) {
@@ -103,14 +113,14 @@ final class NativeNavigationWebUIEngine {
     }
 
     private NativeUIProjection makeProjection(
-        NativeNavigationPlugin plugin, String selector, ProjectionViewProvider viewProvider) {
+        NativeNavigationPlugin plugin, String selector, String surface, ProjectionViewProvider viewProvider) {
         try {
             NativeUIProjection.ReceiveListeners listeners =
                 new NativeUIProjection.ReceiveListeners(
                     List.of("safeAreaChanged"),
                     new NativeUIProjection.ReceiveListeners.Projection(
-                        List.of("chromeShown"), List.of("transitionStart"), List.of("chromeHidden")),
-                    Map.of());
+                        List.of("chromeShown"), List.of(), List.of("chromeHidden")),
+                    Map.of("surface", surface));
             return new NativeUIProjection(
                 plugin.getActivity().getWindow(),
                 plugin.getBridge().getWebView(),
@@ -135,7 +145,8 @@ final class NativeNavigationWebUIEngine {
                 + "? 'position:fixed;left:0;right:0;top:0;pointer-events:none;z-index:0;"
                 + "overflow:hidden;margin:0;padding:0;border:0;height:var(--cap-native-navbar-height, 0px)'"
                 + ": 'position:fixed;left:0;right:0;bottom:0;pointer-events:none;z-index:0;"
-                + "overflow:hidden;margin:0;padding:0;border:0;height:var(--cap-native-tabbar-height, 0px)';"
+                + "overflow:hidden;margin:0;padding:0;border:0;"
+                + "height:max(var(--cap-native-tabbar-height, 0px), var(--cap-native-system-tabbar-height, 0px))';"
                 + "document.documentElement.appendChild(slot);};"
                 + "make('cap-native-navigation-navbar-slot','top');"
                 + "make('cap-native-navigation-tabbar-slot','bottom');"
@@ -144,9 +155,9 @@ final class NativeNavigationWebUIEngine {
     }
 
     @FunctionalInterface
-  interface ProjectionViewProvider {
-    View provide();
-  }
+    interface ProjectionViewProvider {
+        View provide();
+    }
 
     private static final class NativeNavigationWebUIEngineRunOnce {
         private static boolean installed;

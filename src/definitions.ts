@@ -312,11 +312,14 @@ export interface NativeNavigationConfigureOptions {
   verticalBarBehavior?: NativeNavigationVerticalBarBehavior;
 
   /**
-   * Opt in to WebView Native UI Engine so Ionic modals, sheets, and other Web
-   * overlays can cover the native navbar and tabbar with a captured snapshot.
-   * When `false`, the plugin does not register engine projections or overlay
-   * listeners. When `true`, call `configure` before the first navigation and
-   * keep using the same `setNavbar` and `setTabbar` APIs. On Android, also set
+   * Opt in to WebView Native UI Engine so supported Web overlays can cover the
+   * native navbar and tabbar with a captured snapshot. Ionic modals, sheets,
+   * and similar overlays are wired automatically when the option is on. Plain
+   * `<dialog>` elements and other custom overlays need matching lifecycle
+   * events (see the plugin README engine modal example). When `false`, the
+   * plugin does not register engine projections or overlay listeners. When
+   * `true`, call `configure` before the first navigation and keep using the
+   * same `setNavbar` and `setTabbar` APIs. On Android, also set
    * `webNativeUIEngine: true` under `plugins.NativeNavigation` in
    * `capacitor.config` so the engine channel installs in plugin `load()` before
    * the WebView navigates. CocoaPods apps also need a direct

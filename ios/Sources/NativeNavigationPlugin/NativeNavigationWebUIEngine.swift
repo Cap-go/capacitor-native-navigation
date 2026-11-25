@@ -10,19 +10,24 @@ final class NativeNavigationWebUIEngine {
     private(set) var isActive = false
 
     func setActive(_ active: Bool, plugin: NativeNavigationPlugin) {
-        guard active != isActive else {
-            if active {
-                refreshProjections(plugin: plugin)
+        self.plugin = plugin
+        if !active {
+            if isActive {
+                isActive = false
+                teardown()
             }
             return
         }
-        isActive = active
-        self.plugin = plugin
-        if active {
-            install(plugin: plugin)
-        } else {
-            teardown()
+        if isActive {
+            refreshProjections(plugin: plugin)
+            return
         }
+        guard install(plugin: plugin) else {
+            isActive = false
+            teardown()
+            return
+        }
+        isActive = true
     }
 
     func forward(eventName: String, data: [String: Any]?) {
@@ -34,16 +39,11 @@ final class NativeNavigationWebUIEngine {
     }
 
     func notifyChrome(surface: String, hidden: Bool) {
-        guard isActive else {
+        guard isActive, let plugin else {
             return
         }
         let eventName = hidden ? "chromeHidden" : "chromeShown"
-        let data: [String: Any] = ["surface": surface]
-        if surface == "navbar" {
-            navbarProjection?.receive(eventName, data: data)
-        } else if surface == "tabbar" {
-            tabbarProjection?.receive(eventName, data: data)
-        }
+        plugin.notifyListeners(eventName, data: ["surface": surface], retainUntilConsumed: false)
     }
 
     func teardown() {
@@ -54,9 +54,10 @@ final class NativeNavigationWebUIEngine {
         plugin = nil
     }
 
-    private func install(plugin: NativeNavigationPlugin) {
+    @discardableResult
+    private func install(plugin: NativeNavigationPlugin) -> Bool {
         guard let webView = plugin.bridge?.webView as? WKWebView else {
-            return
+            return false
         }
         injectProjectionSlots(into: webView)
         if navbarProjection == nil {
@@ -64,7 +65,8 @@ final class NativeNavigationWebUIEngine {
                 webView: webView,
                 selector: NativeNavigationWebUIEngine.navbarSelector,
                 plugin: plugin,
-                view: { [weak plugin] in plugin?.navContainer }
+                surface: "navbar",
+                view: { [weak plugin] in plugin?.nativeNavigationNavbarProjectionView() }
             )
         }
         if tabbarProjection == nil {
@@ -72,11 +74,16 @@ final class NativeNavigationWebUIEngine {
                 webView: webView,
                 selector: NativeNavigationWebUIEngine.tabbarSelector,
                 plugin: plugin,
+                surface: "tabbar",
                 view: { [weak plugin] in plugin?.nativeNavigationTabbarProjectionView() }
             )
         }
+        guard navbarProjection != nil, tabbarProjection != nil else {
+            return false
+        }
         notifyChrome(surface: "navbar", hidden: !plugin.nativeNavigationNavbarProjectionVisible())
         notifyChrome(surface: "tabbar", hidden: !plugin.nativeNavigationTabbarProjectionVisible())
+        return true
     }
 
     private func refreshProjections(plugin: NativeNavigationPlugin) {
@@ -88,6 +95,7 @@ final class NativeNavigationWebUIEngine {
         webView: WKWebView,
         selector: String,
         plugin: NativeNavigationPlugin,
+        surface: String,
         view: @escaping () -> UIView?
     ) -> NativeUIProjection? {
         do {
@@ -99,9 +107,10 @@ final class NativeNavigationWebUIEngine {
                     update: ["safeAreaChanged"],
                     projection: .init(
                         native: ["chromeShown"],
-                        web: ["transitionStart"],
+                        web: [],
                         none: ["chromeHidden"]
-                    )
+                    ),
+                    match: ["surface": surface]
                 ),
                 view: view
             )
@@ -123,7 +132,7 @@ final class NativeNavigationWebUIEngine {
             slot.setAttribute('aria-hidden', 'true');
             slot.style.cssText = placement === 'top'
               ? 'position:fixed;left:0;right:0;top:0;pointer-events:none;z-index:0;overflow:hidden;margin:0;padding:0;border:0;height:var(--cap-native-navbar-height, 0px)'
-              : 'position:fixed;left:0;right:0;bottom:0;pointer-events:none;z-index:0;overflow:hidden;margin:0;padding:0;border:0;height:var(--cap-native-tabbar-height, 0px)';
+              : 'position:fixed;left:0;right:0;bottom:0;pointer-events:none;z-index:0;overflow:hidden;margin:0;padding:0;border:0;height:max(var(--cap-native-tabbar-height, 0px), var(--cap-native-system-tabbar-height, 0px))';
             document.documentElement.appendChild(slot);
           };
           make('cap-native-navigation-navbar-slot', 'top');

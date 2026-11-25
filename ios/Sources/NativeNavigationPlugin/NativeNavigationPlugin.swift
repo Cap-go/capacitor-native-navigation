@@ -2634,14 +2634,18 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         isEnabled && tabbarVisible
     }
 
+    internal func nativeNavigationNavbarProjectionView() -> UIView? {
+        if navbarUsesSystemRail, let navigationBar = bridge?.viewController?.navigationController?.navigationBar {
+            return navigationBar
+        }
+        return navContainer
+    }
+
     internal func nativeNavigationTabbarProjectionView() -> UIView? {
         if usesSystemTabBar {
             return tabBarController?.tabBar
         }
-        if tabbarStyle.shape == .floating {
-            return floatingTabBar
-        }
-        return tabContainer ?? tabBar
+        return tabContainer ?? tabBar ?? floatingTabBar
     }
 
     internal func layoutChrome() {

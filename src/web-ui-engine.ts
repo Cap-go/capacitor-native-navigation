@@ -29,13 +29,13 @@ const ensureSlot = (doc: Document, id: string, placement: 'top' | 'bottom'): HTM
   slot.style.cssText =
     placement === 'top'
       ? `${SLOT_STYLE};top:0;height:var(--cap-native-navbar-height, 0px)`
-      : `${SLOT_STYLE};bottom:0;height:var(--cap-native-tabbar-height, 0px)`;
+      : `${SLOT_STYLE};bottom:0;height:max(var(--cap-native-tabbar-height, 0px), var(--cap-native-system-tabbar-height, 0px))`;
   doc.documentElement.appendChild(slot);
   return slot;
 };
 
-export const ensureProjectionSlots = (doc: Document = document): void => {
-  if (typeof document === 'undefined') {
+export const ensureProjectionSlots = (doc: Document = globalThis.document!): void => {
+  if (!doc) {
     return;
   }
   ensureSlot(doc, NATIVE_NAVIGATION_NAVBAR_SLOT_ID, 'top');
