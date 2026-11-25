@@ -44,15 +44,14 @@ export const ensureProjectionSlots = (doc: Document = globalThis.document!): voi
 };
 
 export const activateWebNativeUIEngine = async (): Promise<void> => {
-  const generation = ++activationGeneration;
   ensureProjectionSlots();
   if (ionicOverlaysEnabled) {
     return;
   }
+  const generation = ++activationGeneration;
   ionicOverlaysEnabled = true;
   const { enableSupportIonicOverlays } = await import('@webview-native-ui/engine/ionic');
   if (generation !== activationGeneration) {
-    ionicOverlaysEnabled = false;
     return;
   }
   enableSupportIonicOverlays();

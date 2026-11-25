@@ -50,6 +50,15 @@ final class NativeNavigationWebUIEngine {
         if ("transitionStart".equals(eventName) || "transitionEnd".equals(eventName)) {
             return;
         }
+        if ("safeAreaChanged".equals(eventName)) {
+            if (navbarProjection != null) {
+                navbarProjection.receive(eventName, copyWithSurface(data, "navbar"));
+            }
+            if (tabbarProjection != null) {
+                tabbarProjection.receive(eventName, copyWithSurface(data, "tabbar"));
+            }
+            return;
+        }
         if (navbarProjection != null) {
             navbarProjection.receive(eventName, data);
         }
@@ -95,10 +104,10 @@ final class NativeNavigationWebUIEngine {
         if (webView == null) {
             return false;
         }
-        if (!NativeNavigationWebUIEngineRunOnce.isInstalled()) {
+        if (!NativeNavigationWebUIEngineRunOnce.isInstalled(webView)) {
             prewireChannel(webView);
         }
-        if (!NativeNavigationWebUIEngineRunOnce.isInstalled()) {
+        if (!NativeNavigationWebUIEngineRunOnce.isInstalled(webView)) {
             return false;
         }
         injectProjectionSlots(webView);
@@ -117,6 +126,23 @@ final class NativeNavigationWebUIEngine {
     private void refreshChrome(NativeNavigationPlugin plugin) {
         notifyChrome("navbar", !plugin.isNavbarProjectionVisible());
         notifyChrome("tabbar", !plugin.isTabbarProjectionVisible());
+    }
+
+    private static JSObject copyWithSurface(JSObject data, String surface) {
+        JSObject copy = new JSObject();
+        if (data != null) {
+            java.util.Iterator<String> keys = data.keys();
+            while (keys.hasNext()) {
+                String key = keys.next();
+                try {
+                    copy.put(key, data.get(key));
+                } catch (org.json.JSONException error) {
+                    // skip malformed key
+                }
+            }
+        }
+        copy.put("surface", surface);
+        return copy;
     }
 
     private NativeUIProjection makeProjection(
@@ -167,21 +193,22 @@ final class NativeNavigationWebUIEngine {
     }
 
     private static final class NativeNavigationWebUIEngineRunOnce {
-        private static boolean installed;
+        private static final java.util.Set<Integer> INSTALLED_WEB_VIEW_IDS =
+            java.util.Collections.synchronizedSet(new java.util.HashSet<>());
 
         private NativeNavigationWebUIEngineRunOnce() {}
 
-        static boolean isInstalled() {
-            return installed;
+        static boolean isInstalled(WebView webView) {
+            return webView != null && INSTALLED_WEB_VIEW_IDS.contains(System.identityHashCode(webView));
         }
 
         static void install(WebView webView) {
-            if (installed || webView == null) {
+            if (webView == null || isInstalled(webView)) {
                 return;
             }
             try {
                 NativeUIProjection.install(webView);
-                installed = true;
+                INSTALLED_WEB_VIEW_IDS.add(System.identityHashCode(webView));
             } catch (RuntimeException error) {
                 Log.w(
                     NativeNavigationWebUIEngine.class.getSimpleName(),

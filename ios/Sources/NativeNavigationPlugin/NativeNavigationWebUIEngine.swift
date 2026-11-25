@@ -38,6 +38,15 @@ final class NativeNavigationWebUIEngine {
         if eventName == "transitionStart" || eventName == "transitionEnd" {
             return
         }
+        if eventName == "safeAreaChanged" {
+            var navbarData = data ?? [:]
+            navbarData["surface"] = "navbar"
+            navbarProjection?.receive(eventName, data: navbarData)
+            var tabbarData = data ?? [:]
+            tabbarData["surface"] = "tabbar"
+            tabbarProjection?.receive(eventName, data: tabbarData)
+            return
+        }
         navbarProjection?.receive(eventName, data: data)
         tabbarProjection?.receive(eventName, data: data)
     }

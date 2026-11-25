@@ -8,15 +8,15 @@ if (process.env.CAPACITOR_PLATFORM_NAME && process.env.CAPACITOR_PLATFORM_NAME !
 }
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
-const appRoot = process.cwd();
+const appRoot = process.env.CAPACITOR_ROOT_DIR ?? process.cwd();
 const podfilePath = join(appRoot, 'ios', 'App', 'Podfile');
 
 const resolveEngineRoot = () => {
   for (const base of [appRoot, pluginRoot]) {
     try {
       const requireFrom = createRequire(join(base, 'package.json'));
-      const enginePackageJson = requireFrom.resolve('@webview-native-ui/engine/package.json');
-      return dirname(enginePackageJson);
+      const engineEntry = requireFrom.resolve('@webview-native-ui/engine');
+      return dirname(dirname(engineEntry));
     } catch {
       // try next base
     }
