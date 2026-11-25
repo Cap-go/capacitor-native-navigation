@@ -1,4 +1,4 @@
-appId: app.capgo.native.navigation.example
+appId: app.capgo.capacitor.navigation
 ---
 - launchApp
 - tapOn:
