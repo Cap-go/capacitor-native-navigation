@@ -9,6 +9,9 @@ const config: CapacitorConfig = {
   appName: '@capgo/capacitor-native-navigation',
   webDir: 'dist',
   plugins: {
+    NativeNavigation: {
+      webNativeUIEngine: process.env.VITE_WEB_NATIVE_UI_ENGINE === 'true',
+    },
     CapacitorUpdater: {
       appId: 'app.capgo.native.navigation.example',
       autoUpdate: !screenshotBuild,

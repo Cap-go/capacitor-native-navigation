@@ -316,7 +316,12 @@ export interface NativeNavigationConfigureOptions {
    * overlays can cover the native navbar and tabbar with a captured snapshot.
    * When `false`, the plugin does not register engine projections or overlay
    * listeners. When `true`, call `configure` before the first navigation and
-   * keep using the same `setNavbar` and `setTabbar` APIs.
+   * keep using the same `setNavbar` and `setTabbar` APIs. On Android, also set
+   * `webNativeUIEngine: true` under `plugins.NativeNavigation` in
+   * `capacitor.config` so the engine channel installs in plugin `load()` before
+   * the WebView navigates. CocoaPods apps also need a direct
+   * `@webview-native-ui/engine` npm dependency and a `WebViewNativeUIEngine` pod
+   * entry in the application `Podfile`.
    *
    * @default false
    * @since 8.17.0

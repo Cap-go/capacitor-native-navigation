@@ -61,6 +61,17 @@ final class NativeNavigationWebUIEngine {
         }
     }
 
+    void prewireChannel(WebView webView) {
+        if (webView == null) {
+            return;
+        }
+        try {
+            NativeNavigationWebUIEngineRunOnce.install(webView);
+        } catch (RuntimeException error) {
+            Log.w(NativeNavigationWebUIEngine.class.getSimpleName(), "Web UI engine channel prewire failed", error);
+        }
+    }
+
     void teardown() {
         if (navbarProjection != null) {
             navbarProjection.close();
