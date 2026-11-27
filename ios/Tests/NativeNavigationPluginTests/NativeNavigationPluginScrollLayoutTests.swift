@@ -136,11 +136,10 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         rootView.addSubview(webView)
         drainMainQueue(for: 0.25)
-        waitForWebViewHTMLLoad(
+        try waitForWebViewHTMLLoad(
             webView,
             html: "<html><head><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head>"
-                + "<body style=\"margin:0;background:#dbe6f5;min-height:200vh\"></body></html>",
-            baseURL: URL(string: "https://capacitor.test")
+                + "<body style=\"margin:0;background:#dbe6f5;min-height:200vh\"></body></html>"
         )
 
         let plugin = NativeNavigationPlugin()
@@ -184,45 +183,90 @@ final class NativeNavigationPluginScrollLayoutTests: XCTestCase {
         }
     }
 
-    private func waitForWebViewHTMLLoad(_ webView: WKWebView, html: String, baseURL: URL?, timeout: TimeInterval = 30) {
-        let deadline = Date().addingTimeInterval(timeout)
-        var navigationDidFinish = false
+    /// Upper bound for one local HTML load. On a cold CI simulator the first WKWebView of the run has to
+    /// launch the WebKit WebContent, Networking and GPU helper processes, which has been observed to take
+    /// more than 60 seconds. Later loads in the same run finish in well under a second.
+    private static let webViewLoadTimeout: TimeInterval = 90
 
+    /// Loads local HTML (nil base URL, so no network origin) and waits for the navigation delegate to report
+    /// `didFinish` for that navigation. Fails fast with the WebKit error on `didFail`,
+    /// `didFailProvisionalNavigation` or a WebContent process termination instead of polling until the deadline.
+    private func waitForWebViewHTMLLoad(
+        _ webView: WKWebView,
+        html: String,
+        timeout: TimeInterval = NativeNavigationPluginScrollLayoutTests.webViewLoadTimeout,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
         let observer = WebViewLoadObserver()
-        observer.onDidFinish = { navigationDidFinish = true }
         webViewLoadObserverRetention.append(observer)
         webView.navigationDelegate = observer
-
-        webView.loadHTMLString(html, baseURL: baseURL)
-
-        var isReady = false
-        while Date() < deadline && !isReady {
-            drainMainQueue(for: 0.05)
-            if navigationDidFinish || !webView.isLoading {
-                isReady = isWebViewDocumentReady(webView)
-            }
+        defer {
+            webView.navigationDelegate = nil
+            webViewLoadObserverRetention.removeAll { $0 === observer }
         }
 
-        XCTAssertTrue(isReady, "WKWebView HTML load timed out")
-        webView.navigationDelegate = nil
-        webViewLoadObserverRetention.removeAll { $0 === observer }
+        observer.navigation = webView.loadHTMLString(html, baseURL: nil)
+
+        let startedAt = Date()
+        let deadline = startedAt.addingTimeInterval(timeout)
+        while observer.outcome == nil && Date() < deadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        }
+        let elapsed = Date().timeIntervalSince(startedAt)
+
+        switch observer.outcome {
+        case .finished:
+            break
+        case .failed(let reason):
+            XCTFail(
+                String(format: "WKWebView local HTML load failed after %.1fs: %@", elapsed, reason),
+                file: file,
+                line: line
+            )
+            throw NSError(domain: "NativeNavigationPluginScrollLayoutTests", code: 3)
+        case nil:
+            XCTFail(
+                String(
+                    format: "WKWebView local HTML load got no didFinish or didFail within %.0fs (isLoading=%@)",
+                    timeout,
+                    webView.isLoading ? "true" : "false"
+                ),
+                file: file,
+                line: line
+            )
+            throw NSError(domain: "NativeNavigationPluginScrollLayoutTests", code: 4)
+        }
+
+        let readyState = try evaluateDocumentReadyState(webView)
+        XCTAssertEqual(readyState, "complete", "document.readyState after didFinish", file: file, line: line)
     }
 
-    private func isWebViewDocumentReady(_ webView: WKWebView) -> Bool {
+    private func evaluateDocumentReadyState(_ webView: WKWebView) throws -> String? {
         final class Probe {
-            var ready = false
+            var value: String?
+            var error: Error?
             var completed = false
         }
         let probe = Probe()
-        webView.evaluateJavaScript("document.readyState") { result, _ in
-            probe.ready = (result as? String) == "complete"
+        webView.evaluateJavaScript("document.readyState") { result, error in
+            probe.value = result as? String
+            probe.error = error
             probe.completed = true
         }
-        let scriptDeadline = Date().addingTimeInterval(2)
+        let scriptDeadline = Date().addingTimeInterval(10)
         while !probe.completed && Date() < scriptDeadline {
             RunLoop.main.run(until: Date().addingTimeInterval(0.05))
         }
-        return probe.ready && !webView.isLoading
+        guard probe.completed else {
+            XCTFail("document.readyState evaluation did not complete within 10s after didFinish")
+            throw NSError(domain: "NativeNavigationPluginScrollLayoutTests", code: 5)
+        }
+        if let error = probe.error {
+            XCTFail("document.readyState evaluation failed: \(error)")
+            throw NSError(domain: "NativeNavigationPluginScrollLayoutTests", code: 6)
+        }
+        return probe.value
     }
 
     private func awaitEdgeBlurOverlayHeight(plugin: NativeNavigationPlugin, webView: WKWebView) throws -> CGFloat {
@@ -246,9 +290,47 @@ private extension UIView {
 }
 
 private final class WebViewLoadObserver: NSObject, WKNavigationDelegate {
-    var onDidFinish: (() -> Void)?
+    enum Outcome {
+        case finished
+        case failed(String)
+    }
+
+    /// Navigation returned by `loadHTMLString`; callbacks for any other navigation are ignored.
+    var navigation: WKNavigation?
+    private(set) var outcome: Outcome?
+
+    private func isTracked(_ candidate: WKNavigation?) -> Bool {
+        guard let navigation else {
+            return true
+        }
+        return candidate === navigation
+    }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        onDidFinish?()
+        guard outcome == nil, isTracked(navigation) else {
+            return
+        }
+        outcome = .finished
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        guard outcome == nil, isTracked(navigation) else {
+            return
+        }
+        outcome = .failed("didFail: \(error)")
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        guard outcome == nil, isTracked(navigation) else {
+            return
+        }
+        outcome = .failed("didFailProvisionalNavigation: \(error)")
+    }
+
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        guard outcome == nil else {
+            return
+        }
+        outcome = .failed("WebContent process terminated")
     }
 }
