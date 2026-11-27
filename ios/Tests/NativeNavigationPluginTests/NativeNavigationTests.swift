@@ -584,6 +584,9 @@ class NativeNavigationTests: XCTestCase {
         let entries = nativeNavigationVisibleTabEntries(tabs: tabs, selectedId: nil)
         XCTAssertEqual(entries.map(\.id), ["home", "search"])
         XCTAssertEqual(entries.last?.role, "search")
+
+        let withSelectedHidden = nativeNavigationVisibleTabEntries(tabs: tabs, selectedId: "hidden")
+        XCTAssertEqual(withSelectedHidden.map(\.id), ["home", "hidden", "search"])
     }
 
     func testUsesUITabSearchAPIRequiresTrailingSearchRole() {
@@ -595,6 +598,9 @@ class NativeNavigationTests: XCTestCase {
 
         let trailingSearch = normal + [NativeNavigationVisibleTabEntry(sourceIndex: 2, id: "s", role: "search", enabled: true)]
         XCTAssertTrue(nativeNavigationUsesUITabSearchAPI(visibleTabs: trailingSearch))
+
+        let trailingProminent = normal + [NativeNavigationVisibleTabEntry(sourceIndex: 2, id: "p", role: "prominent", enabled: true)]
+        XCTAssertTrue(nativeNavigationUsesUITabSearchAPI(visibleTabs: trailingProminent))
 
         let searchNotLast = [
             NativeNavigationVisibleTabEntry(sourceIndex: 0, id: "s", role: "search", enabled: true),
