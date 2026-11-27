@@ -118,6 +118,9 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     private var tabDisplayTitles: [String?] = []
     private var tabBaseImages: [UIImage?] = []
     private var tabSelectedImages: [UIImage?] = []
+    private var usesSystemUITabAPI = false
+    private var systemUITabVisibleSourceIndexes: [Int] = []
+    private var systemSearchTabIdentifier: String?
     private var suppressTabSelectEvent = false
     private var tabSelectEmittedForReTap = false
     private var didOverrideSystemTabBarControllerSemanticContentAttribute = false
@@ -444,13 +447,13 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 // after the controller view itself was hidden.
                 self.tabBarController?.view.isHidden = false
                 let tabBar = self.ensureTabBar()
-                let (items, selectedIndex) = self.makeTabBarItems(
+                let buildResult = self.makeTabBarItems(
                     tabs,
                     selectedId: selectedId,
                     labelVisibilityMode: labelVisibilityMode,
                     icons: icons
                 )
-                self.applySystemTabBarItems(items, selectedIndex: selectedIndex, animated: call.getBool("animated", false))
+                self.applySystemTabBarItems(buildResult, animated: call.getBool("animated", false))
                 if let options = call.options as? [String: Any] {
                     self.lastSetTabbarOptions = options
                 }
@@ -458,7 +461,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 self.tabbarLayoutDirection = call.getString("layoutDirection")
                 self.applySystemTabBarPlacement()
                 self.applyTabBarLayoutDirection(self.tabbarLayoutDirection, tabBar: tabBar)
-                if items.isEmpty {
+                if buildResult.items.isEmpty {
                     self.tabbarVisible = false
                     self.tabbarSkipImmediateSystemReveal = false
                     self.hideSystemTabBarChromeCompletely()
@@ -1001,6 +1004,9 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
 
     public func tabBarController(_ tabBarController: UITabBarController, shouldSelect viewController: UIViewController) -> Bool {
+        if usesSystemUITabAPI {
+            return true
+        }
         if usesSystemTabBar {
             hostWebView(in: viewController)
         }
@@ -1014,6 +1020,9 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
 
     public func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
+        if usesSystemUITabAPI {
+            return
+        }
         guard !suppressTabSelectEvent else {
             tabSelectEmittedForReTap = false
             hostWebViewInSelectedSystemTab()
@@ -1027,6 +1036,59 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             notifyTabSelect(index: index)
         }
         tabSelectEmittedForReTap = false
+    }
+
+    @available(iOS 18.0, *)
+    public func tabBarController(_ tabBarController: UITabBarController, shouldSelectTab tab: UITab) -> Bool {
+        guard usesSystemUITabAPI, usesSystemTabBar else {
+            return true
+        }
+        guard let index = tabBarController.tabs.firstIndex(where: { $0 === tab }),
+              index < tabViewControllers.count else {
+            return true
+        }
+        hostWebView(in: tabViewControllers[index])
+        tabSelectEmittedForReTap = false
+        if !suppressTabSelectEvent,
+           tabBarController.selectedTab === tab {
+            notifyTabSelectForVisibleTabIndex(index)
+            tabSelectEmittedForReTap = true
+        }
+        return true
+    }
+
+    @available(iOS 18.0, *)
+    public func tabBarController(_ tabBarController: UITabBarController, didSelectTab tab: UITab, previousTab: UITab?) {
+        guard usesSystemUITabAPI, usesSystemTabBar else {
+            return
+        }
+        guard let index = tabBarController.tabs.firstIndex(where: { $0 === tab }),
+              index < tabViewControllers.count else {
+            return
+        }
+        let previousIndex = previousTab.flatMap { previous in
+            tabBarController.tabs.firstIndex(where: { $0 === previous })
+        }
+        syncSystemUITabSelectionImages(selectedVisibleIndex: index, previousVisibleIndex: previousIndex)
+        guard !suppressTabSelectEvent else {
+            tabSelectEmittedForReTap = false
+            hostWebViewInSelectedSystemTab()
+            refreshRailNavbarItems()
+            return
+        }
+        hostWebViewInSelectedSystemTab()
+        refreshRailNavbarItems()
+        if !tabSelectEmittedForReTap {
+            notifyTabSelectForVisibleTabIndex(index)
+        }
+        tabSelectEmittedForReTap = false
+    }
+
+    private func notifyTabSelectForVisibleTabIndex(_ visibleIndex: Int) {
+        guard systemUITabVisibleSourceIndexes.indices.contains(visibleIndex) else {
+            return
+        }
+        notifyTabSelect(index: systemUITabVisibleSourceIndexes[visibleIndex])
     }
 
     private func notifyTabSelect(index: Int) {
@@ -1314,7 +1376,26 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         }
     }
 
-    private func applySystemTabBarItems(_ items: [UITabBarItem], selectedIndex: Int?, animated: Bool) {
+    private func applySystemTabBarItems(_ buildResult: SystemTabBarBuildResult, animated: Bool) {
+        let prefersUITabs = nativeNavigationPrefersSystemUITabAPI(hasDetachedSearchTab: buildResult.hasDetachedSearchTab)
+        if #available(iOS 18.0, *), prefersUITabs {
+            applySystemUITabBarItems(buildResult, animated: animated)
+            return
+        }
+        if usesSystemUITabAPI {
+            if #available(iOS 18.0, *) {
+                tabBarController?.setTabs([], animated: false)
+            }
+            usesSystemUITabAPI = false
+            systemSearchTabIdentifier = nil
+            systemUITabVisibleSourceIndexes = []
+        }
+        applyLegacySystemTabBarItems(buildResult, animated: animated)
+    }
+
+    private func applyLegacySystemTabBarItems(_ buildResult: SystemTabBarBuildResult, animated: Bool) {
+        let items = buildResult.items
+        let selectedIndex = buildResult.selectedIndex
         guard let tabBarController = tabBarController else {
             return
         }
@@ -1358,9 +1439,181 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         }
     }
 
-    private func systemTabContentControllers(for items: [UITabBarItem]) -> [UIViewController] {
+    @available(iOS 18.0, *)
+    private func applySystemUITabBarItems(_ buildResult: SystemTabBarBuildResult, animated: Bool) {
+        guard let tabBarController = tabBarController else {
+            return
+        }
+
+        let items = buildResult.items
+        let selectedIndex = buildResult.selectedIndex
+        systemUITabVisibleSourceIndexes = buildResult.visibleSourceIndexes
+
+        let previousSelectedTab = tabBarController.selectedTab
+        let previousVisibleIndex = previousSelectedTab.flatMap { tab in
+            tabBarController.tabs.firstIndex(where: { $0 === tab })
+        }
+        let previousContent = nativeNavigationTabContentController(
+            from: previousVisibleIndex.flatMap { tabViewControllers.indices.contains($0) ? tabViewControllers[$0] : nil }
+                ?? tabBarController.selectedViewController
+        )
+
+        suppressTabSelectEvent = true
+        defer { suppressTabSelectEvent = false }
+
+        guard !items.isEmpty else {
+            restoreWebViewFromSystemTabController()
+            usesSystemUITabAPI = false
+            systemSearchTabIdentifier = nil
+            tabBarController.setTabs([], animated: false)
+            tabViewControllers = []
+            return
+        }
+
+        let existingTabs = tabBarController.tabs
+        let shouldRebuildTabs = !usesSystemUITabAPI
+            || existingTabs.count != items.count
+            || tabViewControllers.count != items.count
+
+        if shouldRebuildTabs {
+            tabViewControllers = systemTabContentControllers(for: items, forceCreate: true)
+            let tabs = makeSystemUITabs(for: buildResult, controllers: tabViewControllers)
+            tabBarController.setTabs(tabs, animated: animated && !existingTabs.isEmpty)
+            applySystemUITabProminence(on: tabBarController)
+            usesSystemUITabAPI = true
+        } else {
+            updateSystemUITabs(from: buildResult)
+        }
+
+        let resolvedIndex = selectedIndex
+            ?? previousSelectedTab.flatMap { tab in tabBarController.tabs.firstIndex(where: { $0 === tab }) }
+            ?? 0
+        let index = min(max(resolvedIndex, 0), tabViewControllers.count - 1)
+        if tabBarController.tabs.indices.contains(index) {
+            tabBarController.selectedTab = tabBarController.tabs[index]
+        }
+        syncSystemUITabSelectionImages(selectedVisibleIndex: index, previousVisibleIndex: nil)
+        hostWebView(in: tabViewControllers[index])
+        let nextContent = nativeNavigationTabContentController(from: tabViewControllers[index])
+        if shouldRebuildTabs || previousSelectedTab !== tabBarController.selectedTab || previousContent !== nextContent {
+            navbarItemsNeedPlacement = true
+        }
+    }
+
+    @available(iOS 18.0, *)
+    private func makeSystemUITabs(for buildResult: SystemTabBarBuildResult, controllers: [UIViewController]) -> [UITab] {
+        var tabs: [UITab] = []
+        var searchIdentifier: String?
+
+        for (visibleIndex, item) in buildResult.items.enumerated() {
+            guard controllers.indices.contains(visibleIndex) else {
+                continue
+            }
+            let controller = controllers[visibleIndex]
+            let sourceIndex = buildResult.visibleSourceIndexes[visibleIndex]
+            let tabId = tabIds.indices.contains(sourceIndex) ? tabIds[sourceIndex] : "tab-\(visibleIndex)"
+            let identifier = nativeNavigationSystemTabIdentifier(forTabId: tabId)
+            let isSearchTab = buildResult.hasDetachedSearchTab && visibleIndex == buildResult.items.count - 1
+            let accessibilityTitle = tabTitles.indices.contains(sourceIndex)
+                ? (tabTitles[sourceIndex].isEmpty ? tabId : tabTitles[sourceIndex])
+                : tabId
+
+            let tab: UITab
+            if isSearchTab {
+                let searchTab = UISearchTab { _ in controller }
+                searchTab.identifier = identifier
+                tab = searchTab
+                searchIdentifier = identifier
+            } else {
+                tab = UITab(
+                    title: tabDisplayTitles.indices.contains(visibleIndex) ? tabDisplayTitles[visibleIndex] : item.title,
+                    image: tabBaseImages.indices.contains(visibleIndex) ? tabBaseImages[visibleIndex] : item.image,
+                    identifier: identifier
+                ) { _ in controller }
+            }
+
+            tab.isEnabled = item.isEnabled
+            tab.badgeValue = item.badgeValue
+            tab.accessibilityLabel = item.accessibilityLabel ?? accessibilityTitle
+            if let selectedImage = tabSelectedImages.indices.contains(visibleIndex) ? tabSelectedImages[visibleIndex] : item.selectedImage {
+                tab.selectedImage = selectedImage
+            }
+            if let baseImage = tabBaseImages.indices.contains(visibleIndex) ? tabBaseImages[visibleIndex] : item.image,
+               isSearchTab {
+                tab.image = baseImage
+            }
+            tabs.append(tab)
+        }
+
+        systemSearchTabIdentifier = searchIdentifier
+        return tabs
+    }
+
+    @available(iOS 18.0, *)
+    private func updateSystemUITabs(from buildResult: SystemTabBarBuildResult) {
+        guard let tabBarController = tabBarController else {
+            return
+        }
+
+        for (visibleIndex, item) in buildResult.items.enumerated() where tabBarController.tabs.indices.contains(visibleIndex) {
+            let tab = tabBarController.tabs[visibleIndex]
+            let isSearchTab = buildResult.hasDetachedSearchTab && visibleIndex == buildResult.items.count - 1
+            if !isSearchTab {
+                tab.title = tabDisplayTitles.indices.contains(visibleIndex) ? tabDisplayTitles[visibleIndex] : item.title
+            }
+            tab.isEnabled = item.isEnabled
+            tab.badgeValue = item.badgeValue
+            let baseImage = tabBaseImages.indices.contains(visibleIndex) ? tabBaseImages[visibleIndex] : item.image
+            let selectedImage = tabSelectedImages.indices.contains(visibleIndex) ? tabSelectedImages[visibleIndex] : item.selectedImage
+            tab.selectedImage = selectedImage
+            let isSelected = tabBarController.selectedTab === tab
+            tab.image = isSelected ? (selectedImage ?? baseImage) : baseImage
+        }
+
+        if buildResult.hasDetachedSearchTab {
+            let sourceIndex = buildResult.visibleSourceIndexes.last ?? 0
+            let tabId = tabIds.indices.contains(sourceIndex) ? tabIds[sourceIndex] : "search"
+            systemSearchTabIdentifier = nativeNavigationSystemTabIdentifier(forTabId: tabId)
+            applySystemUITabProminence(on: tabBarController)
+        }
+    }
+
+    @available(iOS 18.0, *)
+    private func applySystemUITabProminence(on tabBarController: UITabBarController) {
+        guard let searchIdentifier = systemSearchTabIdentifier else {
+            return
+        }
+        if #available(iOS 27.0, *) {
+            tabBarController.prominentTabIdentifier = searchIdentifier
+        }
+    }
+
+    @available(iOS 18.0, *)
+    private func syncSystemUITabSelectionImages(selectedVisibleIndex: Int, previousVisibleIndex: Int?) {
+        guard let tabBarController = tabBarController else {
+            return
+        }
+
+        if let previousVisibleIndex,
+           tabBarController.tabs.indices.contains(previousVisibleIndex),
+           tabBaseImages.indices.contains(previousVisibleIndex) {
+            tabBarController.tabs[previousVisibleIndex].image = tabBaseImages[previousVisibleIndex]
+        }
+        if tabBarController.tabs.indices.contains(selectedVisibleIndex) {
+            let selectedImage = tabSelectedImages.indices.contains(selectedVisibleIndex)
+                ? tabSelectedImages[selectedVisibleIndex]
+                : tabBaseImages.indices.contains(selectedVisibleIndex) ? tabBaseImages[selectedVisibleIndex] : nil
+            if let selectedImage {
+                tabBarController.tabs[selectedVisibleIndex].image = selectedImage
+            }
+        }
+    }
+
+    private func systemTabContentControllers(for items: [UITabBarItem], forceCreate: Bool = false) -> [UIViewController] {
         let existingContent = tabViewControllers.compactMap { nativeNavigationTabContentController(from: $0) }
-        if existingContent.count == items.count, existingContent.count == tabViewControllers.count {
+        if !forceCreate,
+           existingContent.count == items.count,
+           existingContent.count == tabViewControllers.count {
             for (controller, item) in zip(tabViewControllers, items) {
                 controller.tabBarItem = item
                 nativeNavigationTabContentController(from: controller)?.tabBarItem = item
@@ -1417,7 +1670,10 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
 
     private func hideSystemTabBarChromeCompletely() {
-        applySystemTabBarItems([], selectedIndex: nil, animated: false)
+        applySystemTabBarItems(
+            SystemTabBarBuildResult(items: [], selectedIndex: nil, visibleSourceIndexes: [], hasDetachedSearchTab: false),
+            animated: false
+        )
         setSystemTabBarHidden(true)
         tabBarController?.view.isHidden = true
         tabContainer?.isHidden = true
@@ -1698,7 +1954,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         selectedId: String?,
         labelVisibilityMode: String,
         icons: Bool
-    ) -> ([UITabBarItem], Int?) {
+    ) -> SystemTabBarBuildResult {
         tabIds = []
         tabTitles = []
         tabDisplayTitles = []
@@ -1706,6 +1962,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         tabSelectedImages = []
         var selectedIndex: Int?
         var items: [UITabBarItem] = []
+        var visibleSourceIndexes: [Int] = []
         var trailingEntry: (item: UITabBarItem, title: String?, image: UIImage?, selectedImage: UIImage?)?
 
         for (sourceIndex, tab) in tabs.enumerated() {
@@ -1728,9 +1985,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             let role = (tab["role"] as? String)?.lowercased()
             let item: UITabBarItem
             if role == "search" || role == "prominent" {
-                // iOS 26+ Liquid Glass renders `.search` as a detached trailing
-                // circular action beside the floating tab capsule. Keep the
-                // system-item title empty so UIKit treats it as icon-only.
+                // Pre-iOS-26 Liquid Glass keeps a search system item in the
+                // capsule; iOS 26+ uses UISearchTab via applySystemUITabBarItems.
                 item = UITabBarItem(tabBarSystemItem: .search, tag: sourceIndex)
                 item.title = nil
                 if let image = image {
@@ -1758,6 +2014,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 trailingEntry = (item, title, image, selectedImage ?? image)
             } else {
                 items.append(item)
+                visibleSourceIndexes.append(sourceIndex)
                 tabDisplayTitles.append(title)
                 tabBaseImages.append(image)
                 tabSelectedImages.append(selectedImage ?? image)
@@ -1766,6 +2023,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
         if let trailingEntry = trailingEntry {
             items.append(trailingEntry.item)
+            visibleSourceIndexes.append(trailingEntry.item.tag)
             tabDisplayTitles.append(trailingEntry.title)
             tabBaseImages.append(trailingEntry.image)
             tabSelectedImages.append(trailingEntry.selectedImage)
@@ -1776,7 +2034,17 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             })
         }
 
-        return (items, selectedIndex)
+        let hasDetachedSearchTab = trailingEntry != nil
+        if visibleSourceIndexes.count != items.count {
+            visibleSourceIndexes = nativeNavigationVisibleTabDescriptors(tabs: tabs, selectedId: selectedId).map(\.sourceIndex)
+        }
+
+        return SystemTabBarBuildResult(
+            items: items,
+            selectedIndex: selectedIndex,
+            visibleSourceIndexes: visibleSourceIndexes,
+            hasDetachedSearchTab: hasDetachedSearchTab
+        )
     }
 
     private func makeFloatingTabBarItems(

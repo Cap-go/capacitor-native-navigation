@@ -574,4 +574,51 @@ class NativeNavigationTests: XCTestCase {
         XCTAssertFalse(nativeNavigationSearchPlacementIsButton("stacked"))
         XCTAssertTrue(nativeNavigationSearchPlacementIsButton("button"))
     }
+
+    func testVisibleTabDescriptorsPlaceTrailingSearchLast() {
+        let tabs: [[String: Any]] = [
+            ["id": "home", "title": "Home"],
+            ["id": "library", "title": "Library"],
+            ["id": "search", "title": "Search", "role": "search"]
+        ]
+        let descriptors = nativeNavigationVisibleTabDescriptors(tabs: tabs, selectedId: nil)
+        XCTAssertEqual(descriptors.map(\.id), ["home", "library", "search"])
+        XCTAssertEqual(descriptors.last?.role, "search")
+        XCTAssertTrue(descriptors.last?.isDetachedTrailing == true)
+        XCTAssertEqual(descriptors.map(\.sourceIndex), [0, 1, 2])
+    }
+
+    func testVisibleTabDescriptorsKeepOnlyLastDetachedRole() {
+        let tabs: [[String: Any]] = [
+            ["id": "a", "role": "search"],
+            ["id": "b", "role": "prominent"],
+            ["id": "c"]
+        ]
+        let descriptors = nativeNavigationVisibleTabDescriptors(tabs: tabs, selectedId: nil)
+        XCTAssertEqual(descriptors.map(\.id), ["c", "b"])
+        XCTAssertEqual(descriptors.last?.role, "prominent")
+    }
+
+    func testVisibleTabDescriptorsRespectHiddenUnlessSelected() {
+        let tabs: [[String: Any]] = [
+            ["id": "home"],
+            ["id": "hidden", "hidden": true],
+            ["id": "search", "role": "search"]
+        ]
+        let descriptors = nativeNavigationVisibleTabDescriptors(tabs: tabs, selectedId: nil)
+        XCTAssertEqual(descriptors.map(\.id), ["home", "search"])
+        let selectedHidden = nativeNavigationVisibleTabDescriptors(tabs: tabs, selectedId: "hidden")
+        XCTAssertEqual(selectedHidden.map(\.id), ["home", "hidden", "search"])
+    }
+
+    func testSystemTabIdentifierIsStable() {
+        XCTAssertEqual(
+            nativeNavigationSystemTabIdentifier(forTabId: "search"),
+            "app.capgo.nativenavigation.search"
+        )
+    }
+
+    func testPrefersSystemUITabAPIRequiresDetachedSearchTab() {
+        XCTAssertFalse(nativeNavigationPrefersSystemUITabAPI(hasDetachedSearchTab: false))
+    }
 }
