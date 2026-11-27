@@ -1062,7 +1062,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             return true
         }
         if systemTabVisibleEntries.indices.contains(visibleIndex),
-           !systemTabVisibleEntries[visibleIndex].enabled || !tab.isEnabled {
+           !systemTabIsSelectable(tab, entryEnabled: systemTabVisibleEntries[visibleIndex].enabled) {
             return false
         }
         let viewController = systemTabViewController(atVisibleIndex: visibleIndex)
@@ -1555,13 +1555,14 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 let searchTab = UISearchTab { _ in
                     viewController
                 }
-                searchTab.identifier = entry.id
-                searchTab.title = title
+                if let title {
+                    searchTab.title = title
+                }
                 if let image {
                     searchTab.image = image
                 }
                 searchTab.badgeValue = badge
-                searchTab.isEnabled = entry.enabled
+                applySystemTabEnabled(searchTab, enabled: entry.enabled)
                 return searchTab
             }
 
@@ -1569,7 +1570,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 viewController
             }
             tab.badgeValue = badge
-            tab.isEnabled = entry.enabled
+            applySystemTabEnabled(tab, enabled: entry.enabled)
             return tab
         }
 
@@ -1586,13 +1587,32 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
         for (visibleIndex, entry) in visibleEntries.enumerated() {
             let tab = tabs[visibleIndex]
-            tab.identifier = entry.id
-            tab.title = tabDisplayTitles.indices.contains(visibleIndex) ? tabDisplayTitles[visibleIndex] : tab.title
+            if let nextTitle = tabDisplayTitles.indices.contains(visibleIndex) ? tabDisplayTitles[visibleIndex] : nil {
+                tab.title = nextTitle
+            }
             tab.badgeValue = tabBadgeValues.indices.contains(visibleIndex) ? tabBadgeValues[visibleIndex] : nil
             let image = tabBaseImages.indices.contains(visibleIndex) ? tabBaseImages[visibleIndex] : tab.image
             tab.image = image
-            tab.isEnabled = entry.enabled
+            applySystemTabEnabled(tab, enabled: entry.enabled)
         }
+    }
+
+    @available(iOS 18.0, *)
+    private func applySystemTabEnabled(_ tab: UITab, enabled: Bool) {
+        if #available(iOS 18.4, *) {
+            tab.isEnabled = enabled
+        }
+    }
+
+    @available(iOS 18.0, *)
+    private func systemTabIsSelectable(_ tab: UITab, entryEnabled: Bool) -> Bool {
+        guard entryEnabled else {
+            return false
+        }
+        if #available(iOS 18.4, *) {
+            return tab.isEnabled
+        }
+        return true
     }
 
     @available(iOS 18.0, *)
