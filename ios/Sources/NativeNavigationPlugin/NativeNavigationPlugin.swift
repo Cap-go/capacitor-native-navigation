@@ -450,7 +450,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 // after the controller view itself was hidden.
                 self.tabBarController?.view.isHidden = false
                 let tabBar = self.ensureTabBar()
-                let visibleEntries = nativeNavigationVisibleTabEntries(tabs: tabs, selectedId: selectedId)
+                let visibleEntries = nativeNavigationNormalizedVisibleTabEntries(tabs: tabs, selectedId: selectedId)
                 let (items, selectedIndex) = self.makeTabBarItems(
                     tabs,
                     selectedId: selectedId,
@@ -1060,6 +1060,10 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         guard let visibleIndex = nativeNavigationIndexForTabIdentifier(systemTabIdentifiers, identifier: tab.identifier) else {
             return true
         }
+        if systemTabVisibleEntries.indices.contains(visibleIndex),
+           !systemTabVisibleEntries[visibleIndex].enabled || !tab.isEnabled {
+            return false
+        }
         let viewController = systemTabViewController(atVisibleIndex: visibleIndex)
         if usesSystemTabBar {
             hostWebView(in: viewController)
@@ -1552,6 +1556,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                     searchTab.image = image
                 }
                 searchTab.badgeValue = badge
+                searchTab.isEnabled = entry.enabled
                 return searchTab
             }
 
@@ -1559,6 +1564,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 viewController
             }
             tab.badgeValue = badge
+            tab.isEnabled = entry.enabled
             return tab
         }
 
@@ -1580,6 +1586,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             tab.badgeValue = tabBadgeValues.indices.contains(visibleIndex) ? tabBadgeValues[visibleIndex] : nil
             let image = tabBaseImages.indices.contains(visibleIndex) ? tabBaseImages[visibleIndex] : tab.image
             tab.image = image
+            tab.isEnabled = entry.enabled
         }
     }
 

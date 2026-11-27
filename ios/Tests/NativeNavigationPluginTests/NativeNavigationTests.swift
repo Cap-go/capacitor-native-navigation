@@ -588,19 +588,40 @@ class NativeNavigationTests: XCTestCase {
 
     func testUsesUITabSearchAPIRequiresTrailingSearchRole() {
         let normal = [
-            NativeNavigationVisibleTabEntry(sourceIndex: 0, id: "a", role: nil),
-            NativeNavigationVisibleTabEntry(sourceIndex: 1, id: "b", role: nil)
+            NativeNavigationVisibleTabEntry(sourceIndex: 0, id: "a", role: nil, enabled: true),
+            NativeNavigationVisibleTabEntry(sourceIndex: 1, id: "b", role: nil, enabled: true)
         ]
         XCTAssertFalse(nativeNavigationUsesUITabSearchAPI(visibleTabs: normal))
 
-        let trailingSearch = normal + [NativeNavigationVisibleTabEntry(sourceIndex: 2, id: "s", role: "search")]
+        let trailingSearch = normal + [NativeNavigationVisibleTabEntry(sourceIndex: 2, id: "s", role: "search", enabled: true)]
         XCTAssertTrue(nativeNavigationUsesUITabSearchAPI(visibleTabs: trailingSearch))
 
         let searchNotLast = [
-            NativeNavigationVisibleTabEntry(sourceIndex: 0, id: "s", role: "search"),
-            NativeNavigationVisibleTabEntry(sourceIndex: 1, id: "b", role: nil)
+            NativeNavigationVisibleTabEntry(sourceIndex: 0, id: "s", role: "search", enabled: true),
+            NativeNavigationVisibleTabEntry(sourceIndex: 1, id: "b", role: nil, enabled: true)
         ]
         XCTAssertFalse(nativeNavigationUsesUITabSearchAPI(visibleTabs: searchNotLast))
+    }
+
+    func testNormalizedVisibleTabEntriesKeepsOnlyLastTrailingRole() {
+        let tabs: [[String: Any]] = [
+            ["id": "home"],
+            ["id": "searchA", "role": "search"],
+            ["id": "library"],
+            ["id": "searchB", "role": "search"]
+        ]
+        let normalized = nativeNavigationNormalizedVisibleTabEntries(tabs: tabs, selectedId: nil)
+        XCTAssertEqual(normalized.map(\.id), ["home", "library", "searchB"])
+        XCTAssertTrue(normalized.last?.role == "search")
+    }
+
+    func testVisibleTabEntriesReadsEnabledFlag() {
+        let tabs: [[String: Any]] = [
+            ["id": "home", "enabled": false],
+            ["id": "search", "role": "search", "enabled": true]
+        ]
+        let entries = nativeNavigationVisibleTabEntries(tabs: tabs, selectedId: nil)
+        XCTAssertEqual(entries.map(\.enabled), [false, true])
     }
 
     func testTabImageForSelectionSwapsIcon() {
