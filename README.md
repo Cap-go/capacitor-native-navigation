@@ -40,11 +40,11 @@ We build, improve and fix our plugins with heavy use of AI, so issues usually ge
 
 | App                                                                                            | Tap flow                                                                                                                                                | SVG icons                                                                                                                                                 | Styling                                                                                                                                                                                                        |
 | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| <img src="./docs/demo.webp" alt="Demo of capacitor-native-navigation in action" width="160" /> | <img src="./docs/demo-navigation.webp" alt="Animated native navigation tap flow showing tab selection, push transition, and native back" width="160" /> | <img src="./docs/demo-svg-icons.webp" alt="Animated native SVG icon demo showing inline SVG icons, native tint, labels, and tab selection" width="160" /> | <img src="./docs/demo-options.webp" alt="Animated native navigation options demo showing dynamic colors, selected labels, custom indicators, badges, system Liquid Glass, and zoom transitions" width="160" /> |
+| <img src="https://raw.githubusercontent.com/Cap-go/capacitor-native-navigation/main/docs/demo.webp" alt="Demo of capacitor-native-navigation in action" width="160" /> | <img src="https://raw.githubusercontent.com/Cap-go/capacitor-native-navigation/main/docs/demo-navigation.webp" alt="Animated native navigation tap flow showing tab selection, push transition, and native back" width="160" /> | <img src="https://raw.githubusercontent.com/Cap-go/capacitor-native-navigation/main/docs/demo-svg-icons.webp" alt="Animated native SVG icon demo showing inline SVG icons, native tint, labels, and tab selection" width="160" /> | <img src="https://raw.githubusercontent.com/Cap-go/capacitor-native-navigation/main/docs/demo-options.webp" alt="Animated native navigation options demo showing dynamic colors, selected labels, custom indicators, badges, system Liquid Glass, and zoom transitions" width="160" /> |
 
 | iOS Liquid Glass                                                                                                         | Android blur                                                                                                                                                                      | Android tap flow                                                                                                                                                                                                       | Curved tabbar                                                                                                                                                     |
 | ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| <img src="./docs/native-liquid-glass-ios.webp" alt="iOS native Liquid Glass navbar and tabbar screenshot" width="160" /> | <img src="./docs/android-mimesis-blur.webp" alt="Android native navbar and floating tabbar over page content blurred with CSS backdrop-filter, in the Mimesis app" width="160" /> | <img src="./docs/android-mimesis-flow.webp" alt="Android recording of the Mimesis app: a large navbar title collapsing on scroll, a push transition with native back, and switching between three tabs" width="160" /> | <img src="./docs/native-screenshots/android-curved-tabbar.png" alt="Android native curved tabbar with raised center camera action and side margin" width="160" /> |
+| <img src="https://raw.githubusercontent.com/Cap-go/capacitor-native-navigation/main/docs/native-liquid-glass-ios.webp" alt="iOS native Liquid Glass navbar and tabbar screenshot" width="160" /> | <img src="https://raw.githubusercontent.com/Cap-go/capacitor-native-navigation/main/docs/android-mimesis-blur.webp" alt="Android native navbar and floating tabbar over page content blurred with CSS backdrop-filter, in the Mimesis app" width="160" /> | <img src="https://raw.githubusercontent.com/Cap-go/capacitor-native-navigation/main/docs/android-mimesis-flow.webp" alt="Android recording of the Mimesis app: a large navbar title collapsing on scroll, a push transition with native back, and switching between three tabs" width="160" /> | <img src="https://raw.githubusercontent.com/Cap-go/capacitor-native-navigation/main/docs/native-screenshots/android-curved-tabbar.png" alt="Android native curved tabbar with raised center camera action and side margin" width="160" /> |
 
 The Android captures come from [Mimesis](https://github.com/Cap-go/mimesis) on Android 16: a large navbar title that collapses on scroll, a translucent native tabbar and a transparent navbar over CSS `backdrop-filter` blur.
 
@@ -83,10 +83,10 @@ Captured on the iPhone Duo simulator in iOS 27.1.
 
 | Folded, center                                                                                                                                                         | Open, center                                                                                                                                                              | Open, system                                                                                                                                                                                | Folded, system                                                                                                                                                                              |
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| <img src="./docs/iphone-duo-folded-center.webp" alt="iPhone Duo simulator, folded: curved tab bar and a circular camera button stay on the bottom" width="160" />     | <img src="./docs/iphone-duo-open-center.webp" alt="iPhone Duo simulator, open in landscape: the camera button stays a circle on the bottom bar" width="220" />            | <img src="./docs/iphone-duo-open-system.webp" alt="iPhone Duo simulator, open in landscape: system tab bar and navbar compose button in the vertical rail" width="220" />                  | <img src="./docs/iphone-duo-folded-system.webp" alt="iPhone Duo simulator, folded: system tab bar and navbar compose button in the vertical rail" width="160" />                            |
+| <img src="https://raw.githubusercontent.com/Cap-go/capacitor-native-navigation/main/docs/iphone-duo-folded-center.webp" alt="iPhone Duo simulator, folded: curved tab bar and a circular camera button stay on the bottom" width="160" />     | <img src="https://raw.githubusercontent.com/Cap-go/capacitor-native-navigation/main/docs/iphone-duo-open-center.webp" alt="iPhone Duo simulator, open in landscape: the camera button stays a circle on the bottom bar" width="220" />            | <img src="https://raw.githubusercontent.com/Cap-go/capacitor-native-navigation/main/docs/iphone-duo-open-system.webp" alt="iPhone Duo simulator, open in landscape: system tab bar and navbar compose button in the vertical rail" width="220" />                  | <img src="https://raw.githubusercontent.com/Cap-go/capacitor-native-navigation/main/docs/iphone-duo-folded-system.webp" alt="iPhone Duo simulator, folded: system tab bar and navbar compose button in the vertical rail" width="160" />                            |
 
 <img
-  src="./docs/iphone-duo-open-portrait.webp"
+  src="https://raw.githubusercontent.com/Cap-go/capacitor-native-navigation/main/docs/iphone-duo-open-portrait.webp"
   alt="iPhone Duo simulator, open in portrait: navbar and system tab bar stay horizontal"
   width="220"
 />
@@ -94,7 +94,7 @@ Captured on the iPhone Duo simulator in iOS 27.1.
 Open landscape with the navbar controls in the rail. The back icon sits under the status items, Done is a prominent text button, reply and forward share one group, and search is a detached button. The system tabs stay at the bottom of the rail.
 
 <img
-  src="./docs/iphone-duo-open-dock.webp"
+  src="https://raw.githubusercontent.com/Cap-go/capacitor-native-navigation/main/docs/iphone-duo-open-dock.webp"
   alt="iPhone Duo simulator, open in landscape: back icon, prominent Done, grouped reply and forward, and a detached search button in the vertical rail"
   width="220"
 />
@@ -105,7 +105,7 @@ Multi-level native segment rows under the navbar: a scope switcher on top, secti
 
 | iOS                                                                                                                                                                                                 | Android                                                                                                                                                                                         |
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| <img src="./docs/navbar-segments-ios.webp" alt="iOS recording: tapping Account sections, switching to Organization swaps the second row to eight scrolling chips, selecting Billing" width="160" /> | <img src="./docs/navbar-segments-android.webp" alt="Android recording: segmented Account / Organization row over scrolling section chips, switching scope and selecting Billing" width="160" /> |
+| <img src="https://raw.githubusercontent.com/Cap-go/capacitor-native-navigation/main/docs/navbar-segments-ios.webp" alt="iOS recording: tapping Account sections, switching to Organization swaps the second row to eight scrolling chips, selecting Billing" width="160" /> | <img src="https://raw.githubusercontent.com/Cap-go/capacitor-native-navigation/main/docs/navbar-segments-android.webp" alt="Android recording: segmented Account / Organization row over scrolling section chips, switching scope and selecting Billing" width="160" /> |
 
 ### Pull to refresh
 
@@ -113,7 +113,7 @@ Opt-in native pull-to-refresh, shown below the navbar. It works whether the page
 
 | iOS                                                                                                         | Android                                                                                                                         |
 | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| <img src="./docs/pull-to-refresh-ios.webp" alt="iOS native pull to refresh below the navbar" width="160" /> | <img src="./docs/pull-to-refresh-android.webp" alt="Android SwipeRefreshLayout pull to refresh below the navbar" width="160" /> |
+| <img src="https://raw.githubusercontent.com/Cap-go/capacitor-native-navigation/main/docs/pull-to-refresh-ios.webp" alt="iOS native pull to refresh below the navbar" width="160" /> | <img src="https://raw.githubusercontent.com/Cap-go/capacitor-native-navigation/main/docs/pull-to-refresh-android.webp" alt="Android SwipeRefreshLayout pull to refresh below the navbar" width="160" /> |
 
 ```ts
 await NativeNavigation.setPullToRefresh({ enabled: true });
@@ -455,7 +455,7 @@ The example app route **Scroll header demo** (home tile) shows a long list with 
 
 | At rest                                                                                                                                      | Hide, then reveal                                                                                                                                                                              |
 | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| <img src="./docs/media/scroll-header.webp" alt="iPhone 17 simulator: navbar stays visible over the top of a long list" width="160" />                             | <img src="./docs/media/scroll-header-demo.webp" alt="iPhone 17 simulator: the navbar is hidden after the list scrolls down" width="160" />                                       |
+| <img src="https://raw.githubusercontent.com/Cap-go/capacitor-native-navigation/main/docs/media/scroll-header.webp" alt="iPhone 17 simulator: navbar stays visible over the top of a long list" width="160" />                             | <img src="https://raw.githubusercontent.com/Cap-go/capacitor-native-navigation/main/docs/media/scroll-header-demo.webp" alt="iPhone 17 simulator: the navbar is hidden after the list scrolls down" width="160" />                                       |
 
 ## Navbar search
 
@@ -493,8 +493,8 @@ The example **Settings** tab uses this field to filter an inset grouped list, an
 
 iPhone 17 simulator, iOS 27.0.
 
-<img src="./docs/navbar-search-light.webp" alt="Settings search under the large title, light appearance" width="180" />
-<img src="./docs/navbar-search-dark.webp" alt="Settings search under the large title, dark appearance" width="180" />
+<img src="https://raw.githubusercontent.com/Cap-go/capacitor-native-navigation/main/docs/navbar-search-light.webp" alt="Settings search under the large title, light appearance" width="180" />
+<img src="https://raw.githubusercontent.com/Cap-go/capacitor-native-navigation/main/docs/navbar-search-dark.webp" alt="Settings search under the large title, dark appearance" width="180" />
 
 ## Tab bar placement and alignment
 
@@ -533,8 +533,8 @@ The example **Tabbar** playground and the **Settings** tab both expose alignment
 
 iPad Pro 11-inch simulator, iOS 27.0. Alignment moves the floating capsule; the iOS 26 system tab bar does not. Sidebar placement uses UIKit's top tab bar and sidebar button.
 
-<img src="./docs/tabbar-alignment-start.webp" alt="iPad: floating tab bar aligned to the start" width="240" />
-<img src="./docs/tabbar-sidebar.webp" alt="iPad: sidebar placement shows the system top tab bar and sidebar button" width="240" />
+<img src="https://raw.githubusercontent.com/Cap-go/capacitor-native-navigation/main/docs/tabbar-alignment-start.webp" alt="iPad: floating tab bar aligned to the start" width="240" />
+<img src="https://raw.githubusercontent.com/Cap-go/capacitor-native-navigation/main/docs/tabbar-sidebar.webp" alt="iPad: sidebar placement shows the system top tab bar and sidebar button" width="240" />
 
 ## Navbar segment rows (multi-level top bar)
 
@@ -1652,7 +1652,7 @@ Defaults to `none` (current static navbar behavior).
 Native tab role for Liquid Glass tab bars.
 
 `search` (and `prominent` when the OS supports it) renders as a detached
-trailing circular action beside the floating tab capsule — the Apple News /
+trailing circular action beside the floating tab capsule, the Apple News /
 Photos pattern. On iOS 26+ with the system Liquid Glass bar, keep a trailing
 `search` or `prominent` tab last in `tabs`: the plugin uses `UISearchTab` and
 `UITabBarController.prominentTabIdentifier` on iOS 27+ so UIKit draws the

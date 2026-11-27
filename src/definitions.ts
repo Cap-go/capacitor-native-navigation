@@ -127,7 +127,7 @@ export type NativeNavigationNavbarSearchPlacement = 'stacked' | 'button';
  * Native tab role for Liquid Glass tab bars.
  *
  * `search` (and `prominent` when the OS supports it) renders as a detached
- * trailing circular action beside the floating tab capsule — the Apple News /
+ * trailing circular action beside the floating tab capsule, the Apple News /
  * Photos pattern. On iOS 26+ with the system Liquid Glass bar, keep a trailing
  * `search` or `prominent` tab last in `tabs`: the plugin uses `UISearchTab` and
  * `UITabBarController.prominentTabIdentifier` on iOS 27+ so UIKit draws the
