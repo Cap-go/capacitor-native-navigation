@@ -1566,7 +1566,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 return searchTab
             }
 
-            let tab = UITab(title: title, image: image, identifier: entry.id) { _ in
+            let tab = UITab(title: title ?? "", image: image, identifier: entry.id) { _ in
                 viewController
             }
             tab.badgeValue = badge
