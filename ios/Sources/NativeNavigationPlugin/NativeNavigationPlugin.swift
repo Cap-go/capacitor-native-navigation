@@ -1479,9 +1479,6 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
         let visibleSourceIndices = visibleEntries.map(\.sourceIndex)
         let identifiers = visibleEntries.map(\.id)
-        let trailingRole = visibleEntries.last?.role
-        let prominentId = (trailingRole == "search" || trailingRole == "prominent") ? visibleEntries.last?.id : nil
-
         let previousSelectedVisibleIndex = {
             if #available(iOS 18.0, *),
                let selectedTab = tabBarController.selectedTab,
@@ -1507,7 +1504,6 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         systemTabIdentifiers = identifiers
         systemTabVisibleSourceIndices = visibleSourceIndices
         systemTabVisibleEntries = visibleEntries
-        prominentSearchTabIdentifier = prominentId
         usesSystemTabsAPI = true
 
         suppressTabSelectEvent = true
@@ -1587,9 +1583,10 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
         for (visibleIndex, entry) in visibleEntries.enumerated() {
             let tab = tabs[visibleIndex]
-            if let nextTitle = tabDisplayTitles.indices.contains(visibleIndex) ? tabDisplayTitles[visibleIndex] : nil {
-                tab.title = nextTitle
-            }
+            let nextTitle = tabDisplayTitles.indices.contains(visibleIndex)
+                ? (tabDisplayTitles[visibleIndex] ?? "")
+                : (tab.title ?? "")
+            tab.title = nextTitle
             tab.badgeValue = tabBadgeValues.indices.contains(visibleIndex) ? tabBadgeValues[visibleIndex] : nil
             let image = tabBaseImages.indices.contains(visibleIndex) ? tabBaseImages[visibleIndex] : tab.image
             tab.image = image
@@ -1636,14 +1633,23 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
     }
 
     private func applyProminentSystemTabIdentifierIfNeeded(_ tabBarController: UITabBarController) {
-        guard let prominentSearchTabIdentifier else {
+        guard usesSystemTabsAPI, #available(iOS 27, *) else {
             return
         }
-        if #available(iOS 27, *) {
-            #if compiler(>=6.4)
-            tabBarController.prominentTabIdentifier = prominentSearchTabIdentifier
-            #endif
+        #if compiler(>=6.4)
+        guard let trailingIndex = systemTabVisibleEntries.lastIndex(where: { entry in
+            entry.role == "search" || entry.role == "prominent"
+        }),
+        let tabs = tabBarController.tabs as [UITab]?,
+        tabs.indices.contains(trailingIndex) else {
+            tabBarController.prominentTabIdentifier = nil
+            prominentSearchTabIdentifier = nil
+            return
         }
+        let uiIdentifier = tabs[trailingIndex].identifier
+        tabBarController.prominentTabIdentifier = uiIdentifier
+        prominentSearchTabIdentifier = uiIdentifier
+        #endif
     }
 
     private func systemTabViewController(atVisibleIndex visibleIndex: Int) -> UIViewController? {
@@ -3303,6 +3309,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             } else {
                 tabBarController.selectedIndex = index
             }
+            updateSystemTabImages(selectedVisibleIndex: index)
+            applyProminentSystemTabIdentifierIfNeeded(tabBarController)
         } else {
             tabBarController.setViewControllers(wrapped, animated: false)
             tabBarController.selectedIndex = index
