@@ -646,5 +646,16 @@ class NativeNavigationTests: XCTestCase {
             nativeNavigationSourceIndexForVisibleTab(visibleIndex: 2, visibleSourceIndices: [0, 3, 5]),
             5
         )
+        XCTAssertEqual(nativeNavigationIndexForTabIdentifier(["dup", "dup"], identifier: "dup"), 0)
+    }
+
+    func testVisibleIndexForTabUsesObjectIdentity() {
+        if #available(iOS 18.0, *) {
+            let first = UITab(title: "A", image: nil, identifier: "dup") { _ in UIViewController() }
+            let second = UITab(title: "B", image: nil, identifier: "dup") { _ in UIViewController() }
+            let tabs = [first, second]
+            XCTAssertEqual(nativeNavigationVisibleIndexForTab(first, in: tabs), 0)
+            XCTAssertEqual(nativeNavigationVisibleIndexForTab(second, in: tabs), 1)
+        }
     }
 }

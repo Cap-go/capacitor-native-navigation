@@ -66,6 +66,11 @@ func nativeNavigationIndexForTabIdentifier(_ identifiers: [String], identifier: 
     return identifiers.firstIndex(of: identifier)
 }
 
+@available(iOS 18.0, *)
+func nativeNavigationVisibleIndexForTab(_ tab: UITab, in tabs: [UITab]) -> Int? {
+    tabs.firstIndex { $0 === tab }
+}
+
 func nativeNavigationTabImageForSelection(
     isSelected: Bool,
     base: UIImage?,

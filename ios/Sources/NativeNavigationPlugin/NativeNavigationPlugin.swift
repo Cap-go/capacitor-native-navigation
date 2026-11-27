@@ -1057,7 +1057,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         guard usesSystemTabsAPI else {
             return true
         }
-        guard let visibleIndex = nativeNavigationIndexForTabIdentifier(systemTabIdentifiers, identifier: tab.identifier) else {
+        guard let tabs = tabBarController.tabs as [UITab]?,
+              let visibleIndex = nativeNavigationVisibleIndexForTab(tab, in: tabs) else {
             return true
         }
         if systemTabVisibleEntries.indices.contains(visibleIndex),
@@ -1070,8 +1071,8 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         }
         tabSelectEmittedForReTap = false
         if !suppressTabSelectEvent,
-           let selectedIdentifier = tabBarController.selectedTab?.identifier,
-           selectedIdentifier == tab.identifier {
+           let selectedTab = tabBarController.selectedTab,
+           selectedTab === tab {
             notifyTabSelectForVisibleIndex(visibleIndex)
             tabSelectEmittedForReTap = true
         }
@@ -1093,12 +1094,14 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             refreshRailNavbarItems()
             return
         }
-        if let visibleIndex = nativeNavigationIndexForTabIdentifier(systemTabIdentifiers, identifier: selectedTab.identifier) {
+        if let tabs = tabBarController.tabs as [UITab]?,
+           let visibleIndex = nativeNavigationVisibleIndexForTab(selectedTab, in: tabs) {
             updateSystemTabImages(selectedVisibleIndex: visibleIndex)
         }
         hostWebViewInSelectedSystemTab()
         refreshRailNavbarItems()
-        if let visibleIndex = nativeNavigationIndexForTabIdentifier(systemTabIdentifiers, identifier: selectedTab.identifier),
+        if let tabs = tabBarController.tabs as [UITab]?,
+           let visibleIndex = nativeNavigationVisibleIndexForTab(selectedTab, in: tabs),
            !tabSelectEmittedForReTap {
             notifyTabSelectForVisibleIndex(visibleIndex)
         }
@@ -1480,8 +1483,10 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         let prominentId = (trailingRole == "search" || trailingRole == "prominent") ? visibleEntries.last?.id : nil
 
         let previousSelectedVisibleIndex = {
-            if let selectedTab = tabBarController.selectedTab,
-               let index = nativeNavigationIndexForTabIdentifier(systemTabIdentifiers, identifier: selectedTab.identifier) {
+            if #available(iOS 18.0, *),
+               let selectedTab = tabBarController.selectedTab,
+               let tabs = tabBarController.tabs as [UITab]?,
+               let index = nativeNavigationVisibleIndexForTab(selectedTab, in: tabs) {
                 return index
             }
             return tabBarController.selectedIndex
