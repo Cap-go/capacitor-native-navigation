@@ -2,15 +2,48 @@ import { registerPlugin } from '@capacitor/core';
 
 import type {
   NativeNavigationBeginTransitionOptions,
+  NativeNavigationConfigureOptions,
   NativeNavigationFinishTransitionOptions,
   NativeNavigationPlugin,
   NativeNavigationRect,
   NativeNavigationTransitionResult,
 } from './definitions';
 import { createNativeNavigationWeb } from './plugin';
+import { activateWebNativeUIEngine, deactivateWebNativeUIEngine } from './web-ui-engine';
 
-export const NativeNavigation = registerPlugin<NativeNavigationPlugin>('NativeNavigation', {
+const nativeNavigationPlugin = registerPlugin<NativeNavigationPlugin>('NativeNavigation', {
   web: createNativeNavigationWeb,
+});
+
+async function syncWebNativeUIEngine(options?: NativeNavigationConfigureOptions): Promise<void> {
+  if (options?.webNativeUIEngine === true) {
+    await activateWebNativeUIEngine();
+    return;
+  }
+  if (options?.webNativeUIEngine === false) {
+    deactivateWebNativeUIEngine();
+  }
+}
+
+const configureNativeNavigation = async (
+  options?: NativeNavigationConfigureOptions,
+): Promise<Awaited<ReturnType<NativeNavigationPlugin['configure']>>> => {
+  const result = await nativeNavigationPlugin.configure(options);
+  await syncWebNativeUIEngine(options);
+  return result;
+};
+
+export const NativeNavigation: NativeNavigationPlugin = new Proxy(nativeNavigationPlugin, {
+  get(target, prop, receiver) {
+    if (prop === 'configure') {
+      return configureNativeNavigation;
+    }
+    const value = Reflect.get(target, prop, receiver);
+    if (typeof value === 'function') {
+      return (value as (...args: unknown[]) => unknown).bind(target);
+    }
+    return value;
+  },
 });
 
 export * from './definitions';

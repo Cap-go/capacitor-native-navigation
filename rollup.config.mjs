@@ -1,5 +1,8 @@
+import resolve from '@rollup/plugin-node-resolve';
+
 export default {
   input: 'dist/esm/index.js',
+  plugins: [resolve({ browser: true, preferBuiltins: false })],
   output: [
     {
       file: 'dist/plugin.js',

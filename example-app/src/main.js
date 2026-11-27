@@ -179,6 +179,7 @@ const configDemo = {
   animationDuration: '360',
   glass: 'liquidGlass',
   transitionDuration: '',
+  webNativeUIEngine: import.meta.env.VITE_WEB_NATIVE_UI_ENGINE === 'true',
 };
 const configToggles = [['enabled', 'Native chrome enabled']];
 const configSelects = [
@@ -721,6 +722,7 @@ const applyConfigure = async () => {
     enabled: configDemo.enabled,
     contentInsetMode: configDemo.contentInsetMode,
     animationDuration: Number(configDemo.animationDuration),
+    webNativeUIEngine: configDemo.webNativeUIEngine,
     colors: {
       tint: chromePalette().tint,
       inactiveTint: chromePalette().inactiveTint,
@@ -742,12 +744,35 @@ const applyConfigure = async () => {
   showInsets(result.insets);
 };
 
+const registerEngineDialogOverlayHooks = async () => {
+  if (!configDemo.webNativeUIEngine) {
+    return;
+  }
+  const { enableSupportIonicOverlays } = await import('@webview-native-ui/engine/ionic');
+  enableSupportIonicOverlays({
+    additional: [
+      {
+        selector: '#engine-modal-sheet',
+        events: {
+          willPresent: 'capNativeNavigationEngineModalWillPresent',
+          didDismiss: 'capNativeNavigationEngineModalDidDismiss',
+        },
+      },
+    ],
+  });
+};
+
 const configureChrome = async () => {
   const applyNativeChrome = async () => {
     await applyConfigure();
     chromeConfigured = true;
     await updateNavbar();
     await updateTabbar();
+    try {
+      await registerEngineDialogOverlayHooks();
+    } catch (error) {
+      console.warn('registerEngineDialogOverlayHooks failed', error);
+    }
   };
 
   if (screenshotMode) {
@@ -1628,6 +1653,56 @@ window.addEventListener('storage', (event) => {
 if (screenshotMode) {
   void SplashScreen.hide({ fadeOutDuration: 0 });
 }
+let engineModalDemoReady = false;
+const installEngineModalDemo = () => {
+  if (engineModalDemoReady) {
+    return;
+  }
+  engineModalDemoReady = true;
+  const wrap = document.createElement('section');
+  wrap.className = 'engine-modal-demo';
+  wrap.innerHTML = `
+    <button type="button" id="engine-modal-open">Open engine modal</button>
+    <p id="engine-runtime-off" hidden>Engine runtime disabled</p>
+    <p id="engine-projection-inactive" hidden>Engine navbar snapshot inactive</p>
+    <dialog id="engine-modal-sheet" class="engine-modal-sheet">
+      <p id="engine-modal-sheet-title">Engine modal layer</p>
+      <p id="engine-projection-active" hidden>Engine navbar snapshot active</p>
+      <button type="button" id="engine-modal-close">Close</button>
+    </dialog>
+  `;
+  document.body.appendChild(wrap);
+  const engineOn = import.meta.env.VITE_WEB_NATIVE_UI_ENGINE === 'true';
+  wrap.querySelector('#engine-runtime-off')?.toggleAttribute('hidden', engineOn);
+  const dialog = wrap.querySelector('#engine-modal-sheet');
+  const refreshProbe = () => {
+    const slot = document.getElementById('cap-native-navigation-navbar-slot');
+    const active = Boolean(slot?.querySelector('[data-native-ui-projection-node]'));
+    wrap.querySelector('#engine-projection-active')?.toggleAttribute('hidden', !active);
+    wrap.querySelector('#engine-projection-inactive')?.toggleAttribute('hidden', active);
+  };
+  const pollProbe = (deadline = Date.now() + 4000) => {
+    refreshProbe();
+    if (Date.now() < deadline) {
+      window.requestAnimationFrame(() => pollProbe(deadline));
+    }
+  };
+  wrap.querySelector('#engine-modal-open')?.addEventListener('click', () => {
+    dialog?.dispatchEvent(new Event('capNativeNavigationEngineModalWillPresent', { bubbles: true }));
+    dialog?.showModal();
+    pollProbe();
+  });
+  dialog?.addEventListener('close', () => {
+    dialog?.dispatchEvent(new Event('capNativeNavigationEngineModalDidDismiss', { bubbles: true }));
+    pollProbe();
+  });
+  wrap.querySelector('#engine-modal-close')?.addEventListener('click', () => {
+    dialog?.close();
+  });
+  refreshProbe();
+};
+installEngineModalDemo();
+
 void configureChrome().catch((error) => {
   console.error('configureChrome failed', error);
 });

@@ -11,6 +11,7 @@
         "@capacitor/splash-screen": "8.0.0",
         "@capgo/capacitor-native-navigation": "file:..",
         "@capgo/capacitor-updater": "^8.51.21",
+        "@webview-native-ui/engine": "1.0.11",
       },
       "devDependencies": {
         "@capacitor/assets": "^3.0.5",
@@ -43,7 +44,7 @@
 
     "@capacitor/splash-screen": ["@capacitor/splash-screen@8.0.0", "", { "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-zkFdUSd6C6gd3s3bIEgtO3DVjfwpaX5mmWU9er8xYTg47zr2toEkGtfyE6CPhhErG09fl4rCqrK5DfnGrXLh9w=="],
 
-    "@capgo/capacitor-native-navigation": ["@capgo/capacitor-native-navigation@file:..", { "devDependencies": { "@capacitor/android": "^8.5.2", "@capacitor/cli": "^8.5.2", "@capacitor/core": "^8.5.2", "@capacitor/docgen": "^0.3.1", "@capacitor/ios": "^8.5.2", "@ionic/eslint-config": "^0.5.0", "@ionic/prettier-config": "^4.0.0", "@ionic/swiftlint-config": "^2.0.0", "@types/node": "^24.13.6", "eslint": "^10.11.0", "eslint-plugin-import": "^2.31.0", "husky": "^9.1.7", "prettier": "^3.9.8", "prettier-plugin-java": "^2.10.4", "prettier-pretty-check": "^0.2.0", "rimraf": "^6.1.0", "rollup": "^4.63.4", "swiftlint": "^2.0.0", "typescript": "6" }, "peerDependencies": { "@capacitor/core": ">=8.0.0" } }],
+    "@capgo/capacitor-native-navigation": ["@capgo/capacitor-native-navigation@file:..", { "dependencies": { "@webview-native-ui/engine": "1.0.11" }, "devDependencies": { "@capacitor/android": "^8.5.2", "@capacitor/cli": "^8.5.2", "@capacitor/core": "^8.5.2", "@capacitor/docgen": "^0.3.1", "@capacitor/ios": "^8.5.2", "@ionic/eslint-config": "^0.5.0", "@ionic/prettier-config": "^4.0.0", "@ionic/swiftlint-config": "^2.0.0", "@types/node": "^24.13.6", "eslint": "^10.11.0", "eslint-plugin-import": "^2.31.0", "husky": "^9.1.7", "prettier": "^3.9.8", "prettier-plugin-java": "^2.10.4", "prettier-pretty-check": "^0.2.0", "rimraf": "^6.1.0", "rollup": "^4.63.4", "swiftlint": "^2.0.0", "typescript": "6" }, "peerDependencies": { "@capacitor/core": ">=8.0.0" } }],
 
     "@capgo/capacitor-updater": ["@capgo/capacitor-updater@8.51.23", "", { "peerDependencies": { "@capacitor/core": "^8.0.0" } }, "sha512-1vC/msh6eg/Wa7nYa7u1wMUQoxuQ9ZZk+bT0pewkrfFpyvDWJFtASL1tFVewLrI4n2gQM/ctZD5QCh7XXMOWnw=="],
 
@@ -114,6 +115,8 @@
     "@oxc-project/types": ["@oxc-project/types@0.151.0", "", {}, "sha512-J1yXrIlNDZVzE3ada310xeAw7nH8yCAyLPuUIsjKatFPmfn5bS1oW+cM+QsGOtVWd5nhSpbwZWx/rue+r5Z+PA=="],
 
     "@prettier/plugin-xml": ["@prettier/plugin-xml@2.2.0", "", { "dependencies": { "@xml-tools/parser": "^1.0.11", "prettier": ">=2.4.0" } }, "sha512-UWRmygBsyj4bVXvDiqSccwT1kmsorcwQwaIy30yVh8T+Gspx4OlC0shX1y+ZuwXZvgnafmpRYKks0bAu9urJew=="],
+
+    "@rdlabo/ionic-theme-utils": ["@rdlabo/ionic-theme-utils@0.1.5", "", { "peerDependencies": { "@ionic/core": ">=8.8.1 <10" }, "optionalPeers": ["@ionic/core"], "bin": { "rdlabo-check-esm": "scripts/check-esm.mjs", "rdlabo-build-theme": "scripts/build-theme.mjs", "rdlabo-copy-structured-list": "scripts/copy-structured-list.mjs" } }, "sha512-LTf+GQ3S786xF1R6ITs9PtfDfSZxPcWJqzIzk046X9dvwgS+9+cCmdA5ENXYbo2Xbdv4KnxS/LKvm4fPL9THGQ=="],
 
     "@rolldown/binding-android-arm-eabi": ["@rolldown/binding-android-arm-eabi@1.2.10", "", { "os": "android", "cpu": "arm" }, "sha512-bp9svZb+QurZeh+8H4BhrZkifEB0YBNvTVzNSJnJQkj4NrRwmQoDUCGP0vSN7PbvLeM7l1tK6GXL8mrTiH2myg=="],
 
@@ -322,6 +325,8 @@
     "@unrs/resolver-binding-win32-ia32-msvc": ["@unrs/resolver-binding-win32-ia32-msvc@1.12.2", "", { "os": "win32", "cpu": "ia32" }, "sha512-WD9sY00OfpHVGfsnHZoA8jVT+esS/Bg8z8jzxp5BnDCjjwsuKsPQrzswwpFy4J1AUJbXPRfkpcX0mXrzeXW79g=="],
 
     "@unrs/resolver-binding-win32-x64-msvc": ["@unrs/resolver-binding-win32-x64-msvc@1.12.2", "", { "os": "win32", "cpu": "x64" }, "sha512-nAB74NfSNKknqQ1RrYj6uz8FcXEomu/MATJZxh/x+BArzN2U3JbOYC0APYzUIGhVY3m5hRxA8VPNdPBoG8txlA=="],
+
+    "@webview-native-ui/engine": ["@webview-native-ui/engine@1.0.11", "", { "dependencies": { "@rdlabo/ionic-theme-utils": "0.1.5" }, "peerDependencies": { "@capacitor/core": ">=8.0.0 <9", "@ionic/core": ">=8.8.1 <10" }, "optionalPeers": ["@capacitor/core", "@ionic/core"] }, "sha512-+gSA43PpzOflopNNpR0jyDYvnw39eMcy77vhziWOug6nLpEwj14WZschM8c6k4OUNT9iJpUxRpDsrYBV6HMQJg=="],
 
     "@xml-tools/parser": ["@xml-tools/parser@1.0.11", "", { "dependencies": { "chevrotain": "7.1.1" } }, "sha512-aKqQ077XnR+oQtHJlrAflaZaL7qZsulWc/i/ZEooar5JiWj1eLt0+Wg28cpa+XLney107wXqneC+oG1IZvxkTA=="],
 

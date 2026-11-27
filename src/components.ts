@@ -46,6 +46,7 @@ export function defineNativeNavigationElements(): void {
         'colors',
         'glass',
         'vertical-bar-behavior',
+        'web-native-ui-engine',
       ];
     }
 
@@ -77,6 +78,7 @@ export function defineNativeNavigationElements(): void {
           this,
           'vertical-bar-behavior',
         ),
+        webNativeUIEngine: parseBoolean(this.getAttribute('web-native-ui-engine'), false),
       };
 
       if (duration) {

@@ -1,5 +1,6 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
+import { webNativeUIEngineFromEnv } from './engine-env.mjs';
 import pkg from './package.json' with { type: 'json' };
 
 const screenshotBuild = Boolean(process.env.VITE_SCREENSHOT_MODE);
@@ -9,6 +10,9 @@ const config: CapacitorConfig = {
   appName: '@capgo/capacitor-native-navigation',
   webDir: 'dist',
   plugins: {
+    NativeNavigation: {
+      webNativeUIEngine: webNativeUIEngineFromEnv(),
+    },
     CapacitorUpdater: {
       appId: 'app.capgo.native.navigation.example',
       autoUpdate: !screenshotBuild,

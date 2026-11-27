@@ -6,3 +6,4 @@ dist/
 *.map
 .sourcemaps
 .capgo_key*
+dist-engine-on/

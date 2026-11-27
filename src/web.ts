@@ -49,6 +49,10 @@ export class NativeNavigationWeb extends WebPlugin implements NativeNavigationPl
         ...options.glass,
       },
     };
+    if (options.webNativeUIEngine === true) {
+      const { ensureProjectionSlots } = await import('./web-ui-engine');
+      ensureProjectionSlots();
+    }
     return this.applyInsets();
   }
 

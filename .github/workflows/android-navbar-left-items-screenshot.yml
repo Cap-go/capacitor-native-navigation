@@ -50,23 +50,47 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p screenshot-apks
-          build_apk() {
-            local plugin_source="$1"
-            local apk_out="$2"
-            local root_plugin_source="android/src/main/java/app/capgo/nativenavigation/NativeNavigationPlugin.java"
-            local installed_plugin_source
-            if [ "${plugin_source}" != "HEAD" ]; then
-              cp "${plugin_source}" "${root_plugin_source}"
+          sync_installed_android_sources() {
+            local mode="$1"
+            local installed_root
+            installed_root="$(find example-app/node_modules -type d -path '*/@capgo/capacitor-native-navigation/android/src/main/java/app/capgo/nativenavigation' -print -quit)"
+            test -n "${installed_root}"
+            if [ "${mode}" = "main" ]; then
+              git ls-tree --name-only "origin/main:android/src/main/java/app/capgo/nativenavigation" | while read -r name; do
+                git show "origin/main:android/src/main/java/app/capgo/nativenavigation/${name}" > "${installed_root}/${name}"
+              done
+              for file in "${installed_root}"/*.java; do
+                [ -e "${file}" ] || continue
+                base="$(basename "${file}")"
+                if ! git cat-file -e "origin/main:android/src/main/java/app/capgo/nativenavigation/${base}" 2>/dev/null; then
+                  rm -f "${file}"
+                fi
+              done
             else
-              plugin_source="${root_plugin_source}"
+              local staging_dir
+              staging_dir="$(mktemp -d)"
+              git ls-tree --name-only "HEAD:android/src/main/java/app/capgo/nativenavigation" | while read -r name; do
+                git show "HEAD:android/src/main/java/app/capgo/nativenavigation/${name}" > "${staging_dir}/${name}"
+              done
+              for file in "${staging_dir}"/*.java; do
+                [ -e "${file}" ] || continue
+                cp -f "${file}" "${installed_root}/$(basename "${file}")"
+              done
+              for file in "${installed_root}"/*.java; do
+                [ -e "${file}" ] || continue
+                base="$(basename "${file}")"
+                if ! git cat-file -e "HEAD:android/src/main/java/app/capgo/nativenavigation/${base}" 2>/dev/null; then
+                  rm -f "${file}"
+                fi
+              done
+              rm -rf "${staging_dir}"
             fi
-            installed_plugin_source="$(find example-app/node_modules -type f -path '*/@capgo/capacitor-native-navigation/android/src/main/java/app/capgo/nativenavigation/NativeNavigationPlugin.java' -print -quit)"
-            test -n "${installed_plugin_source}"
-            if ! cmp -s "${plugin_source}" "${installed_plugin_source}"; then
-              cp "${plugin_source}" "${installed_plugin_source}"
-            fi
-            test "$(sha256sum "${plugin_source}" | cut -d' ' -f1)" = \
-              "$(sha256sum "${installed_plugin_source}" | cut -d' ' -f1)"
+            git checkout HEAD -- android/src/main/java/app/capgo/nativenavigation/ 2>/dev/null || true
+          }
+          build_apk() {
+            local android_source_mode="$1"
+            local apk_out="$2"
+            sync_installed_android_sources "${android_source_mode}"
             bun run build
             cd example-app
             VITE_SCREENSHOT_MODE=navbar-left-items bun run build
@@ -78,10 +102,8 @@ jobs:
             cd ../..
           }
           git fetch origin main
-          git show origin/main:android/src/main/java/app/capgo/nativenavigation/NativeNavigationPlugin.java > /tmp/NativeNavigationPlugin.main.java
-          build_apk /tmp/NativeNavigationPlugin.main.java screenshot-apks/navbar-before.apk
-          git checkout -- android/src/main/java/app/capgo/nativenavigation/NativeNavigationPlugin.java
-          build_apk HEAD screenshot-apks/navbar-after.apk
+          build_apk main screenshot-apks/navbar-before.apk
+          build_apk head screenshot-apks/navbar-after.apk
       - name: Upload screenshot APKs
         uses: actions/upload-artifact@v7
         with:

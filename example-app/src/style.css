@@ -722,4 +722,21 @@ pre {
   background: #0a84ff;
 }
 
+.engine-modal-demo {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + var(--cap-native-navigation-top, 0px) + 8px);
+  right: 12px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: min(220px, 42vw);
+  pointer-events: auto;
+}
+
+.engine-modal-demo button {
+  font: inherit;
+  cursor: pointer;
+}
+
 
