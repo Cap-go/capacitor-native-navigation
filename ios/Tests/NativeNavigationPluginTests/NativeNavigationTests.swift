@@ -620,5 +620,10 @@ class NativeNavigationTests: XCTestCase {
 
     func testPrefersSystemUITabAPIRequiresDetachedSearchTab() {
         XCTAssertFalse(nativeNavigationPrefersSystemUITabAPI(hasDetachedSearchTab: false))
+        if #available(iOS 26.0, *) {
+            XCTAssertTrue(nativeNavigationPrefersSystemUITabAPI(hasDetachedSearchTab: true))
+        } else {
+            XCTAssertFalse(nativeNavigationPrefersSystemUITabAPI(hasDetachedSearchTab: true))
+        }
     }
 }

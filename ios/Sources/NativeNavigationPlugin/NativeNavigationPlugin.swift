@@ -1487,12 +1487,14 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
 
         let resolvedIndex = selectedIndex
             ?? previousSelectedTab.flatMap { tab in tabBarController.tabs.firstIndex(where: { $0 === tab }) }
+            ?? previousVisibleIndex
             ?? 0
         let index = min(max(resolvedIndex, 0), tabViewControllers.count - 1)
         if tabBarController.tabs.indices.contains(index) {
             tabBarController.selectedTab = tabBarController.tabs[index]
         }
-        syncSystemUITabSelectionImages(selectedVisibleIndex: index, previousVisibleIndex: nil)
+        let imageResetIndex = previousVisibleIndex == index ? nil : previousVisibleIndex
+        syncSystemUITabSelectionImages(selectedVisibleIndex: index, previousVisibleIndex: imageResetIndex)
         hostWebView(in: tabViewControllers[index])
         let nextContent = nativeNavigationTabContentController(from: tabViewControllers[index])
         if shouldRebuildTabs || previousSelectedTab !== tabBarController.selectedTab || previousContent !== nextContent {
@@ -1559,6 +1561,11 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         for (visibleIndex, item) in buildResult.items.enumerated() where tabBarController.tabs.indices.contains(visibleIndex) {
             let tab = tabBarController.tabs[visibleIndex]
             let isSearchTab = buildResult.hasDetachedSearchTab && visibleIndex == buildResult.items.count - 1
+            let sourceIndex = buildResult.visibleSourceIndexes[visibleIndex]
+            let tabId = tabIds.indices.contains(sourceIndex) ? tabIds[sourceIndex] : "tab-\(visibleIndex)"
+            let accessibilityTitle = tabTitles.indices.contains(sourceIndex)
+                ? (tabTitles[sourceIndex].isEmpty ? tabId : tabTitles[sourceIndex])
+                : tabId
             if !isSearchTab {
                 let resolvedTitle = tabDisplayTitles.indices.contains(visibleIndex)
                     ? (tabDisplayTitles[visibleIndex] ?? item.title)
@@ -1569,6 +1576,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 tab.isEnabled = item.isEnabled
             }
             tab.badgeValue = item.badgeValue
+            tab.accessibilityLabel = item.accessibilityLabel ?? accessibilityTitle
             let baseImage = tabBaseImages.indices.contains(visibleIndex) ? tabBaseImages[visibleIndex] : item.image
             let selectedImage = tabSelectedImages.indices.contains(visibleIndex) ? tabSelectedImages[visibleIndex] : item.selectedImage
             let isSelected = tabBarController.selectedTab === tab
@@ -2042,9 +2050,6 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         }
 
         let hasDetachedSearchTab = trailingEntry != nil
-        if visibleSourceIndexes.count != items.count {
-            visibleSourceIndexes = nativeNavigationVisibleTabDescriptors(tabs: tabs, selectedId: selectedId).map(\.sourceIndex)
-        }
 
         return SystemTabBarBuildResult(
             items: items,
