@@ -1518,30 +1518,31 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 ? (tabTitles[sourceIndex].isEmpty ? tabId : tabTitles[sourceIndex])
                 : tabId
 
+            let resolvedTitle = tabDisplayTitles.indices.contains(visibleIndex)
+                ? (tabDisplayTitles[visibleIndex] ?? item.title ?? "")
+                : (item.title ?? "")
+            let baseImage = tabBaseImages.indices.contains(visibleIndex) ? tabBaseImages[visibleIndex] : item.image
             let tab: UITab
             if isSearchTab {
                 let searchTab = UISearchTab { _ in controller }
-                searchTab.identifier = identifier
+                if let baseImage {
+                    searchTab.image = baseImage
+                }
                 tab = searchTab
-                searchIdentifier = identifier
+                searchIdentifier = UISearchTab.identifier
             } else {
                 tab = UITab(
-                    title: tabDisplayTitles.indices.contains(visibleIndex) ? tabDisplayTitles[visibleIndex] : item.title,
-                    image: tabBaseImages.indices.contains(visibleIndex) ? tabBaseImages[visibleIndex] : item.image,
+                    title: resolvedTitle,
+                    image: baseImage,
                     identifier: identifier
                 ) { _ in controller }
             }
 
-            tab.isEnabled = item.isEnabled
+            if #available(iOS 18.4, *) {
+                tab.isEnabled = item.isEnabled
+            }
             tab.badgeValue = item.badgeValue
             tab.accessibilityLabel = item.accessibilityLabel ?? accessibilityTitle
-            if let selectedImage = tabSelectedImages.indices.contains(visibleIndex) ? tabSelectedImages[visibleIndex] : item.selectedImage {
-                tab.selectedImage = selectedImage
-            }
-            if let baseImage = tabBaseImages.indices.contains(visibleIndex) ? tabBaseImages[visibleIndex] : item.image,
-               isSearchTab {
-                tab.image = baseImage
-            }
             tabs.append(tab)
         }
 
@@ -1559,21 +1560,23 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             let tab = tabBarController.tabs[visibleIndex]
             let isSearchTab = buildResult.hasDetachedSearchTab && visibleIndex == buildResult.items.count - 1
             if !isSearchTab {
-                tab.title = tabDisplayTitles.indices.contains(visibleIndex) ? tabDisplayTitles[visibleIndex] : item.title
+                let resolvedTitle = tabDisplayTitles.indices.contains(visibleIndex)
+                    ? (tabDisplayTitles[visibleIndex] ?? item.title)
+                    : item.title
+                tab.title = resolvedTitle
             }
-            tab.isEnabled = item.isEnabled
+            if #available(iOS 18.4, *) {
+                tab.isEnabled = item.isEnabled
+            }
             tab.badgeValue = item.badgeValue
             let baseImage = tabBaseImages.indices.contains(visibleIndex) ? tabBaseImages[visibleIndex] : item.image
             let selectedImage = tabSelectedImages.indices.contains(visibleIndex) ? tabSelectedImages[visibleIndex] : item.selectedImage
-            tab.selectedImage = selectedImage
             let isSelected = tabBarController.selectedTab === tab
             tab.image = isSelected ? (selectedImage ?? baseImage) : baseImage
         }
 
         if buildResult.hasDetachedSearchTab {
-            let sourceIndex = buildResult.visibleSourceIndexes.last ?? 0
-            let tabId = tabIds.indices.contains(sourceIndex) ? tabIds[sourceIndex] : "search"
-            systemSearchTabIdentifier = nativeNavigationSystemTabIdentifier(forTabId: tabId)
+            systemSearchTabIdentifier = UISearchTab.identifier
             applySystemUITabProminence(on: tabBarController)
         }
     }
@@ -1583,9 +1586,11 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
         guard let searchIdentifier = systemSearchTabIdentifier else {
             return
         }
+        #if compiler(>=6.4)
         if #available(iOS 27.0, *) {
             tabBarController.prominentTabIdentifier = searchIdentifier
         }
+        #endif
     }
 
     @available(iOS 18.0, *)
