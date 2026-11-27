@@ -128,7 +128,10 @@ export type NativeNavigationNavbarSearchPlacement = 'stacked' | 'button';
  *
  * `search` (and `prominent` when the OS supports it) renders as a detached
  * trailing circular action beside the floating tab capsule — the Apple News /
- * Photos pattern. Only one detached trailing role is used; if multiple tabs
+ * Photos pattern. On iOS 26+ with the system Liquid Glass bar, keep a trailing
+ * `search` or `prominent` tab last in `tabs`: the plugin uses `UISearchTab` and
+ * `UITabBarController.prominentTabIdentifier` on iOS 27+ so UIKit draws the
+ * detached control. Only one detached trailing role is used; if multiple tabs
  * set `search` or `prominent`, the last one wins. Curve-shaped bars ignore
  * `role` and keep using the included center action instead.
  */
@@ -797,10 +800,14 @@ export interface NativeNavigationTab {
    * Optional tab role. On floating tabbars, `search` (or `prominent` when
    * available) becomes a detached trailing circular action beside the capsule
    * — including the iOS 26+ system Liquid Glass tab bar, Android floating
-   * layout, and the custom floating capsule path. Only one detached trailing
-   * role is used; if multiple tabs set `search` or `prominent`, the last one
-   * wins. Curve-shaped bars ignore `role` and keep using the included center
-   * action. Defaults to `normal`.
+   * layout, and the custom floating capsule path. On iOS 26+ with the system
+   * bar, a trailing `search` or `prominent` tab must be last in the tab list:
+   * the plugin builds the bar with `UITab` / `UISearchTab` and, on iOS 27+,
+   * sets `UITabBarController.prominentTabIdentifier` so UIKit draws the
+   * detached round search control. Only one detached trailing role is used; if
+   * multiple tabs set `search` or `prominent`, the last one wins. Curve-shaped
+   * bars ignore `role` and keep using the included center action. Defaults to
+   * `normal`.
    */
   role?: NativeNavigationTabRole;
 }

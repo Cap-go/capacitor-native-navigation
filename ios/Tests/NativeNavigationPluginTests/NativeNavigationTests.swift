@@ -574,4 +574,50 @@ class NativeNavigationTests: XCTestCase {
         XCTAssertFalse(nativeNavigationSearchPlacementIsButton("stacked"))
         XCTAssertTrue(nativeNavigationSearchPlacementIsButton("button"))
     }
+
+    func testVisibleTabEntriesRespectsHiddenTabs() {
+        let tabs: [[String: Any]] = [
+            ["id": "home", "title": "Home"],
+            ["id": "hidden", "title": "Hidden", "hidden": true],
+            ["id": "search", "title": "Search", "role": "search"]
+        ]
+        let entries = nativeNavigationVisibleTabEntries(tabs: tabs, selectedId: nil)
+        XCTAssertEqual(entries.map(\.id), ["home", "search"])
+        XCTAssertEqual(entries.last?.role, "search")
+    }
+
+    func testUsesUITabSearchAPIRequiresTrailingSearchRole() {
+        let normal = [
+            NativeNavigationVisibleTabEntry(sourceIndex: 0, id: "a", role: nil),
+            NativeNavigationVisibleTabEntry(sourceIndex: 1, id: "b", role: nil)
+        ]
+        XCTAssertFalse(nativeNavigationUsesUITabSearchAPI(visibleTabs: normal))
+
+        let trailingSearch = normal + [NativeNavigationVisibleTabEntry(sourceIndex: 2, id: "s", role: "search")]
+        XCTAssertTrue(nativeNavigationUsesUITabSearchAPI(visibleTabs: trailingSearch))
+
+        let searchNotLast = [
+            NativeNavigationVisibleTabEntry(sourceIndex: 0, id: "s", role: "search"),
+            NativeNavigationVisibleTabEntry(sourceIndex: 1, id: "b", role: nil)
+        ]
+        XCTAssertFalse(nativeNavigationUsesUITabSearchAPI(visibleTabs: searchNotLast))
+    }
+
+    func testTabImageForSelectionSwapsIcon() {
+        let base = UIImage(systemName: "house")
+        let selected = UIImage(systemName: "house.fill")
+        XCTAssertEqual(nativeNavigationTabImageForSelection(isSelected: false, base: base, selected: selected), base)
+        XCTAssertEqual(nativeNavigationTabImageForSelection(isSelected: true, base: base, selected: selected), selected)
+        XCTAssertEqual(nativeNavigationTabImageForSelection(isSelected: true, base: base, selected: nil), base)
+    }
+
+    func testIndexForTabIdentifierAndSourceIndexMapping() {
+        let ids = ["home", "library", "search"]
+        XCTAssertEqual(nativeNavigationIndexForTabIdentifier(ids, identifier: "library"), 1)
+        XCTAssertNil(nativeNavigationIndexForTabIdentifier(ids, identifier: "missing"))
+        XCTAssertEqual(
+            nativeNavigationSourceIndexForVisibleTab(visibleIndex: 2, visibleSourceIndices: [0, 3, 5]),
+            5
+        )
+    }
 }
