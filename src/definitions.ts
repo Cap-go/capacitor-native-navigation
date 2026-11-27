@@ -798,8 +798,8 @@ export interface NativeNavigationTab {
 
   /**
    * Optional tab role. On floating tabbars, `search` (or `prominent` when
-   * available) becomes a detached trailing circular action beside the capsule
-   * — including the iOS 26+ system Liquid Glass tab bar, Android floating
+   * available) becomes a detached trailing circular action beside the capsule,
+   * including the iOS 26+ system Liquid Glass tab bar, Android floating
    * layout, and the custom floating capsule path. On iOS 26+ with the system
    * bar, a trailing `search` or `prominent` tab must be last in the tab list:
    * the plugin builds the bar with `UITab` / `UISearchTab` and, on iOS 27+,
