@@ -1529,7 +1529,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                     searchTab.image = baseImage
                 }
                 tab = searchTab
-                searchIdentifier = UISearchTab.identifier
+                searchIdentifier = searchTab.identifier
             } else {
                 tab = UITab(
                     title: resolvedTitle,
@@ -1563,7 +1563,7 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
                 let resolvedTitle = tabDisplayTitles.indices.contains(visibleIndex)
                     ? (tabDisplayTitles[visibleIndex] ?? item.title)
                     : item.title
-                tab.title = resolvedTitle
+                tab.title = resolvedTitle ?? ""
             }
             if #available(iOS 18.4, *) {
                 tab.isEnabled = item.isEnabled
@@ -1573,10 +1573,12 @@ public class NativeNavigationPlugin: CAPPlugin, CAPBridgedPlugin, UITabBarContro
             let selectedImage = tabSelectedImages.indices.contains(visibleIndex) ? tabSelectedImages[visibleIndex] : item.selectedImage
             let isSelected = tabBarController.selectedTab === tab
             tab.image = isSelected ? (selectedImage ?? baseImage) : baseImage
+            if isSearchTab {
+                systemSearchTabIdentifier = tab.identifier
+            }
         }
 
         if buildResult.hasDetachedSearchTab {
-            systemSearchTabIdentifier = UISearchTab.identifier
             applySystemUITabProminence(on: tabBarController)
         }
     }
